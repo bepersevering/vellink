@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+src-tauri/target/
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+*.swp
+.idea/
+.vscode/
+
+# env
+.env
+.env.local
+
+# workbuddy workspace data
+.workbuddy/
