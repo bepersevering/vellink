@@ -28,6 +28,9 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      - name: 版本号一致性
+        run: npm run version:check
+
       - name: 单元测试
         run: npm test
 
@@ -43,7 +46,7 @@ jobs:
           retention-days: 7
 
   shell:
-    name: Tauri Rust 壳编译检查
+    name: Tauri Rust 壳编译检查与测试
     runs-on: macos-latest
     steps:
       - name: 检出代码
@@ -58,8 +61,16 @@ jobs:
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: 缓存 Rust 产物
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
       - name: 安装前端依赖
         run: npm ci
 
       - name: cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml

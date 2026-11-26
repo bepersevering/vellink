@@ -29,7 +29,9 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 
 ## Getting Started
 
-> The project is in early development (M4.7 file names & watching). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, and two official plugins: WebDAV cloud sync and AI knowledge-base Q&A.
+> The project is in early development (M5 packaging & auto-update). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), and signed installers for macOS / Windows / Linux that update themselves in place.
+
+Prebuilt installers live on the [Releases](https://github.com/bepersevering/vellink/releases) page. Once installed, new versions arrive in-app: the app checks quietly on launch, and you can force a check with `⌘U` or the version badge in the status bar.
 
 ```bash
 # Prerequisites: Node.js 20+, Rust toolchain, Xcode Command Line Tools (macOS)
@@ -38,7 +40,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (170 tests)
+npm test               # run unit tests (184 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -46,8 +48,9 @@ Architecture design and the phased plan: [`开发清单.md`](./开发清单.md) 
 
 ### CI & Builds
 
-- **CI**: every push to `main` or PR runs `npm ci` → unit tests → type check → frontend build, plus a `cargo check` of the Rust shell; `dist/` is uploaded as an artifact (7-day retention).
-- **Desktop build**: push a `v*` tag or trigger "Desktop Build" manually from the Actions page to produce macOS (arm64 / x86_64), Windows and Linux installers in workflow artifacts; pushing a tag also creates a draft Release.
+- **CI**: every push to `main` or PR runs `npm ci` → version consistency check → unit tests → type check → frontend build, plus `cargo check` and `cargo test` of the Rust shell; `dist/` is uploaded as an artifact (7-day retention).
+- **Release build**: pushing a `v*` tag builds macOS (arm64 / x86_64), Windows (NSIS + MSI) and Linux (deb + AppImage) on four runners, signs the updater artifacts and publishes a Release with `latest.json`, which is what the in-app updater reads. A manual "Release Build" run only produces workflow artifacts. Builds run one platform at a time so they don't overwrite each other's entry in `latest.json`.
+- **Versioning**: `npm version patch|minor|major` is the only way to bump; it syncs `tauri.conf.json`, `Cargo.toml` and `Cargo.lock` and stages them into the tag commit. CI fails if the three disagree.
 - **Working convention**: commit + push immediately after each milestone task; a green CI run is the acceptance criterion.
 
 ## Architecture
@@ -93,7 +96,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M4.5 | Workspace: real documents, autosave, live outline | Document list with create / switch / two-step delete, a separate undo stack per document, title derived from the first heading, debounced autosave with reload recovery, outline built from the IR and clickable in both views, ⌘N / ⌘S wired, and a ProseMirror base keymap (Enter / Backspace / Mod-B / Mod-I). ([notes](./M4.5-文档工作区说明.md), Chinese) |
 | M4.6 | Local Markdown files: Tauri fs backend | Open or switch a workspace folder; one document = one real `.md` file; atomic write (temp file + rename), BOM/CRLF normalisation on read, recursive listing that skips `node_modules` / hidden dirs, deletion to `.vellink-trash`, folder picker + reveal in file manager, and a 4s poll that reloads externally edited files while never overwriting unsaved local edits. ([notes](./M4.6-本地文件后端说明.md), Chinese) |
 | M4.7 | File names follow titles, live watching | Renaming a heading renames the file on disk after a 900ms pause (atomic, collision-suffixed, undo stack and cursor preserved); only local edits count, so an external tool changing the H1 is never overruled. A `notify`-based recursive watcher replaces the 4s poll (200ms event coalescing, self-write suppression, stale-scan guard, 30s fallback). ([notes](./M4.7-文件名跟随与实时监听说明.md), Chinese) |
-| M5 | Three-platform packaging + CI + auto-update | Not started |
+| M5 | Three-platform packaging + CI + auto-update | Signed installers for macOS (dmg/app, both arches), Windows (NSIS/MSI) and Linux (deb/AppImage), published to Releases by tag. In-app updater: quiet check 4s after launch (6h throttle), progress + signature verification, restart to apply; `⌘U` / status-bar version badge / command palette to check manually. Version numbers come from `package.json` only — `npm version` syncs the other three files and CI enforces it. ([notes](./M5-三平台打包与自动更新说明.md), Chinese) |
 | M6 | 10-user beta polish → public release | Not started |
 
 ## Design Principles

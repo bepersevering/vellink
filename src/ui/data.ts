@@ -85,4 +85,12 @@ export const commands: CommandItem[] = [
     group: "group.recent",
     action: "sync",
   },
+  {
+    id: "c-check-update",
+    label: "cmd.checkUpdate",
+    icon: "cloud",
+    hint: "⌘U",
+    group: "group.recent",
+    action: "check-update",
+  },
 ];

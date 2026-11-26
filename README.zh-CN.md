@@ -29,7 +29,9 @@ Vellink 的选择是：**以统一文档模型（IR）为内核，把一切上�
 
 ## 快速开始
 
-> 项目处于早期开发阶段（M4.7 文件名跟随与实时监听）。当前可运行：React 写作界面 + ProseMirror WYSIWYG / CodeMirror 6 双视图实时同步、桌面端直接读写本地 `.md` 文件夹的多文档工作区（文件名跟随标题、外部改动由文件监听即时回灌）、可安装启停的插件系统，以及 WebDAV 云同步与 AI 知识库问答两个官方插件。
+> 项目处于早期开发阶段（M5 三平台打包与自动更新）。当前可运行：React 写作界面 + ProseMirror WYSIWYG / CodeMirror 6 双视图实时同步、桌面端直接读写本地 `.md` 文件夹的多文档工作区（文件名跟随标题、外部改动由文件监听即时回灌）、可安装启停的插件系统、WebDAV 云同步与 AI 知识库问答两个官方插件，以及 macOS / Windows / Linux 三平台签名安装包与就地自动更新。
+
+现成安装包在 [Releases](https://github.com/bepersevering/vellink/releases)。装好之后新版本在应用内升级：启动后静默检查一次，也可以按 `⌘U` 或点状态栏右下角的版本号手动检查。
 
 ```bash
 # 前置：Node.js 20+、Rust 工具链、Xcode Command Line Tools（macOS）
@@ -38,7 +40,7 @@ cd vellink
 npm install
 npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测（170 项）
+npm test               # 运行核心单测（184 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -46,8 +48,9 @@ npx tsc --noEmit       # 类型检查
 
 ### 持续集成与构建
 
-- **CI**：每次推送到 `main` 或提 PR 自动运行 `npm ci` → 单测 → 类型检查 → 前端构建，并检查 Rust 壳能否编译（`cargo check`）；`dist/` 作为 artifact 保留 7 天。
-- **桌面构建**：推送 `v*` 标签，或在 Actions 页手动触发「桌面构建」，会产出 macOS（arm64 / x86_64）、Windows、Linux 安装包到 workflow artifacts；推标签时还会创建草稿 Release。
+- **CI**：每次推送到 `main` 或提 PR 自动运行 `npm ci` → 版本号一致性校验 → 单测 → 类型检查 → 前端构建，并对 Rust 壳跑 `cargo check` 与 `cargo test`；`dist/` 作为 artifact 保留 7 天。
+- **发布构建**：推送 `v*` 标签后，四台 runner 依次产出 macOS（arm64 / x86_64）、Windows（NSIS + MSI）、Linux（deb + AppImage）安装包，签名更新产物并发布 Release（含 `latest.json`，应用内更新就是读它）。Actions 页手动触发只产出 workflow artifacts。四个平台串行执行，避免并行 job 互相覆盖 `latest.json` 里的平台条目。
+- **版本号**：只能用 `npm version patch|minor|major` 升版本，它会同步 `tauri.conf.json`、`Cargo.toml`、`Cargo.lock` 并把改动放进 tag 提交；三处不一致 CI 直接红。
 - **工作约定**：每个阶段任务完成后立即 commit + push（**提交信息用英文**），以 CI 绿灯作为验收依据。
 
 ## 架构
@@ -93,7 +96,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 | M4.5 | 文档工作区：多文档 + 自动保存 + 真大纲 | 文档列表可新建/切换/二次确认删除，每篇独立撤销栈；标题由首个一级标题派生；停手 700ms 自动落盘、刷新可恢复；大纲从 IR 现算、双视图可点击跳转；⌘N / ⌘S 已接线，并补齐 ProseMirror 基础键位（回车/退格/加粗/斜体）。[说明](./M4.5-文档工作区说明.md) |
 | M4.6 | 本地 Markdown 文件：Tauri fs 后端 | 可选/可切换工作区目录，一篇文档 = 一个真实 `.md` 文件；原子写（临时文件 + rename）、读取时统一 BOM/CRLF、递归列举跳过 `node_modules` 与隐藏目录、删除进 `.vellink-trash`、系统文件夹选择器与「在文件管理器中显示」、4 秒轮询外部改动并在不影响未保存编辑的前提下重载。[说明](./M4.6-本地文件后端说明.md) |
 | M4.7 | 文件名跟随标题 + 实时监听 | 改标题停手 900ms 就把磁盘文件改名（原子、重名自动加序号、撤销栈与光标不丢）；只有本地编辑才改名，外部工具改 H1 不会被反向覆盖。基于 `notify` 的递归目录监听取代 4 秒轮询（200ms 事件合并、自写抑制、陈旧扫描作废、30 秒兜底）。[说明](./M4.7-文件名跟随与实时监听说明.md) |
-| M5 | 三平台打包 + CI + 自动更新 | 待开始 |
+| M5 | 三平台打包 + CI + 自动更新 | macOS（dmg/app，双架构）、Windows（NSIS/MSI）、Linux（deb/AppImage）签名安装包，推 tag 自动发布到 Releases。应用内更新：启动 4 秒后静默检查（6 小时节流）、显示下载进度、验签后安装、重启生效；`⌘U` / 状态栏版本号 / 命令面板可手动检查。版本号只写 `package.json`，`npm version` 自动同步另外三处，CI 强制校验。[说明](./M5-三平台打包与自动更新说明.md) |
 | M6 | 10 人试用打磨 → 公开发布 | 待开始 |
 
 ## 设计原则

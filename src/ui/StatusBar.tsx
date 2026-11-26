@@ -16,6 +16,9 @@ interface Props {
   storagePath: string | null;
   /** 目录实时监听是否可用（不可用时退回定时检查）。 */
   liveWatch?: boolean;
+  /** 当前构建版本号，显示在右下角，点一下手动检查更新。 */
+  version: string;
+  onCheckUpdate: () => void;
 }
 
 function saveLabel(state: SaveState | "dirty", savedAt: number | null): string {
@@ -42,6 +45,8 @@ export function StatusBar({
   storageKind,
   storagePath,
   liveWatch = false,
+  version,
+  onCheckUpdate,
 }: Props) {
   const icon: IconName = saveState === "error" ? "cloud" : "check";
   return (
@@ -78,6 +83,9 @@ export function StatusBar({
         <Icon name="plug" />
         {t("status.pluginsEnabled", { count: pluginCount })}
       </div>
+      <button className="status-version" onClick={onCheckUpdate} title={t("status.checkUpdate")}>
+        v{version}
+      </button>
     </footer>
   );
 }

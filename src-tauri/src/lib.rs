@@ -4,6 +4,9 @@ mod fs;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // 自动更新：检查/下载/验签由 updater 负责，装完重启由 process 负责
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(fs::WatchState::default())
         .invoke_handler(tauri::generate_handler![
             fs::fs_default_root,

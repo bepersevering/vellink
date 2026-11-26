@@ -1,5 +1,7 @@
-name: 桌面构建
+name: 发布构建
 
+# tag 推送 → 三平台签名构建 + 发布 Release（含 latest.json，自动更新从这里取）；
+# 手动触发 → 只产出 workflow artifacts，不碰 Release。
 on:
   push:
     tags: ["v*"]
@@ -8,21 +10,36 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
-    name: ${{ matrix.platform }} ${{ matrix.args }}
+    name: ${{ matrix.label }}
     strategy:
       fail-fast: false
+      # latest.json 是同一个文件，每个 job 都是「读出已有平台 → 加自己 → 写回」。
+      # 并行跑会互相覆盖（后写的把前一个平台的条目吃掉），所以串行出包。
+      max-parallel: 1
       matrix:
         include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: windows-latest
-            args: ""
+          - label: macOS · Apple Silicon
+            platform: macos-latest
+            targetArgs: --target aarch64-apple-darwin
+            bundles: app,dmg
+          - label: macOS · Intel
+            platform: macos-latest
+            targetArgs: --target x86_64-apple-darwin
+            bundles: app,dmg
+          - label: Linux · x64
+            platform: ubuntu-22.04
+            targetArgs: ""
+            bundles: deb,appimage
+          - label: Windows · x64
+            platform: windows-latest
+            targetArgs: ""
+            bundles: nsis,msi
     runs-on: ${{ matrix.platform }}
     steps:
       - name: 检出代码
@@ -37,7 +54,14 @@ jobs:
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          # macOS 两个架构各自出包；其它平台用默认 host target
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: 缓存 Rust 产物
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.label }}
 
       - name: 安装 Linux 系统依赖
         if: matrix.platform == 'ubuntu-22.04'
@@ -48,15 +72,45 @@ jobs:
       - name: 安装前端依赖
         run: npm ci
 
+      - name: 校验版本号一致
+        run: npm run version:check
+
+      # 没有签名私钥（fork / 未配置 secret）时关掉 updater 产物，
+      # 让构建照样出安装包，而不是因为签不了名直接失败。
+      - name: 准备更新签名
+        id: signing
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "extra=" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "extra=--config src-tauri/tauri.nosign.json" >> "$GITHUB_OUTPUT"
+            printf '%s\n' '{"bundle":{"createUpdaterArtifacts":false}}' > src-tauri/tauri.nosign.json
+            echo "::warning::未配置 TAURI_SIGNING_PRIVATE_KEY，本次构建不含自动更新产物。"
+          fi
+
       - name: 构建并上传安装包
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # 需要 macOS 公证时在仓库 secrets 里补齐这组变量，tauri 会自动识别：
+          # APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
+          # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID
         with:
-          # 打 v* tag 时顺带创建草稿 Release；手动触发只产出 workflow artifacts
+          args: ${{ matrix.targetArgs }} --bundles ${{ matrix.bundles }} ${{ steps.signing.outputs.extra }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && format('Vellink {0}', github.ref_name) || '' }}
-          releaseDraft: true
-          prerelease: false
+          # 更新器读 releases/latest/download/latest.json，草稿和预发布都不算 latest
+          releaseDraft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generateReleaseNotes: true
+          uploadUpdaterJson: true
+          # Windows 用 NSIS 的 setup.exe 做更新包（passive 安装更安静）
+          updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: true
-          args: ${{ matrix.args }}

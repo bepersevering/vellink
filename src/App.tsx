@@ -27,6 +27,8 @@ import {
 } from "./ui/Editor";
 import { SideDrawer, type PanelTab } from "./ui/SideDrawer";
 import { StatusBar } from "./ui/StatusBar";
+import { UpdateNotice } from "./ui/UpdateNotice";
+import { useUpdater } from "./ui/useUpdater";
 import { CommandPalette } from "./ui/CommandPalette";
 import { IconSprite } from "./ui/Icon";
 import { commands as commandItems, type PluginInfo, type CommandItem } from "./ui/data";
@@ -62,6 +64,9 @@ export default function App() {
   const [pluginErrors, setPluginErrors] = useState<string[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState("");
+
+  /** 自动更新：启动后静默查一次，右下角版本号可手动查。 */
+  const updater = useUpdater();
 
   // 工作区状态
   const [ready, setReady] = useState(false);
@@ -532,6 +537,9 @@ export default function App() {
         } else {
           void saveNow();
         }
+      } else if (key === "u") {
+        e.preventDefault();
+        void updater.check(true);
       } else if (e.key === "1") {
         e.preventDefault();
         setEditorMode("source");
@@ -608,6 +616,9 @@ export default function App() {
         void runtimeRef.current?.runCommand("webdav.sync").then(({ ok, notified }) => {
           if (!notified) showToast(ok ? t("toast.syncDone") : t("toast.syncNeedConfig"));
         });
+        break;
+      case "check-update":
+        void updater.check(true);
         break;
       default:
         showToast(label);
@@ -702,6 +713,8 @@ export default function App() {
         storageKind={storage.kind}
         storagePath={storage.root}
         liveWatch={liveWatch}
+        version={updater.currentVersion}
+        onCheckUpdate={() => void updater.check(true)}
       />
 
       <CommandPalette
@@ -710,6 +723,8 @@ export default function App() {
         onClose={() => setPaletteOpen(false)}
         onRun={runCommand}
       />
+
+      <UpdateNotice updater={updater} />
 
       <div className={`hint ${toast ? "show" : ""}`}>{toast}</div>
     </div>
