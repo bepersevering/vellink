@@ -15,8 +15,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 发版前的唯一闸门。
+  #
+  # 以前的写法是每个平台各自检查密钥，缺了就各打一条 warning 继续构建——
+  # 结果是 tag 发版照样「成功」，但 Release 里没有 latest.json，
+  # 已安装的用户从此收不到更新，而且没有一处是红色的。
+  preflight:
+    name: 校验发版条件
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检查更新签名密钥
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          REF: ${{ github.ref }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "签名密钥已配置（${#KEY} 字符）"
+            echo "### 更新签名：已配置" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$REF_TYPE" = "tag" ] || [[ "$REF" == refs/tags/v* ]]; then
+            echo "::error title=缺少更新签名密钥::tag 发版需要 TAURI_SIGNING_PRIVATE_KEY：没有它就不会产出 latest.json，已安装的用户收不到更新。请在 Settings → Secrets and variables → Actions 添加该 secret（值是 ~/.vellink/updater.key 的全文）；只想出包不发版，请改用「手动触发」。"
+            exit 1
+          fi
+          echo "::notice title=未配置签名密钥::手动触发：只产出安装包，不含自动更新产物。"
+          echo "### 更新签名：未配置（手动触发，仅安装包）" >> "$GITHUB_STEP_SUMMARY"
+
   build:
     name: ${{ matrix.label }}
+    needs: preflight
     strategy:
       fail-fast: false
       # latest.json 是同一个文件，每个 job 都是「读出已有平台 → 加自己 → 写回」。
@@ -43,10 +71,10 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -78,8 +106,9 @@ jobs:
       - name: 校验版本号一致
         run: npm run version:check
 
-      # 没有签名私钥（fork / 未配置 secret）时关掉 updater 产物，
-      # 让构建照样出安装包，而不是因为签不了名直接失败。
+      # 没有签名私钥时关掉 updater 产物，让手动触发的构建照样出安装包。
+      # tag 发版走到这里时 key 一定存在（preflight 已经拦住），
+      # 落进 else 只可能是手动触发，提示已经在 preflight 里给过，这里不再重复刷屏。
       - name: 准备更新签名
         id: signing
         shell: bash
@@ -87,13 +116,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
             echo "extra=" >> "$GITHUB_OUTPUT"
           else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "extra=--config src-tauri/tauri.nosign.json" >> "$GITHUB_OUTPUT"
             printf '%s\n' '{"bundle":{"createUpdaterArtifacts":false}}' > src-tauri/tauri.nosign.json
-            echo "::warning::未配置 TAURI_SIGNING_PRIVATE_KEY，本次构建不含自动更新产物。"
           fi
 
       - name: 构建并上传安装包
