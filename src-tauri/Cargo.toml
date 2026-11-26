@@ -1,7 +1,7 @@
 [package]
 name = "vellink"
 version = "0.1.0"
-description = "A Markdown editor with Typora-like focus and Obsidian-like extensibility"
+description = "A Markdown editor with distraction-free writing and plugin-based extensibility"
 authors = ["bepersevering"]
 edition = "2021"
 
