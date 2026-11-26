@@ -110,6 +110,22 @@ export const commands: CommandItem[] = [
     action: "source",
   },
   {
+    id: "c-undo",
+    label: "撤销",
+    icon: "edit",
+    hint: "⌘Z",
+    group: "最近使用",
+    action: "undo",
+  },
+  {
+    id: "c-redo",
+    label: "重做",
+    icon: "edit",
+    hint: "⌘⇧Z",
+    group: "最近使用",
+    action: "redo",
+  },
+  {
     id: "c-continue",
     label: "AI · 续写当前段落",
     icon: "ai",

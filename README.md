@@ -75,7 +75,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 |---|---|---|
 | M0 | 地基：脚手架 + IR 类型 + 命令/事务 | 已完成（13 单测通过） |
 | M1 | 内核：增量解析 + source map + 双视图同步 | 增量解析与 source map 已完成（[验证报告](./M1-技术验证报告.md)）；双视图光标同步验证通过，不砍 WYSIWYG（[验证报告](./M2-光标同步验证报告.md)） |
-| M2 | UI：Typora 骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。ProseMirror 已挂载到 `data-editor-host`，与 Markdown 源码视图实时双向同步（⌘1 源码 / ⌘2 WYSIWYG），光标位置互通。[说明](./M2-反向序列化说明.md) |
+| M2 | UI：Typora 骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。ProseMirror 已挂载到 `data-editor-host`，与 Markdown 源码视图实时双向同步（⌘1 源码 / ⌘2 WYSIWYG）；撤销栈已统一到 DocumentStore（⌘Z / ⌘⇧Z），连续输入合并为单个撤销点。[说明](./M2-反向序列化说明.md) |
 | M3 | 插件运行时：manifest + 加载 + 贡献点 | 待开始 |
 | M4 | 官方插件：WebDAV + DeepSeek 问答 | 待开始 |
 | M5 | 三平台打包 + CI + 自动更新 | 待开始 |

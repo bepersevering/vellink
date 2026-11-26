@@ -115,6 +115,16 @@ export class ViewBridge {
     };
   }
 
+  /**
+   * 撤销/重做后回灌已保存的 IR：重新构建 PM 文档与映射，但不重新解析源码。
+   * 与 fromSource 的区别是这里不需要产生新文档对象之外的事务。
+   */
+  reset(ir: DocumentIR): void {
+    this.sourceText = ir.source;
+    this.documentIR = ir;
+    this.mapping = buildPMView(ir);
+  }
+
   /** 当前 PM pos → 当前源码 offset。 */
   pmToSource(pos: number): number {
     return pmToSource(this.mapping, pos);

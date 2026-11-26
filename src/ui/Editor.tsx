@@ -1,6 +1,15 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
+import type { DocumentIR } from "../core/ir/types";
+import { DocumentStore } from "../core/store";
 import { vellinkSchema } from "../core/view/schema";
 import { ViewBridge } from "../core/view/sync";
 import { SAMPLE_MARKDOWN } from "./sample";
@@ -15,6 +24,14 @@ export interface DocStats {
   source: number;
 }
 
+/** 暴露给 App 的撤销/重做入口——唯一权威是 DocumentStore。 */
+export interface EditorHandle {
+  undo(): boolean;
+  redo(): boolean;
+  canUndo(): boolean;
+  canRedo(): boolean;
+}
+
 interface Props {
   docName: string;
   mode: EditorMode;
@@ -25,39 +42,109 @@ interface Props {
  * 编辑区：真实编辑器挂载点。
  *
  * data-editor-host 所在的 .doc-body 由 ProseMirror 接管（WYSIWYG）。
- * 源码模式复用同一个 ViewBridge：PM 事务 → serializePM → 源码；
- * 源码输入 → parseMarkdown → buildPMView → 整体替换 PM doc。
- * 两种视图共享同一份 source offset ↔ PM pos 映射，光标切换时不丢位置。
+ * 两种视图的每次编辑都提交 replaceDocument 事务到同一个 DocumentStore，
+ * 撤销栈只有一份；撤销后把 IR 回灌给 ViewBridge，再整体替换 PM 文档。
  */
-export function Editor({ docName, mode, onStats }: Props) {
+export const Editor = forwardRef<EditorHandle, Props>(function Editor(
+  { docName, mode, onStats },
+  ref,
+) {
   const hostRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef<HTMLTextAreaElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const bridgeRef = useRef<ViewBridge | null>(null);
-  /** 源码输入引发 PM dispatch 时，跳过回写，避免把未规范化的输入又覆盖掉。 */
+  const storeRef = useRef<DocumentStore | null>(null);
+  /** 源码输入 / 撤销回灌引发 PM dispatch 时，跳过再次提交事务。 */
   const fromSourceRef = useRef(false);
   const cursorRef = useRef({ pm: 1, source: 0 });
 
   const [source, setSource] = useState(SAMPLE_MARKDOWN);
   const [cursor, setCursor] = useState({ pm: 1, source: 0 });
 
-  // 挂载 ProseMirror。docName 变化视为换文档，重新建桥（M3 会换成真实文件内容）。
+  /** 把 DocumentStore 里的 IR 回灌到两个视图（撤销/重做专用，不产生新事务）。 */
+  const restoreDocument = (ir: DocumentIR) => {
+    const view = viewRef.current;
+    const bridge = bridgeRef.current;
+    if (!view || !bridge) return;
+
+    bridge.reset(ir);
+    fromSourceRef.current = true;
+    try {
+      const tr = view.state.tr.replaceWith(
+        0,
+        view.state.doc.content.size,
+        bridge.doc.content,
+      );
+      const pos = Math.min(
+        bridge.sourceToPM(cursorRef.current.source),
+        tr.doc.content.size,
+      );
+      tr.setSelection(TextSelection.create(tr.doc, pos));
+      view.dispatch(tr);
+    } finally {
+      fromSourceRef.current = false;
+    }
+
+    const snap = bridge.fromPM(view.state, false);
+    cursorRef.current = snap.cursor;
+    setSource(snap.source);
+    setCursor(snap.cursor);
+  };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      undo: () => {
+        const store = storeRef.current;
+        if (!store?.undo()) return false;
+        restoreDocument(store.getDocument());
+        return true;
+      },
+      redo: () => {
+        const store = storeRef.current;
+        if (!store?.redo()) return false;
+        restoreDocument(store.getDocument());
+        return true;
+      },
+      canUndo: () => storeRef.current?.canUndo() ?? false,
+      canRedo: () => storeRef.current?.canRedo() ?? false,
+    }),
+    [],
+  );
+
+  // 挂载 ProseMirror 与唯一撤销栈
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
 
     const bridge = new ViewBridge(SAMPLE_MARKDOWN);
     bridgeRef.current = bridge;
+    storeRef.current = new DocumentStore(bridge.ir);
+
     const state = EditorState.create({ doc: bridge.doc, schema: vellinkSchema });
+    const store = storeRef.current;
 
     const view = new EditorView(host, {
       state,
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
-        // 源码侧驱动的事务不再反向写源码，避免循环与光标抖动
+        // 源码输入 / 撤销回灌引发的事务不再反向提交，避免循环
         if (fromSourceRef.current) return;
+
         const snap = bridge.fromPM(next, tr.docChanged);
+        if (tr.docChanged) {
+          store.apply(
+            [
+              {
+                type: "replaceDocument",
+                children: snap.ir.children,
+                source: snap.source,
+              },
+            ],
+            { mergeKey: "wysiwyg" },
+          );
+        }
         cursorRef.current = snap.cursor;
         setSource(snap.source);
         setCursor(snap.cursor);
@@ -72,8 +159,10 @@ export function Editor({ docName, mode, onStats }: Props) {
 
     return () => {
       view.destroy();
+      store.dispose();
       viewRef.current = null;
       bridgeRef.current = null;
+      storeRef.current = null;
     };
   }, [docName]);
 
@@ -113,7 +202,8 @@ export function Editor({ docName, mode, onStats }: Props) {
     const caret = e.target.selectionStart ?? next.length;
     const bridge = bridgeRef.current;
     const view = viewRef.current;
-    if (!bridge || !view) return;
+    const store = storeRef.current;
+    if (!bridge || !view || !store) return;
 
     fromSourceRef.current = true;
     try {
@@ -126,6 +216,17 @@ export function Editor({ docName, mode, onStats }: Props) {
       const pos = Math.min(snapshot.cursor.pm, tr.doc.content.size);
       tr.setSelection(TextSelection.create(tr.doc, pos));
       view.dispatch(tr);
+
+      store.apply(
+        [
+          {
+            type: "replaceDocument",
+            children: snapshot.ir.children,
+            source: next,
+          },
+        ],
+        { mergeKey: "source" },
+      );
 
       cursorRef.current = snapshot.cursor;
       setSource(next);
@@ -160,4 +261,4 @@ export function Editor({ docName, mode, onStats }: Props) {
       </div>
     </main>
   );
-}
+});

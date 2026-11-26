@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
-import { Editor, type DocStats, type EditorMode } from "./ui/Editor";
+import {
+  Editor,
+  type DocStats,
+  type EditorHandle,
+  type EditorMode,
+} from "./ui/Editor";
 import { SideDrawer, type PanelTab } from "./ui/SideDrawer";
 import { StatusBar } from "./ui/StatusBar";
 import { CommandPalette } from "./ui/CommandPalette";
@@ -36,6 +41,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | null>(null);
+  const editorRef = useRef<EditorHandle>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -59,6 +65,15 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        const ok = e.shiftKey
+          ? editorRef.current?.redo()
+          : editorRef.current?.undo();
+        showToast(ok ? (e.shiftKey ? "已重做" : "已撤销") : "没有可撤销的操作");
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        showToast(editorRef.current?.redo() ? "已重做" : "没有可重做的操作");
       } else if ((e.metaKey || e.ctrlKey) && e.key === "1") {
         e.preventDefault();
         setEditorMode("source");
@@ -97,6 +112,12 @@ export default function App() {
             ? "源码模式 · PM ⇄ Markdown 已接通"
             : "所见即所得模式",
         );
+        break;
+      case "undo":
+        showToast(editorRef.current?.undo() ? "已撤销" : "没有可撤销的操作");
+        break;
+      case "redo":
+        showToast(editorRef.current?.redo() ? "已重做" : "没有可重做的操作");
         break;
       case "ai-continue":
         setActiveTab("ai");
@@ -145,6 +166,7 @@ export default function App() {
         />
 
         <Editor
+          ref={editorRef}
           docName={activeFile.label}
           mode={editorMode}
           onStats={handleStats}

@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { EditorState, TextSelection } from "prosemirror-state";
+import { parseMarkdown } from "../parser/markdown";
 import { vellinkSchema } from "./schema";
 import { ViewBridge } from "./sync";
 
@@ -75,6 +76,21 @@ describe("ViewBridge · 双视图同步", () => {
     expect(snapshot.cursor.source).toBe(caret);
     expect(bridge.pmToSource(snapshot.cursor.pm)).toBe(caret);
     expect(bridge.sourceToPM(caret)).toBe(snapshot.cursor.pm);
+  });
+
+  it("reset：撤销回灌旧 IR 后，PM 文档与映射同步回退", () => {
+    const bridge = new ViewBridge(DOC);
+    const edited = DOC.replace("第一段", "第一段扩展");
+    bridge.fromSource(edited, edited.indexOf("扩展"));
+
+    // 撤销栈回灌的是之前保存的 IR
+    const oldIR = parseMarkdown({ source: DOC }).ir;
+    bridge.reset(oldIR);
+
+    expect(bridge.source).toBe(DOC);
+    expect(bridge.doc.textContent).not.toContain("扩展");
+    const offset = DOC.indexOf("粗体");
+    expect(bridge.pmToSource(bridge.sourceToPM(offset))).toBe(offset);
   });
 
   it("源码 → PM → 源码：往返后语义内容不丢", () => {

@@ -28,6 +28,12 @@ function invert(op: Op, doc: DocumentIR): Op {
       };
     case "updateSource":
       return { type: "updateSource", source: doc.source };
+    case "replaceDocument":
+      return {
+        type: "replaceDocument",
+        children: doc.children,
+        source: doc.source,
+      };
   }
 }
 
@@ -49,6 +55,8 @@ function applyOp(
       return { children, source: doc.source };
     case "updateSource":
       return { children, source: op.source };
+    case "replaceDocument":
+      return { children: op.children, source: op.source };
   }
 }
 

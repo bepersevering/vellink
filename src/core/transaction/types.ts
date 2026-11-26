@@ -35,7 +35,22 @@ export interface UpdateSourceOp {
   source: string;
 }
 
-export type Op = InsertOp | DeleteOp | ReplaceOp | UpdateSourceOp;
+/**
+ * 整份文档替换：IR 节点树 + 源文本一起换。
+ * 为双视图同步设计——WYSIWYG / 源码编辑产出的新 IR 作为一个原子撤销步骤。
+ */
+export interface ReplaceDocumentOp {
+  type: "replaceDocument";
+  children: BlockNode[];
+  source: string;
+}
+
+export type Op =
+  | InsertOp
+  | DeleteOp
+  | ReplaceOp
+  | UpdateSourceOp
+  | ReplaceDocumentOp;
 
 /** 事务：一组原子 op。 */
 export interface Transaction {
@@ -44,6 +59,15 @@ export interface Transaction {
   /** 该事务生成的反向 op 序列（按逆序应用） */
   inverse: Op[];
   timestamp: number;
+  /** 连续输入合并用；同一 key 且时间窗内的 replaceDocument 事务合并为一个撤销步骤 */
+  mergeKey?: string;
+}
+
+/** apply 的可选行为。 */
+export interface ApplyOptions {
+  /** 与上次同 key 且间隔小于 mergeWindowMs 的单 op 文档替换合并 */
+  mergeKey?: string;
+  mergeWindowMs?: number;
 }
 
 export interface TransactionResult {
