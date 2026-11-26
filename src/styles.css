@@ -435,25 +435,21 @@ svg {
 .hidden {
   display: none !important;
 }
-.source-editor {
-  display: block;
-  width: 100%;
-  min-height: 520px;
-  resize: vertical;
+.source-wrap {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-sub);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.75;
-  padding: 20px;
-  outline: none;
-  tab-size: 2;
+  overflow: hidden;
 }
-.source-editor:focus {
+.source-wrap:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.cm-source-host .cm-editor {
+  min-height: 520px;
+}
+.cm-source-host .cm-scroller {
+  overflow: auto;
 }
 .caret {
   display: inline-block;

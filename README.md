@@ -32,7 +32,7 @@ cd vellink
 npm install
 npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测（62 项）
+npm test               # 运行核心单测（70 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -48,7 +48,7 @@ L1  平台内核       IR · 命令 · 事件总线 · 事务
 L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 ```
 
-技术栈：TypeScript（主）+ Rust（Tauri 宿主壳）、React、ProseMirror（已接入）、Lezer Markdown 解析（已接入）、CodeMirror 6 / Yjs / SQLite + sqlite-vec（后续阶段接入）。
+技术栈：TypeScript（主）+ Rust（Tauri 宿主壳）、React、ProseMirror（WYSIWYG，已接入）、CodeMirror 6（源码视图，已接入）、Lezer Markdown 解析（两视图同源）、Yjs / SQLite + sqlite-vec（后续阶段接入）。
 
 ## 插件开发
 
@@ -75,7 +75,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 |---|---|---|
 | M0 | 地基：脚手架 + IR 类型 + 命令/事务 | 已完成（13 单测通过） |
 | M1 | 内核：增量解析 + source map + 双视图同步 | 增量解析与 source map 已完成（[验证报告](./M1-技术验证报告.md)）；双视图光标同步验证通过，不砍 WYSIWYG（[验证报告](./M2-光标同步验证报告.md)） |
-| M2 | UI：Typora 骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。ProseMirror 已挂载到 `data-editor-host`，与 Markdown 源码视图实时双向同步（⌘1 源码 / ⌘2 WYSIWYG）；撤销栈已统一到 DocumentStore（⌘Z / ⌘⇧Z），连续输入合并为单个撤销点。[说明](./M2-反向序列化说明.md) |
+| M2 | UI：Typora 骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。ProseMirror + CodeMirror 6 双视图实时同步（⌘1 源码 / ⌘2 WYSIWYG），撤销栈统一到 DocumentStore（⌘Z / ⌘⇧Z），IME 组合中间态不污染正文与撤销历史。[说明](./M2-反向序列化说明.md) |
 | M3 | 插件运行时：manifest + 加载 + 贡献点 | 待开始 |
 | M4 | 官方插件：WebDAV + DeepSeek 问答 | 待开始 |
 | M5 | 三平台打包 + CI + 自动更新 | 待开始 |
