@@ -67,7 +67,10 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          # libfuse2：AppImage 打包工具自己也是 AppImage，22.04 上缺它就跑不起来
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 xdg-utils
 
       - name: 安装前端依赖
         run: npm ci
