@@ -853,3 +853,105 @@ body[data-t="dark"] .plugin-ico.i2 {
 body[data-t="dark"] .plugin-ico.i3 {
   background: #352f45;
 }
+
+/* M4 官方插件配置面板 */
+.service-panel {
+  padding: 4px 2px 16px;
+}
+.service-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-sub);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.service-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.service-empty,
+.service-note {
+  font-size: 11px;
+  color: var(--text-hint);
+  line-height: 1.6;
+}
+.service-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.service-fields input,
+.service-question {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 7px 8px;
+  outline: none;
+}
+.service-fields input:focus,
+.service-question:focus {
+  border-color: var(--accent);
+}
+.service-question {
+  min-height: 56px;
+  resize: vertical;
+  margin: 8px 0;
+}
+.service-btn {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-active);
+  color: var(--text);
+  font-size: 11px;
+  padding: 6px 10px;
+  cursor: pointer;
+  margin-right: 6px;
+}
+.service-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.service-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.service-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.service-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.service-answer {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--bg-active);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.service-label {
+  color: var(--accent-text);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.service-sources {
+  margin: 8px 0;
+  color: var(--text-sub);
+  font-size: 10px;
+}
+body[data-t="dark"] .service-block {
+  background: #262629;
+}

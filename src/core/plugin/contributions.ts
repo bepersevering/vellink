@@ -32,7 +32,10 @@ export class ContributionRegistry {
       bucket = new Map();
       this.buckets.set(kind, bucket);
     }
-    if (bucket.has(id))
+    const existing = bucket.get(id);
+    // 同一插件可覆盖自己先前注册的声明（如 manifest descriptor → 运行时服务实例）；
+    // 不同插件撞 id 仍然拒绝，保证命名空间隔离。
+    if (existing && existing.pluginId !== pluginId)
       throw new Error(`Contribution already registered: ${kind}/${id}`);
     bucket.set(id, { pluginId, kind, id, value });
     return () => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentStore } from "./core/store";
 import type { PluginRuntime, PluginSummary } from "./core/plugin/runtime";
 import { createPluginRuntime, persistPluginEnabled } from "./plugins/loader";
+import { createLocalCredentialStore } from "./core/vfs/credentials";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
 import {
@@ -47,6 +48,7 @@ export default function App() {
   const editorRef = useRef<EditorHandle>(null);
   const storeRef = useRef<DocumentStore | null>(null);
   const runtimeRef = useRef<PluginRuntime | null>(null);
+  const [runtimeReady, setRuntimeReady] = useState<PluginRuntime | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -65,19 +67,18 @@ export default function App() {
     void createPluginRuntime({
       getStore: () => storeRef.current,
       notify: showToast,
+      credentialStore: createLocalCredentialStore(),
     }).then(({ runtime, errors }) => {
-      if (disposed) {
-        runtime.dispose();
-        return;
-      }
+      // runtime 是应用级单例：StrictMode 的第一次 cleanup 不可销毁它，
+      // 否则第二次挂载会拿到已 dispose 的实例。
+      if (disposed) return;
       runtimeRef.current = runtime;
+      setRuntimeReady(runtime);
       setPluginSummaries(runtime.list());
       setPluginErrors(errors.map((error) => `${error.path}: ${error.message}`));
     });
     return () => {
       disposed = true;
-      runtimeRef.current?.dispose();
-      runtimeRef.current = null;
     };
   }, [showToast]);
 
@@ -201,7 +202,9 @@ export default function App() {
         showToast("AI · 续写当前段落");
         break;
       case "sync":
-        showToast("已触发同步（占位）");
+        void runtimeRef.current?.runCommand("webdav.sync").then(({ ok, notified }) => {
+          if (!notified) showToast(ok ? "同步完成" : "同步失败，请先配置 WebDAV");
+        });
         break;
       case "open-current":
       case "open-secondbrain":
@@ -257,6 +260,8 @@ export default function App() {
           plugins={plugins}
           pluginErrors={pluginErrors}
           onTogglePlugin={togglePlugin}
+          runtime={runtimeReady}
+          notify={showToast}
         />
       </div>
 

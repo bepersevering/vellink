@@ -39,9 +39,18 @@ export interface PluginLoadResult {
   errors: Array<{ path: string; message: string }>;
 }
 
-export async function createPluginRuntime(
-  options: PluginRuntimeOptions = {},
-): Promise<PluginLoadResult> {
+let sharedRuntime: Promise<PluginLoadResult> | undefined;
+
+/**
+ * 应用级单例：React StrictMode 会双挂载，两次并发 import 会产生两个 runtime，
+ * 同时向全局命令表注册同一插件命令而撞名。这里把首次创建缓存起来，所有调用方共享。
+ */
+export function createPluginRuntime(options: PluginRuntimeOptions = {}): Promise<PluginLoadResult> {
+  if (!sharedRuntime) sharedRuntime = loadRuntime(options);
+  return sharedRuntime;
+}
+
+async function loadRuntime(options: PluginRuntimeOptions): Promise<PluginLoadResult> {
   const runtime = new PluginRuntime(options);
   const errors: PluginLoadResult["errors"] = [];
 

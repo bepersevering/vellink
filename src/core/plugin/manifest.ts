@@ -12,6 +12,7 @@ export const PLUGIN_PERMISSIONS = [
   "documents:read",
   "documents:write",
   "network",
+  "credentials",
   "ai",
   "shell",
 ] as const;

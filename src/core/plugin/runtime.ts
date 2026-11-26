@@ -11,6 +11,7 @@ import type { DocumentStore } from "../store";
 import { commands as globalCommands, type CommandRegistry } from "../command/registry";
 import { bus as globalBus, type AppEvent, type EventBus } from "../event/bus";
 import { satisfiesVersion, type ManifestCommand, type PluginManifest, type PluginPermission } from "./manifest";
+import type { Credential, CredentialStore } from "../vfs/credentials";
 import { ContributionRegistry, type Contribution, type ContributionKind } from "./contributions";
 
 export interface PluginModule {
@@ -80,6 +81,16 @@ export interface PluginContext {
     getDocument(): DocumentIR;
     apply(ops: Op[], options?: ApplyOptions): void;
   };
+  /** 需要 credentials 权限；插件只传 service/account，不接触明文存储实现。 */
+  credentials: {
+    get(service: string, account: string): Promise<Credential | undefined>;
+    set(service: string, account: string, credential: Credential): Promise<void>;
+    delete(service: string, account: string): Promise<void>;
+  };
+  /** 需要 network 权限；走宿主 fetch，便于审计与替换 HTTP 栈。 */
+  net: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  };
   contributions: {
     register<T>(kind: ContributionKind, id: string, value: T): () => void;
   };
@@ -117,6 +128,8 @@ export interface PluginRuntimeOptions {
   getStore?: () => DocumentStore | null;
   notify?: (message: string) => void;
   storage?: PluginStorage;
+  credentialStore?: CredentialStore;
+  fetch?: typeof fetch;
 }
 
 export class PluginRuntime {
@@ -127,6 +140,8 @@ export class PluginRuntime {
   private readonly getStore: () => DocumentStore | null;
   private readonly notify: (message: string) => void;
   private readonly storage: PluginStorage;
+  private readonly credentialStore: CredentialStore;
+  private readonly fetchImpl: typeof fetch;
   private notificationCount = 0;
   readonly contributions = new ContributionRegistry();
 
@@ -141,6 +156,18 @@ export class PluginRuntime {
       userNotify(message);
     };
     this.storage = options.storage ?? createMemoryStorage();
+    this.credentialStore = options.credentialStore ?? {
+      async get() {
+        return undefined;
+      },
+      async set() {
+        throw new Error("CredentialStore 未配置");
+      },
+      async delete() {
+        throw new Error("CredentialStore 未配置");
+      },
+    };
+    this.fetchImpl = options.fetch ?? fetch;
   }
 
   /**
@@ -456,6 +483,28 @@ export class PluginRuntime {
           const store = self.getStore();
           if (!store) throw new Error("DocumentStore is not ready");
           store.apply(ops, options);
+        },
+      },
+
+      credentials: {
+        get: (service, account) => {
+          self.require(record, "credentials");
+          return self.credentialStore.get(service, account);
+        },
+        set: (service, account, credential) => {
+          self.require(record, "credentials");
+          return self.credentialStore.set(service, account, credential);
+        },
+        delete: (service, account) => {
+          self.require(record, "credentials");
+          return self.credentialStore.delete(service, account);
+        },
+      },
+
+      net: {
+        fetch: (input, init) => {
+          self.require(record, "network");
+          return self.fetchImpl(input, init);
         },
       },
 

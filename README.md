@@ -25,7 +25,7 @@ Vellink 的选择是：**以统一文档模型（IR）为内核，把一切上�
 
 ## 快速开始
 
-> 项目处于早期开发阶段（M3 插件运行时）。当前可运行：React 写作界面 + ProseMirror WYSIWYG / CodeMirror 6 双视图实时同步，以及可安装、可启停、可调用命令的插件系统。
+> 项目处于早期开发阶段（M4 官方插件）。当前可运行：React 写作界面 + ProseMirror WYSIWYG / CodeMirror 6 双视图实时同步、可安装启停的插件系统，以及 WebDAV 云同步与 AI 知识库问答两个官方插件。
 
 ```bash
 # 前置：Node.js 20+、Rust 工具链、Xcode Command Line Tools（macOS）
@@ -34,7 +34,7 @@ cd vellink
 npm install
 npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测（88 项）
+npm test               # 运行核心单测（106 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -56,7 +56,7 @@ L1  平台内核       IR · 命令 · 事件总线 · 事务
 L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 ```
 
-技术栈：TypeScript（主）+ Rust（Tauri 宿主壳）、React、ProseMirror（WYSIWYG，已接入）、CodeMirror 6（源码视图，已接入）、Lezer Markdown 解析（两视图同源）、ESM 插件运行时 + 六类贡献点（已接入）、Yjs / SQLite + sqlite-vec（后续阶段接入）。
+技术栈：TypeScript（主）+ Rust（Tauri 宿主壳）、React、ProseMirror（WYSIWYG，已接入）、CodeMirror 6（源码视图，已接入）、Lezer Markdown 解析（两视图同源）、ESM 插件运行时 + 六类贡献点（已接入）、WebDAV VFS + ETag 同步（已接入）、OpenAI 兼容 AIProvider + 内存向量检索（已接入）、OS 密钥链 / SQLite + sqlite-vec / Yjs（Tauri 打包阶段接入）。
 
 ## 插件开发
 
@@ -85,7 +85,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 | M1 | 内核：增量解析 + source map + 双视图同步 | 增量解析与 source map 已完成（[验证报告](./M1-技术验证报告.md)）；双视图光标同步验证通过，不砍 WYSIWYG（[验证报告](./M2-光标同步验证报告.md)） |
 | M2 | UI：Typora 骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。ProseMirror + CodeMirror 6 双视图实时同步（⌘1 源码 / ⌘2 WYSIWYG），撤销栈统一到 DocumentStore（⌘Z / ⌘⇧Z），IME 组合中间态不污染正文与撤销历史。[说明](./M2-反向序列化说明.md) |
 | M3 | 插件运行时：manifest + 加载 + 贡献点 | manifest 严格校验 + ESM 动态加载 + 六类贡献点注册表；生命周期/权限门控/私有存储/失败回滚已实现，附带 `word-count` 示例插件，面板与命令面板已接线。[说明](./M3-插件运行时说明.md) |
-| M4 | 官方插件：WebDAV + DeepSeek 问答 | 待开始 |
+| M4 | 官方插件：WebDAV + DeepSeek 问答 | VFS 抽象 + WebDAV Provider + ETag 离线同步（冲突保留副本）；IR 语义切片 + 向量检索 + OpenAI 兼容 AIProvider；两个官方插件及配置面板已接入。[说明](./M4-官方插件说明.md) |
 | M5 | 三平台打包 + CI + 自动更新 | 待开始 |
 | M6 | 10 人试用打磨 → 公开发布 | 待开始 |
 

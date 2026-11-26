@@ -1,4 +1,6 @@
 import { Icon, type IconName } from "./Icon";
+import { ServicePanel } from "./ServicePanel";
+import type { PluginRuntime } from "../core/plugin/runtime";
 import type { OutlineItem, PluginInfo } from "./data";
 
 export type PanelTab = "outline" | "plugins" | "ai" | "graph";
@@ -11,6 +13,8 @@ interface Props {
   plugins: PluginInfo[];
   pluginErrors?: string[];
   onTogglePlugin: (id: string) => void;
+  runtime: PluginRuntime | null;
+  notify: (message: string) => void;
 }
 
 const TABS: { id: PanelTab; label: string }[] = [
@@ -28,6 +32,8 @@ export function SideDrawer({
   plugins,
   pluginErrors = [],
   onTogglePlugin,
+  runtime,
+  notify,
 }: Props) {
   return (
     <aside
@@ -105,25 +111,7 @@ export function SideDrawer({
       </div>
 
       <div className={`panel ${tab === "ai" ? "on" : ""}`}>
-        <div className="chat-msg">
-          <div className="chat-label">你</div>
-          <div className="chat-user">这篇文章的核心观点是什么？</div>
-        </div>
-        <div className="chat-msg">
-          <div className="chat-label">AI · 已检索 3 篇相关笔记</div>
-          <div className="chat-ai">
-            核心观点是：知识体系的价值不在收藏量，而在能否被重新调用。文中给出了“收集→连接→压缩→表达”的最小闭环，并强调 <code>distill</code>（压缩）是最容易被跳过、也最关键的一步。
-          </div>
-        </div>
-        <div className="chat-msg">
-          <div className="chat-label">你可以问</div>
-          <div className="chat-ai" style={{ color: "var(--accent-text)", cursor: "pointer" }}>
-            · 帮我续写“写在最后”　· 把这篇精简成 200 字　· 列出可链接的笔记
-          </div>
-        </div>
-        <div className="chat-input">
-          问点什么…<span className="kbd">↵</span>
-        </div>
+        <ServicePanel runtime={runtime} notify={notify} />
       </div>
 
       <div className={`panel ${tab === "graph" ? "on" : ""}`}>
