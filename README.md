@@ -1,5 +1,7 @@
 # Vellink
 
+[![CI](https://github.com/bepersevering/vellink/actions/workflows/ci.yml/badge.svg)](https://github.com/bepersevering/vellink/actions/workflows/ci.yml) [![桌面构建](https://github.com/bepersevering/vellink/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/bepersevering/vellink/actions/workflows/build-desktop.yml)
+
 > 一个为写作者设计的 Markdown 编辑器：Typora 般的沉浸写作，Obsidian 般的可扩展知识管理，一切能力皆可插拔。
 
 Vellink 把两件通常互斥的事放在一起——**写作时界面隐形，管理时信息尽在掌握**。默认只有编辑器和极简工具栏；文件树、大纲、插件、AI 助手、关系图谱都藏在抽屉里，需要时一键展开。更重要的是，云同步、AI 知识库、语法扩展等能力全部以插件形式存在，而不是被写死在内核里。
@@ -37,6 +39,12 @@ npx tsc --noEmit       # 类型检查
 ```
 
 架构设计与分阶段开发计划见 [`开发清单.md`](./开发清单.md)。UI 设计基准见 [`ui-prototype.html`](./ui-prototype.html)。
+
+### 持续集成与构建
+
+- **CI**：每次推送到 `main` 或提 PR 自动运行 `npm ci` → 单测 → 类型检查 → 前端构建，并检查 Rust 壳能否编译（`cargo check`）；`dist/` 作为 artifact 保留 7 天。
+- **桌面构建**：推送 `v*` 标签，或在 Actions 页手动触发「桌面构建」，会产出 macOS（arm64 / x86_64）、Windows、Linux 安装包到 workflow artifacts；推标签时还会创建草稿 Release。
+- **工作约定**：每个阶段任务完成后立即 commit + push，以 CI 绿灯作为验收依据。
 
 ## 架构
 
