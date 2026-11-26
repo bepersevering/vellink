@@ -32,16 +32,20 @@ export function TitleBar({
   onOpenSettings,
 }: Props) {
   return (
-    <header className="titlebar">
-      <div className="win-dots" aria-hidden="true">
+    // data-tauri-drag-region：macOS 用 overlay 标题栏（没有系统标题栏条），
+    // 这块区域必须自己声明为可拖动，否则窗口拖不动
+    <header className="titlebar" data-tauri-drag-region>
+      <div className="win-dots" aria-hidden="true" data-tauri-drag-region>
         <span className="dot r" />
         <span className="dot y" />
         <span className="dot g" />
       </div>
 
-      <div className="tb-center">
-        <span className="saved" title={t("titlebar.saved")} />
-        <span className="doc-name">{docName}.md</span>
+      <div className="tb-center" data-tauri-drag-region>
+        <span className="saved" title={t("titlebar.saved")} data-tauri-drag-region />
+        <span className="doc-name" data-tauri-drag-region>
+          {docName}.md
+        </span>
         <div className="mode-switch" role="tablist" aria-label={t("titlebar.modeSwitch")}>
           <button
             className={`mode-btn ${mode === "focus" ? "on" : ""}`}

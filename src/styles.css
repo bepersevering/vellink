@@ -66,6 +66,18 @@ body {
   gap: 8px;
   align-items: center;
 }
+/* 桌面端不画假的窗口按钮：真实窗口里系统已经画了一份（浏览器预览才需要）。
+   macOS 用 overlay 标题栏，原生按钮压在这块位置上，所以保留同样的空档；
+   Windows / Linux 的按钮在右上角，左侧不留空。 */
+body[data-desktop="mac"] .win-dots {
+  width: 52px;
+}
+body[data-desktop="mac"] .win-dots .dot {
+  display: none;
+}
+body[data-desktop="other"] .win-dots {
+  display: none;
+}
 .dot {
   width: 12px;
   height: 12px;
