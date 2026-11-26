@@ -68,14 +68,16 @@ const results = [
   sync(
     lockPath,
     (text) => {
-      // Cargo.lock 里本包那一段：name = "vellink" 紧跟着 version
+      // Cargo.lock 里本包那一段：name = "vellink" 紧跟着 version。
+      // 换行写成 \r?\n：Windows runner 上 checkout 出来的是 CRLF，只认 \n
+      // 会让版本校验在那里恒定失败（macOS / Linux 却全绿，很难查）。
       return text.replace(
-        /(\[\[package\]\]\nname = "vellink"\nversion = ")[^"]*(")/,
+        /(\[\[package\]\]\r?\nname = "vellink"\r?\nversion = ")[^"]*(")/,
         `$1${version}$2`,
       );
     },
     (text) =>
-      (text.match(/\[\[package\]\]\nname = "vellink"\nversion = "([^"]*)"/) ?? [])[1],
+      (text.match(/\[\[package\]\]\r?\nname = "vellink"\r?\nversion = "([^"]*)"/) ?? [])[1],
   ),
 ];
 
