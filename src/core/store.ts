@@ -5,8 +5,8 @@ import type {
   Op,
   Transaction,
 } from "./transaction/types";
-import { bus } from "./event/bus";
-import { commands } from "./command/registry";
+import { bus, type EventBus } from "./event/bus";
+import { commands, type CommandRegistry } from "./command/registry";
 
 /**
  * DocumentStore — 全应用唯一的撤销权威。
@@ -21,20 +21,24 @@ export class DocumentStore {
   private redoStack: Transaction[] = [];
   private unregisterCommands: Array<() => void> = [];
 
-  constructor(initial: DocumentIR = emptyDocument()) {
+  constructor(
+    initial: DocumentIR = emptyDocument(),
+    private readonly registry: CommandRegistry = commands,
+    private readonly eventBus: EventBus = bus,
+  ) {
     this.doc = initial;
     this.registerCommands();
   }
 
   private registerCommands() {
     this.unregisterCommands.push(
-      commands.register({
+      this.registry.register({
         id: "doc.undo",
         title: "撤销",
         keybinding: "Mod+Z",
         run: () => this.undo(),
       }),
-      commands.register({
+      this.registry.register({
         id: "doc.redo",
         title: "重做",
         keybinding: "Mod+Shift+Z",
@@ -86,7 +90,7 @@ export class DocumentStore {
     // 新编辑之后，旧的 redo 分支失效
     this.redoStack = [];
 
-    bus.emit({
+    this.eventBus.emit({
       type: "document:changed",
       transaction: result.transaction,
       version: this.doc.version,
@@ -99,7 +103,7 @@ export class DocumentStore {
     if (!tx) return false;
     this.doc = undoTransaction(this.doc, tx);
     this.redoStack.push(tx);
-    bus.emit({
+    this.eventBus.emit({
       type: "document:changed",
       transaction: tx,
       version: this.doc.version,
@@ -113,7 +117,7 @@ export class DocumentStore {
     // 正向重放：重新应用当时的 ops
     this.doc = commit(this.doc, tx.ops, tx.id).document;
     this.undoStack.push(tx);
-    bus.emit({
+    this.eventBus.emit({
       type: "document:changed",
       transaction: tx,
       version: this.doc.version,

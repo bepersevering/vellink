@@ -36,6 +36,8 @@ interface Props {
   docName: string;
   mode: EditorMode;
   onStats?: (stats: DocStats) => void;
+  /** 把唯一撤销栈暴露给 App，插件通过受权限门控的 API 读同一份 IR。 */
+  onStoreReady?: (store: DocumentStore | null) => void;
 }
 
 /**
@@ -45,7 +47,7 @@ interface Props {
  * compositionend 后一次性提交最终文本。避免拼音中间态污染正文和撤销历史。
  */
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
-  { docName, mode, onStats },
+  { docName, mode, onStats, onStoreReady },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -194,6 +196,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     bridgeRef.current = bridge;
     const store = new DocumentStore(bridge.ir);
     storeRef.current = store;
+    onStoreReady?.(store);
 
     const state = EditorState.create({ doc: bridge.doc, schema: vellinkSchema });
     const view = new EditorView(host, {
@@ -234,11 +237,12 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       host.removeEventListener("compositionend", onCompositionEnd);
       view.destroy();
       store.dispose();
+      onStoreReady?.(null);
       viewRef.current = null;
       bridgeRef.current = null;
       storeRef.current = null;
     };
-  }, [docName]);
+  }, [docName, onStoreReady]);
 
   // 切换视图时把光标带到另一侧：同一份映射，不重新解析、不重排文档。
   useEffect(() => {

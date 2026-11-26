@@ -1,0 +1,20 @@
+{
+  "id": "word-count",
+  "name": "字数统计",
+  "version": "1.0.0",
+  "description": "示例插件：注册命令读取 IR 源码统计字数，并演示私有存储与事件订阅。",
+  "author": "Vellink",
+  "license": "MIT",
+  "entry": "index.ts",
+  "engines": { "vellink": "^0.1.0" },
+  "activationEvents": ["onStartup"],
+  "permissions": ["storage", "documents:read"],
+  "contributes": {
+    "commands": [
+      { "command": "word-count.report", "title": "字数统计 · 报告当前文档" }
+    ],
+    "views": [
+      { "id": "word-count.panel", "title": "字数统计", "location": "rightDrawer", "icon": "chart" }
+    ]
+  }
+}

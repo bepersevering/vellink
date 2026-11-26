@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DocumentStore } from "./core/store";
+import type { PluginRuntime, PluginSummary } from "./core/plugin/runtime";
+import { createPluginRuntime, persistPluginEnabled } from "./plugins/loader";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
 import {
@@ -15,7 +18,6 @@ import {
   commands as commandItems,
   fileTree,
   outline,
-  plugins as initialPlugins,
   type PluginInfo,
   type TreeItem,
   type CommandItem,
@@ -37,11 +39,14 @@ export default function App() {
   const [rightOpen, setRightOpen] = useState(false);
   const [activeFile, setActiveFile] = useState<TreeItem>(fileTree[1]);
   const [activeTab, setActiveTab] = useState<PanelTab>("outline");
-  const [plugins, setPlugins] = useState<PluginInfo[]>(initialPlugins);
+  const [pluginSummaries, setPluginSummaries] = useState<PluginSummary[]>([]);
+  const [pluginErrors, setPluginErrors] = useState<string[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | null>(null);
   const editorRef = useRef<EditorHandle>(null);
+  const storeRef = useRef<DocumentStore | null>(null);
+  const runtimeRef = useRef<PluginRuntime | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -50,6 +55,64 @@ export default function App() {
   }, []);
 
   const handleStats = useCallback((next: DocStats) => setStats(next), []);
+  const handleStoreReady = useCallback((store: DocumentStore | null) => {
+    storeRef.current = store;
+  }, []);
+
+  // 发现并加载插件：坏 manifest / 入口缺失只记录错误，不影响编辑器启动。
+  useEffect(() => {
+    let disposed = false;
+    void createPluginRuntime({
+      getStore: () => storeRef.current,
+      notify: showToast,
+    }).then(({ runtime, errors }) => {
+      if (disposed) {
+        runtime.dispose();
+        return;
+      }
+      runtimeRef.current = runtime;
+      setPluginSummaries(runtime.list());
+      setPluginErrors(errors.map((error) => `${error.path}: ${error.message}`));
+    });
+    return () => {
+      disposed = true;
+      runtimeRef.current?.dispose();
+      runtimeRef.current = null;
+    };
+  }, [showToast]);
+
+  const plugins = useMemo<PluginInfo[]>(
+    () =>
+      pluginSummaries.map((plugin, index) => ({
+        id: plugin.id,
+        name: plugin.name,
+        desc:
+          plugin.error ??
+          plugin.description ??
+          (plugin.active ? "已激活" : "已安装 · 未激活"),
+        tag: `v${plugin.version} · ${plugin.commands.length} 命令 · ${plugin.views.length} 视图`,
+        icon: (["folder", "ai", "chart"] as const)[index % 3],
+        tone: (["i1", "i2", "i3"] as const)[index % 3],
+        enabled: plugin.enabled,
+      })),
+    [pluginSummaries],
+  );
+
+  const paletteCommands = useMemo(
+    () => [
+      ...commandItems,
+      ...pluginSummaries.flatMap((plugin) =>
+        plugin.commands.map((command) => ({
+          id: command.command,
+          label: command.title,
+          icon: "edit" as const,
+          group: `插件 · ${plugin.name}`,
+          action: `plugin:${command.command}`,
+        })),
+      ),
+    ],
+    [pluginSummaries],
+  );
 
   useEffect(() => {
     document.body.dataset.t = theme;
@@ -98,12 +161,25 @@ export default function App() {
     showToast(manage ? "管理模式 · 抽屉已展开" : "写作模式 · 界面已隐形");
   };
 
-  const togglePlugin = (id: string) =>
-    setPlugins((ps) =>
-      ps.map((p) => (p.id === id ? { ...p, enabled: !p.enabled } : p)),
-    );
+  const togglePlugin = async (id: string) => {
+    const runtime = runtimeRef.current;
+    const plugin = runtime?.get(id);
+    if (!runtime || !plugin) return;
+    const next = !plugin.enabled;
+    await runtime.setEnabled(id, next);
+    persistPluginEnabled(id, next);
+    setPluginSummaries(runtime.list());
+    showToast(`${plugin.name} 已${next ? "启用" : "停用"}`);
+  };
 
   const runCommand = (cmd: CommandItem) => {
+    if (cmd.action.startsWith("plugin:")) {
+      const id = cmd.action.slice("plugin:".length);
+      void runtimeRef.current?.runCommand(id).then(({ ok, notified }) => {
+        if (!notified) showToast(ok ? `已执行 · ${cmd.label}` : `执行失败 · ${cmd.label}`);
+      });
+      return;
+    }
     switch (cmd.action) {
       case "source":
         setEditorMode((m) => (m === "wysiwyg" ? "source" : "wysiwyg"));
@@ -170,6 +246,7 @@ export default function App() {
           docName={activeFile.label}
           mode={editorMode}
           onStats={handleStats}
+          onStoreReady={handleStoreReady}
         />
 
         <SideDrawer
@@ -178,6 +255,7 @@ export default function App() {
           onTabChange={setActiveTab}
           outline={outline}
           plugins={plugins}
+          pluginErrors={pluginErrors}
           onTogglePlugin={togglePlugin}
         />
       </div>
@@ -189,7 +267,7 @@ export default function App() {
 
       <CommandPalette
         open={paletteOpen}
-        commands={commandItems}
+        commands={paletteCommands}
         onClose={() => setPaletteOpen(false)}
         onRun={runCommand}
       />

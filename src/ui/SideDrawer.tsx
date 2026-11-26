@@ -9,6 +9,7 @@ interface Props {
   onTabChange: (t: PanelTab) => void;
   outline: OutlineItem[];
   plugins: PluginInfo[];
+  pluginErrors?: string[];
   onTogglePlugin: (id: string) => void;
 }
 
@@ -25,6 +26,7 @@ export function SideDrawer({
   onTabChange,
   outline,
   plugins,
+  pluginErrors = [],
   onTogglePlugin,
 }: Props) {
   return (
@@ -62,6 +64,14 @@ export function SideDrawer({
       </div>
 
       <div className={`panel ${tab === "plugins" ? "on" : ""}`}>
+        {pluginErrors.map((error) => (
+          <div key={error} className="plugin-error" title={error}>
+            ⚠ {error}
+          </div>
+        ))}
+        {plugins.length === 0 && pluginErrors.length === 0 && (
+          <div className="plugin-empty">正在加载插件…</div>
+        )}
         {plugins.map((p) => (
           <div className="plugin-card" key={p.id}>
             <div className="plugin-top">

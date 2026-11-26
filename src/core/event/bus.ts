@@ -21,17 +21,26 @@ export interface PluginLoadedEvent {
   id: string;
 }
 
+export interface PluginUnloadedEvent {
+  type: "plugin:unloaded";
+  id: string;
+}
+
 export type AppEvent =
   | DocumentChangedEvent
   | DocumentSavedEvent
-  | PluginLoadedEvent;
+  | PluginLoadedEvent
+  | PluginUnloadedEvent;
 
 type Handler<E extends AppEvent = AppEvent> = (event: E) => void;
 
 export class EventBus {
   private handlers = new Map<AppEvent["type"], Set<Handler>>();
 
-  on<E extends AppEvent>(type: E["type"], handler: Handler<E>): () => void {
+  on<T extends AppEvent["type"]>(
+    type: T,
+    handler: (event: Extract<AppEvent, { type: T }>) => void,
+  ): () => void {
     let set = this.handlers.get(type);
     if (!set) {
       set = new Set();
