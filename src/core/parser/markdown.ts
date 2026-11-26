@@ -179,7 +179,9 @@ function isMark(name: string): boolean {
     name === "CodeMark" ||
     name === "LinkMark" ||
     name === "TaskMarker" ||
-    name === "TableDelimiter"
+    name === "TableDelimiter" ||
+    name === "URL" ||
+    name === "CodeInfo"
   );
 }
 

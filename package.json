@@ -15,6 +15,9 @@
     "@lezer/common": "^1.5.7",
     "@lezer/markdown": "^1.8.2",
     "@tauri-apps/api": "^2.12.5",
+    "prosemirror-model": "^1.25.13",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-transform": "^1.12.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
