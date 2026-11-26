@@ -36,8 +36,11 @@ export interface EditorHandle {
   redo(): boolean;
   canUndo(): boolean;
   canRedo(): boolean;
-  /** 跳到源码偏移（大纲点击），两种视图都支持。 */
-  seek(offset: number): void;
+  /**
+   * 跳到源码偏移（大纲点击 / 全库搜索命中），两种视图都支持。
+   * 给了 `length` 就顺带选中那一段，让用户看见「就是这里」。
+   */
+  seek(offset: number, length?: number): boolean;
   /** 打开查找替换浮层（⌘F）；已有选区时以选区为初始查询。 */
   openFind(): void;
   closeFind(): void;
@@ -539,28 +542,32 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       },
       canUndo: () => storeRef.current?.canUndo() ?? false,
       canRedo: () => storeRef.current?.canRedo() ?? false,
-      seek: (offset: number) => {
+      seek: (offset: number, length?: number) => {
         const view = viewRef.current;
         const bridge = bridgeRef.current;
-        if (!view || !bridge) return;
+        if (!view || !bridge) return false;
         const safe = Math.max(0, Math.min(offset, bridge.source.length));
+        const span = length && length > 0 ? length : 0;
 
         if (modeRef.current === "source") {
           cursorRef.current = { ...cursorRef.current, source: safe };
           setCursor(cursorRef.current);
-          sourceEditorRef.current?.focusAt(safe);
-          return;
+          sourceEditorRef.current?.focusAt(safe, safe + span);
+          return true;
         }
 
-        const pos = Math.min(bridge.sourceToPM(safe), view.state.doc.content.size);
+        const size = view.state.doc.content.size;
+        const pos = Math.min(bridge.sourceToPM(safe), size);
+        const stop = Math.min(pos + span, size);
         view.dispatch(
           view.state.tr
-            .setSelection(TextSelection.create(view.state.doc, pos))
+            .setSelection(TextSelection.create(view.state.doc, pos, stop))
             .scrollIntoView(),
         );
         view.focus();
         cursorRef.current = { pm: pos, source: safe };
         setCursor(cursorRef.current);
+        return true;
       },
       openFind,
       closeFind,

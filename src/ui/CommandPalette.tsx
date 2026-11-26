@@ -12,22 +12,39 @@ interface Props {
   commands: CommandItem[];
   onClose: () => void;
   onRun: (cmd: CommandItem) => void;
+  /** 全库搜索：给定查询返回笔记命中，排在命令前面。 */
+  searchNotes?: (query: string) => CommandItem[];
 }
 
-export function CommandPalette({ open, commands, onClose, onRun }: Props) {
+/** 单字只对中文放行：英文单字母会把半本文档都搜出来。 */
+function worthSearching(query: string): boolean {
+  const q = query.trim();
+  if (q.length >= 2) return true;
+  return q.length === 1 && /[\u3400-\u9fff]/.test(q);
+}
+
+export function CommandPalette({ open, commands, onClose, onRun, searchNotes }: Props) {
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const notes = useMemo(() => {
+    if (!searchNotes || !worthSearching(query)) return [];
+    return searchNotes(query);
+  }, [query, searchNotes]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return commands;
-    return commands.filter(
-      (c) =>
-        tr(c.label).toLowerCase().includes(q) ||
-        tr(c.group).toLowerCase().includes(q),
-    );
-  }, [commands, query]);
+    const matched = q
+      ? commands.filter(
+          (c) =>
+            tr(c.label).toLowerCase().includes(q) ||
+            tr(c.group).toLowerCase().includes(q),
+        )
+      : commands;
+    // 笔记命中在前：搜索时通常先想找内容，再找命令
+    return q ? [...notes, ...matched] : matched;
+  }, [commands, notes, query]);
 
   useEffect(() => {
     if (open) {

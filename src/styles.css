@@ -795,6 +795,10 @@ svg {
 }
 .palette-item .right {
   margin-left: auto;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 10.5px;
   color: var(--text-hint);
 }

@@ -69,6 +69,7 @@ export const en: Record<string, string> = {
   "palette.placeholder": "Type a command, file name, or search notes…",
   "palette.search": "Search commands",
   "palette.noMatch": "No matching commands",
+  "palette.notes": "Notes",
 
   // Command groups
   "group.recent": "Recent",

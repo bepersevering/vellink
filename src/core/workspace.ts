@@ -10,6 +10,7 @@
  */
 
 import { createRegistry } from "./command/registry";
+import { findMatches } from "./find";
 import { docTitle } from "./outline";
 import { parseMarkdown } from "./parser/markdown";
 import { DocumentStore } from "./store";
@@ -43,6 +44,55 @@ export interface ExternalFile {
   id: string;
   source: string;
   updatedAt: number;
+}
+
+/** 全库搜索的一条结果。 */
+export interface NoteMatch {
+  id: string;
+  title: string;
+  /** 命中在源码里的偏移；标题命中时是标题文字的位置。 */
+  offset: number;
+  /** 命中长度，跳转时用来选中这段文字。 */
+  length: number;
+  /** 命中词前后的片段（换行已压平）。 */
+  snippet: string;
+  /** 这次命中来自标题而不是正文。 */
+  inTitle: boolean;
+}
+
+export interface SearchOptions {
+  /** 最多返回多少条。 */
+  limit?: number;
+  /** 同一篇文档最多取几条，避免一篇长文占满列表。 */
+  perDoc?: number;
+}
+
+/** 截一段命中上下文：换行压成空格，两端按需加省略号。 */
+function snippetAround(source: string, from: number, to: number, radius = 26): string {
+  const start = Math.max(0, from - radius);
+  const end = Math.min(source.length, to + radius);
+  const body = source
+    .slice(start, end)
+    .replace(/\s+/g, " ")
+    // 片段多半从某个标题刚结束的位置开始，开头的 ### 只是噪音
+    .replace(/^…?#{1,6}\s*/, "")
+    .trim();
+  return `${start > 0 ? "…" : ""}${body}${end < source.length ? "…" : ""}`;
+}
+
+/**
+ * 文档开头的一句正文（跳过标题行）。
+ *
+ * 标题命中时列表里再显示一遍标题等于浪费一行，给一句正文更有信息量。
+ */
+function leadSentence(source: string, max = 64): string {
+  const body = source
+    .split("\n")
+    .filter((line) => !/^\s*#{1,6}\s/.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return body.length > max ? `${body.slice(0, max)}…` : body;
 }
 
 export interface WorkspaceOptions {
@@ -109,6 +159,52 @@ export class Workspace {
 
   activeDoc(): WorkspaceDoc | null {
     return this.active ? (this.get(this.active) ?? null) : null;
+  }
+
+  /**
+   * 全库搜索：标题 + 正文。
+   *
+   * 只搜源码（唯一真源），不分词：中文按子串、英文不区分大小写，与编辑器内的
+   * 查找共用同一套规则。返回的 `offset` 就是源码偏移，可直接交给编辑器定位。
+   * 标题命中排在正文命中之前——那通常是「用户要找的就是这篇」。
+   */
+  search(query: string, options: SearchOptions = {}): NoteMatch[] {
+    const q = query.trim();
+    if (!q) return [];
+    const limit = options.limit ?? 10;
+    const perDoc = options.perDoc ?? 2;
+    const needle = q.toLowerCase();
+
+    const titleHits: NoteMatch[] = [];
+    const bodyHits: NoteMatch[] = [];
+
+    for (const doc of this.docs) {
+      if (doc.title.toLowerCase().includes(needle)) {
+        // 跳到标题本身，而不是文档第一个字符（那里通常只是 `# `）
+        const at = doc.source.toLowerCase().indexOf(doc.title.toLowerCase());
+        titleHits.push({
+          id: doc.id,
+          title: doc.title,
+          offset: Math.max(0, at),
+          length: at >= 0 ? doc.title.length : 0,
+          snippet: leadSentence(doc.source),
+          inTitle: true,
+        });
+      }
+      const { matches } = findMatches(doc.source, q, { limit: perDoc });
+      for (const match of matches) {
+        bodyHits.push({
+          id: doc.id,
+          title: doc.title,
+          offset: match.from,
+          length: match.to - match.from,
+          snippet: snippetAround(doc.source, match.from, match.to),
+          inTitle: false,
+        });
+      }
+    }
+
+    return [...titleHits, ...bodyHits].slice(0, limit);
   }
 
   /* ------------------------------ 变更 ------------------------------ */

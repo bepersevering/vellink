@@ -69,6 +69,7 @@ export const zhCN: Record<string, string> = {
   "palette.placeholder": "输入命令、文件名，或搜索笔记…",
   "palette.search": "命令搜索",
   "palette.noMatch": "没有匹配的命令",
+  "palette.notes": "笔记",
 
   // Command groups
   "group.recent": "最近使用",

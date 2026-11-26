@@ -491,6 +491,60 @@ export default function App() {
     editorRef.current?.seek(offset);
   }, []);
 
+  /** 全库搜索命中：切到那篇文档并定位到源码偏移。 */
+  const pendingSeekRef = useRef<{ id: string; offset: number; length: number } | null>(null);
+  const seekTokenRef = useRef(0);
+
+  const openNoteHit = useCallback((id: string, offset: number, length: number) => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    if (workspace.activeId === id) {
+      editorRef.current?.seek(offset, length);
+      return;
+    }
+    pendingSeekRef.current = { id, offset, length };
+    workspace.setActive(id);
+  }, []);
+
+  // 切文档会让编辑器整体重建：等它挂上新的 store 再定位，别赌单次 rAF
+  useEffect(() => {
+    const pending = pendingSeekRef.current;
+    if (!pending || pending.id !== activeId) return;
+    pendingSeekRef.current = null;
+    const token = (seekTokenRef.current += 1);
+    let attempts = 0;
+    const trySeek = () => {
+      if (token !== seekTokenRef.current) return;
+      attempts += 1;
+      if (editorRef.current?.seek(pending.offset, pending.length)) return;
+      if (attempts < 12) window.setTimeout(trySeek, 40);
+    };
+    const timer = window.setTimeout(trySeek, 40);
+    return () => window.clearTimeout(timer);
+  }, [activeId]);
+
+  /** 命令面板的全库搜索数据源。 */
+  const searchNotes = useCallback(
+    (query: string): CommandItem[] => {
+      const workspace = workspaceRef.current;
+      if (!workspace) return [];
+      return workspace.search(query, { limit: 6 }).map((hit) => {
+        // 末尾两段是偏移和长度；路径本身可能带冒号，所以从后往前切
+        const action = `note:${hit.id}:${hit.offset}:${hit.length}`;
+        return {
+          id: action,
+          label: hit.title,
+          icon: "file" as const,
+          hint: hit.snippet,
+          group: t("palette.notes"),
+          action,
+        };
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 切语言时分组名要跟着变
+    [locale],
+  );
+
   /* ------------------------------ 主题与快捷键 ------------------------------ */
 
   useEffect(() => {
@@ -584,6 +638,20 @@ export default function App() {
   const runCommand = (cmd: CommandItem) => {
     /** 命令 label/group 存的是 i18n key；插件命令的标题原样透传。 */
     const label = cmd.label.includes(".") && !cmd.label.includes(" ") ? t(cmd.label) : cmd.label;
+    // 全库搜索命中：id 里最后一段是偏移（路径本身可能带冒号）
+    if (cmd.action.startsWith("note:")) {
+      const rest = cmd.action.slice("note:".length);
+      const lengthAt = rest.lastIndexOf(":");
+      const offsetAt = rest.lastIndexOf(":", lengthAt - 1);
+      if (offsetAt > 0) {
+        openNoteHit(
+          rest.slice(0, offsetAt),
+          Number(rest.slice(offsetAt + 1, lengthAt)) || 0,
+          Number(rest.slice(lengthAt + 1)) || 0,
+        );
+      }
+      return;
+    }
     if (cmd.action.startsWith("plugin:")) {
       const id = cmd.action.slice("plugin:".length);
       void runtimeRef.current?.runCommand(id).then(({ ok, notified }) => {
@@ -732,6 +800,7 @@ export default function App() {
         commands={paletteCommands}
         onClose={() => setPaletteOpen(false)}
         onRun={runCommand}
+        searchNotes={searchNotes}
       />
 
       <UpdateNotice updater={updater} />

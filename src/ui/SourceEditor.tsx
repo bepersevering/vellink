@@ -34,8 +34,8 @@ import { markdown } from "@codemirror/lang-markdown";
 export interface SourceEditorHandle {
   /** 外部（PM 编辑 / 撤销）更新源码时同步 CM 文档，不回写 bridge。 */
   setDocument(text: string, caret: number): void;
-  /** 切到源码模式：聚焦并把光标放到指定 offset。 */
-  focusAt(caret: number): void;
+  /** 切到源码模式：聚焦并把光标放到指定 offset；给了 `end` 就选中这一段。 */
+  focusAt(caret: number, end?: number): void;
   getSelection(): number;
   /** 当前选区文本（打开查找时作为初始查询）。 */
   getSelectedText(): string;
@@ -146,15 +146,15 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
             applyingRef.current = false;
           }
         },
-        focusAt(caret) {
+        focusAt(caret, end) {
           const view = viewRef.current;
           if (!view) return;
-          const pos = Math.max(
-            0,
-            Math.min(caret, view.state.doc.length),
-          );
+          const total = view.state.doc.length;
+          const start = Math.max(0, Math.min(caret, total));
+          const stop =
+            end === undefined ? start : Math.max(start, Math.min(end, total));
           view.dispatch({
-            selection: EditorSelection.cursor(pos),
+            selection: EditorSelection.range(start, stop),
             scrollIntoView: true,
           });
           view.focus();
