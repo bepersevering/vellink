@@ -33,9 +33,17 @@ export interface DocSummary {
   updatedAt: number;
 }
 
+/** 磁盘上读到的一篇文档快照，用于校正工作区。 */
+export interface ExternalFile {
+  id: string;
+  source: string;
+  updatedAt: number;
+}
+
 export interface WorkspaceOptions {
   now?: () => number;
-  idFactory?: () => string;
+  /** 新文档的 id 生成器；文件后端用它把 id 绑成文件路径。 */
+  idFactory?: (title: string) => string;
   /** 没有标题且内容为空时的兜底名。 */
   fallbackTitle?: string;
 }
@@ -59,7 +67,7 @@ export class Workspace {
   private readonly unsubscribes = new Map<string, () => void>();
   private readonly listeners = new Set<() => void>();
   private readonly now: () => number;
-  private readonly idFactory: () => string;
+  private readonly idFactory: (title: string) => string;
   private readonly fallbackTitle: string;
 
   constructor(initial: WorkspaceDoc[] = [], options: WorkspaceOptions = {}) {
@@ -102,11 +110,16 @@ export class Workspace {
     return true;
   }
 
-  create(title?: string): WorkspaceDoc {
+  /**
+   * 新建文档。
+   *
+   * `id` 由调用方给时以它为准（文件后端把 id 绑成 .md 路径），否则走 idFactory。
+   */
+  create(title?: string, id?: string): WorkspaceDoc {
     const name = this.uniqueTitle(title ?? this.fallbackTitle);
     const timestamp = this.now();
     const doc: WorkspaceDoc = {
-      id: this.idFactory(),
+      id: id ?? this.idFactory(name),
       title: name,
       source: newDocumentSource(name),
       savedSource: "",
@@ -142,6 +155,63 @@ export class Workspace {
     if (doc.savedSource === saved) return;
     doc.savedSource = saved;
     this.notify();
+  }
+
+  /**
+   * 用磁盘快照校正工作区（外部编辑、git pull、同步盘写入都会走到这里）。
+   *
+   * - 磁盘有、内存没有：新增文档
+   * - 磁盘内容变了、内存没有未保存改动：覆盖并清空该文档的撤销栈
+   * - 内存有、磁盘已不存在且没有未保存改动：移除
+   *
+   * 脏文档一律以内存为准：宁可和磁盘暂时不一致，也不能吞掉正在写的内容。
+   * `presentIds` 传磁盘上当前全部文档 id，避免「只传变化项」时误判删除。
+   */
+  syncExternal(
+    files: ExternalFile[],
+    presentIds: string[],
+  ): { added: string[]; updated: string[]; removed: string[] } {
+    const added: string[] = [];
+    const updated: string[] = [];
+    const removed: string[] = [];
+
+    for (const file of files) {
+      const existing = this.get(file.id);
+      if (!existing) {
+        this.docs.unshift({
+          id: file.id,
+          title: docTitle(file.source, this.fallbackTitle),
+          source: file.source,
+          savedSource: file.source,
+          createdAt: file.updatedAt,
+          updatedAt: file.updatedAt,
+        });
+        added.push(file.id);
+        continue;
+      }
+      if (existing.source !== existing.savedSource) continue;
+      if (existing.source === file.source) {
+        if (file.updatedAt > existing.updatedAt) existing.updatedAt = file.updatedAt;
+        continue;
+      }
+      existing.source = file.source;
+      existing.savedSource = file.source;
+      existing.title = docTitle(file.source, this.fallbackTitle);
+      existing.updatedAt = file.updatedAt;
+      // 已创建的 store 手里还是旧树，重置后编辑器才会回灌新内容
+      this.stores.get(file.id)?.reset(parseMarkdown({ source: file.source }).ir);
+      updated.push(file.id);
+    }
+
+    const present = new Set(presentIds);
+    for (const doc of [...this.docs]) {
+      if (present.has(doc.id)) continue;
+      if (doc.source !== doc.savedSource) continue;
+      if (this.remove(doc.id)) removed.push(doc.id);
+    }
+
+    if (added.length > 0 || updated.length > 0 || removed.length > 0) this.notify();
+    return { added, updated, removed };
   }
 
   /* ------------------------------ 撤销权威 ------------------------------ */

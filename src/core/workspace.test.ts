@@ -116,6 +116,76 @@ describe("Workspace", () => {
   });
 });
 
+describe("Workspace 外部变更校正", () => {
+  it("磁盘新增的文件进入列表顶部", () => {
+    const workspace = new Workspace([doc("a", "# A")], { now: () => 5000 });
+
+    const result = workspace.syncExternal(
+      [{ id: "b", source: "# B\n\n来自磁盘", updatedAt: 4000 }],
+      ["a", "b"],
+    );
+
+    expect(result.added).toEqual(["b"]);
+    expect(workspace.summaries().map((item) => item.id)).toEqual(["b", "a"]);
+    expect(workspace.get("b")?.title).toBe("B");
+  });
+
+  it("磁盘内容变了就覆盖，并重置该文档的撤销栈", () => {
+    const workspace = new Workspace([doc("a", "# A\n\n旧")]);
+    const store = workspace.store("a")!;
+    typeSource(store, "# A\n\n本地改的");
+
+    // 先让本地改动落盘，模拟「已保存 → 外部又改了」
+    workspace.markSaved("a");
+    const result = workspace.syncExternal(
+      [{ id: "a", source: "# A\n\n外部改的", updatedAt: 9000 }],
+      ["a"],
+    );
+
+    expect(result.updated).toEqual(["a"]);
+    expect(workspace.get("a")?.source).toBe("# A\n\n外部改的");
+    expect(workspace.summaries()[0].dirty).toBe(false);
+    // 视图拿到的也是新内容，且旧历史已作废
+    expect(store.getDocument().source).toBe("# A\n\n外部改的");
+    expect(store.canUndo()).toBe(false);
+  });
+
+  it("有未保存改动的文档不被磁盘覆盖", () => {
+    const workspace = new Workspace([doc("a", "# A\n\n旧")]);
+    const store = workspace.store("a")!;
+    typeSource(store, "# A\n\n正在写");
+
+    const result = workspace.syncExternal(
+      [{ id: "a", source: "# A\n\n外部改的", updatedAt: 9000 }],
+      ["a"],
+    );
+
+    expect(result.updated).toEqual([]);
+    expect(workspace.get("a")?.source).toBe("# A\n\n正在写");
+    expect(workspace.summaries()[0].dirty).toBe(true);
+  });
+
+  it("磁盘上消失的文件被移除，但至少保留一篇", () => {
+    const workspace = new Workspace([doc("a", "# A"), doc("b", "# B")]);
+
+    const result = workspace.syncExternal([], ["a"]);
+    expect(result.removed).toEqual(["b"]);
+    expect(workspace.summaries()).toHaveLength(1);
+
+    // 只剩一篇时不再移除
+    expect(workspace.syncExternal([], []).removed).toEqual([]);
+    expect(workspace.summaries()).toHaveLength(1);
+  });
+
+  it("只传变化项时，未提及的文档不会被当成删除", () => {
+    const workspace = new Workspace([doc("a", "# A"), doc("b", "# B")]);
+
+    workspace.syncExternal([{ id: "a", source: "# A", updatedAt: 2000 }], ["a", "b"]);
+
+    expect(workspace.summaries().map((item) => item.id)).toEqual(["a", "b"]);
+  });
+});
+
 describe("Workspace persistence", () => {
   it("内存后端可完整往返，且落盘后 savedSource 对齐", async () => {
     const backend = createMemoryWorkspaceBackend();
@@ -181,6 +251,19 @@ describe("Autosave", () => {
 
     expect(backend.docs.get("a")?.source).toBe("# A\n\n即时");
     expect(states).toEqual(["saving", "idle"]);
+    autosave.dispose();
+  });
+
+  it("删除后取消待写，不会把文件又写回来", async () => {
+    vi.useFakeTimers();
+    const backend = createMemoryWorkspaceBackend();
+    const autosave = new Autosave(backend, {}, 800);
+    autosave.schedule(doc("a", "# A\n\n还没写完"));
+
+    autosave.cancel("a");
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(backend.docs.has("a")).toBe(false);
     autosave.dispose();
   });
 

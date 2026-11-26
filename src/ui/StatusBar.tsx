@@ -11,6 +11,9 @@ interface Props {
   savedAt: number | null;
   docCount: number;
   dirtyCount: number;
+  /** 文档存在本地文件夹还是浏览器里。 */
+  storageKind: "files" | "browser";
+  storagePath: string | null;
 }
 
 function saveLabel(state: SaveState | "dirty", savedAt: number | null): string {
@@ -34,6 +37,8 @@ export function StatusBar({
   savedAt,
   docCount,
   dirtyCount,
+  storageKind,
+  storagePath,
 }: Props) {
   const icon: IconName = saveState === "error" ? "cloud" : "check";
   return (
@@ -45,6 +50,10 @@ export function StatusBar({
       <div className="status-i">
         <Icon name="file" />
         {t("status.docs", { count: docCount, dirty: dirtyCount })}
+      </div>
+      <div className="status-i" title={storagePath ?? undefined}>
+        <Icon name="folder" />
+        {storageKind === "files" ? t("status.storageLocal") : t("status.storageBrowser")}
       </div>
       <div className="sp" />
       <div>

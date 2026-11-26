@@ -22,6 +22,8 @@ export const zhCN: Record<string, string> = {
   "drawer.deleteDoc": "删除 {name}",
   "drawer.confirmDelete": "再次点击确认删除",
   "drawer.empty": "还没有文档",
+  "drawer.openFolder": "打开工作区文件夹…",
+  "drawer.revealFolder": "在文件管理器中显示",
 
   // Editor
   "editor.loading": "正在加载文档…",
@@ -57,6 +59,8 @@ export const zhCN: Record<string, string> = {
   "status.lineChars": "第 {line} 行 · 共 {chars} 字",
   "status.pmSource": "PM pos {pm} ↔ 源码 offset {source}",
   "status.pluginsEnabled": "{count} 个插件已启用",
+  "status.storageLocal": "本地文件",
+  "status.storageBrowser": "浏览器存储",
 
   // CommandPalette
   "palette.placeholder": "输入命令、文件名，或搜索笔记…",
@@ -76,6 +80,7 @@ export const zhCN: Record<string, string> = {
   "cmd.syncAll": "立即同步所有文档",
   "cmd.newDoc": "新建文档",
   "cmd.save": "保存文档",
+  "cmd.openFolder": "打开工作区文件夹",
 
   // Toasts
   "toast.redone": "已重做",
@@ -98,6 +103,10 @@ export const zhCN: Record<string, string> = {
   "toast.cannotDeleteLast": "至少保留一篇文档",
   "toast.savedNow": "已保存",
   "toast.saveFailed": "保存失败，存储空间可能已满",
+  "toast.externalUpdated": "文件已在磁盘上更新，已重新载入",
+  "toast.desktopOnly": "打开文件夹仅在桌面端可用",
+  "toast.folderPickFailed": "打开文件夹失败：{message}",
+  "toast.revealFailed": "无法打开文件管理器：{message}",
   "toast.lightTheme": "已切换到亮色主题",
   "toast.darkTheme": "已切换到暗色主题",
   "toast.localeSwitched": "已切换到简体中文",

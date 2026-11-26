@@ -14,7 +14,7 @@ export interface CommandItem {
   id: string;
   /** i18n key；显示文案经 t() 解析，运行时翻译。 */
   label: string;
-  icon: "edit" | "ai" | "cloud" | "file";
+  icon: "edit" | "ai" | "cloud" | "file" | "folder";
   hint?: string;
   group: string;
   action: string;
@@ -68,6 +68,14 @@ export const commands: CommandItem[] = [
     hint: "⌘J",
     group: "group.recent",
     action: "ai-continue",
+  },
+  {
+    id: "c-open-folder",
+    label: "cmd.openFolder",
+    icon: "folder",
+    hint: "⌘O",
+    group: "group.recent",
+    action: "open-folder",
   },
   {
     id: "c-sync",

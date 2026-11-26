@@ -23,7 +23,8 @@ export type IconName =
   | "eye"
   | "chevron"
   | "close"
-  | "lang";
+  | "lang"
+  | "external";
 
 export function Icon({
   name,
@@ -120,6 +121,10 @@ export function IconSprite() {
       <symbol id="i-lang" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+      </symbol>
+      <symbol id="i-external" viewBox="0 0 24 24">
+        <path d="M14 3h7v7M21 3l-9 9" />
+        <path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
       </symbol>
     </svg>
   );

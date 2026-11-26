@@ -4,11 +4,13 @@ import type { PluginRuntime, PluginSummary } from "./core/plugin/runtime";
 import { createPluginRuntime, persistPluginEnabled } from "./plugins/loader";
 import { createLocalCredentialStore } from "./core/vfs/credentials";
 import { buildOutline, type OutlineEntry } from "./core/outline";
-import { seedDocuments } from "./core/seed";
-import { Workspace, type DocSummary } from "./core/workspace";
+import { fallbackDocument, seedDocuments } from "./core/seed";
+import { Workspace, type DocSummary, type ExternalFile } from "./core/workspace";
+import { persistRoot, resolveWorkspaceEnv } from "./core/workspace-env";
+import { desktopFs, isDesktop, pickFolder } from "./core/desktop/bridge";
+import type { FileWorkspaceBackend } from "./core/workspace-fs";
 import {
   Autosave,
-  createLocalWorkspaceBackend,
   type SaveState,
   type WorkspaceBackend,
 } from "./core/workspace-storage";
@@ -56,11 +58,17 @@ export default function App() {
   const [outline, setOutline] = useState<OutlineEntry[]>([]);
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  /** 文档存在哪：本地文件夹 or 浏览器 localStorage。 */
+  const [storage, setStorage] = useState<{
+    kind: "files" | "browser";
+    root: string | null;
+  }>({ kind: "browser", root: null });
 
   const toastTimer = useRef<number | null>(null);
   const editorRef = useRef<EditorHandle>(null);
   const workspaceRef = useRef<Workspace | null>(null);
   const backendRef = useRef<WorkspaceBackend | null>(null);
+  const filesRef = useRef<FileWorkspaceBackend | null>(null);
   const autosaveRef = useRef<Autosave | null>(null);
   const activeStoreRef = useRef<DocumentStore | null>(null);
   const runtimeRef = useRef<PluginRuntime | null>(null);
@@ -80,33 +88,50 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    const backend = createLocalWorkspaceBackend();
-    backendRef.current = backend;
-
-    const autosave = new Autosave(
-      backend,
-      {
-        onState: (id, state) =>
-          setSaveStates((prev) => (prev[id] === state ? prev : { ...prev, [id]: state })),
-        onSaved: (id, source) => {
-          workspaceRef.current?.markSaved(id, source);
-          setSavedAt(Date.now());
-        },
-        onError: () => showToast(t("toast.saveFailed")),
-      },
-      700,
-    );
-    autosaveRef.current = autosave;
-
     let unsubscribe = () => undefined as void;
+
     void (async () => {
-      const stored = await backend.load();
+      // 桌面端读写本地文件夹，浏览器退回 localStorage；后端三方法一致
+      const env = await resolveWorkspaceEnv();
       if (cancelled) return;
 
-      // 首次启动：写入种子文档并立即落盘，避免每次启动重新播种
-      let initial = stored && stored.length > 0 ? stored : seedDocuments(Date.now());
-      if (!stored || stored.length === 0) {
-        for (const doc of initial) await backend.save(doc);
+      backendRef.current = env.backend;
+      filesRef.current = env.files;
+      setStorage({ kind: env.kind, root: env.root });
+
+      const autosave = new Autosave(
+        env.backend,
+        {
+          onState: (id, state) =>
+            setSaveStates((prev) => (prev[id] === state ? prev : { ...prev, [id]: state })),
+          onSaved: (id, source) => {
+            workspaceRef.current?.markSaved(id, source);
+            setSavedAt(Date.now());
+          },
+          onError: () => showToast(t("toast.saveFailed")),
+        },
+        700,
+      );
+      autosaveRef.current = autosave;
+
+      const stored = await env.backend.load();
+      if (cancelled) return;
+
+      // 空目录：首次使用给两篇种子，否则只放一篇空白起步（不反复播种）
+      let initial = stored ?? [];
+      if (initial.length === 0) {
+        const now = Date.now();
+        initial = env.fresh
+          ? seedDocuments(now, (title) => env.files?.pathFor(title) ?? title)
+          : [
+              fallbackDocument(
+                now,
+                env.files?.pathFor(t("doc.untitled")) ?? undefined,
+                t("doc.untitled"),
+              ),
+            ];
+        for (const doc of initial) await env.backend.save(doc);
+        if (cancelled) return;
       }
 
       const workspace = new Workspace(initial);
@@ -123,7 +148,7 @@ export default function App() {
     return () => {
       cancelled = true;
       unsubscribe();
-      autosave.dispose();
+      autosaveRef.current?.dispose();
     };
   }, [showToast]);
 
@@ -150,6 +175,53 @@ export default function App() {
       if (doc) autosave.schedule(doc);
     }
   }, [docs]);
+
+  // 磁盘轮询：外部编辑器 / git pull 改了文件就同步回来（只对本地文件夹生效）
+  useEffect(() => {
+    const files = filesRef.current;
+    if (!ready || storage.kind !== "files" || !files) return;
+
+    let stopped = false;
+    const known = new Map<string, number>();
+
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const entries = await files.listMeta();
+        if (stopped) return;
+        const changed: ExternalFile[] = [];
+        for (const entry of entries) {
+          const previous = known.get(entry.path);
+          known.set(entry.path, entry.modified);
+          // 第一次见到这个文件只记基线，不触发重载
+          if (previous === undefined || previous === entry.modified) continue;
+          const doc = workspaceRef.current?.get(entry.path);
+          // 内存里有未保存的改动：以内存为准，等用户自己保存
+          if (doc && doc.source !== doc.savedSource) continue;
+          changed.push({
+            id: entry.path,
+            source: await files.read(entry.path),
+            updatedAt: entry.modified,
+          });
+        }
+        if (stopped) return;
+        const result = workspaceRef.current?.syncExternal(
+          changed,
+          entries.map((entry) => entry.path),
+        );
+        if (result && result.updated.length > 0) showToast(t("toast.externalUpdated"));
+      } catch {
+        // 目录被拔掉 / 权限变化：这一轮先跳过，下一轮再试
+      }
+    };
+
+    const timer = window.setInterval(() => void tick(), 4000);
+    void tick();
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [ready, storage.kind, showToast]);
 
   // 大纲跟随当前文档，输入时防抖，避免每个字符都全量解析
   const activeSource = useMemo(
@@ -229,11 +301,43 @@ export default function App() {
 
   /* ------------------------------ 文档操作 ------------------------------ */
 
-  const createDoc = useCallback(() => {
+  const createDoc = useCallback(async () => {
     const workspace = workspaceRef.current;
     if (!workspace) return;
-    workspace.create(t("doc.untitled"));
+    const title = t("doc.untitled");
+    // 文件后端：先定下磁盘路径（避开目录里已有同名文件），再建文档
+    const id = filesRef.current ? await filesRef.current.newPath(title) : undefined;
+    workspace.create(title, id);
     showToast(t("toast.docCreated"));
+  }, [showToast]);
+
+  /** 切换工作区目录：写盘后整页重载，工作区按新目录重建。 */
+  const switchFolder = useCallback(async () => {
+    if (!isDesktop()) {
+      showToast(t("toast.desktopOnly"));
+      return;
+    }
+    try {
+      const picked = await pickFolder();
+      if (!picked) return;
+      // 换目录前把没落盘的改动写掉，避免 700ms 防抖窗口里的内容丢在内存里
+      await autosaveRef.current?.flush();
+      persistRoot(picked);
+      window.location.reload();
+    } catch (error) {
+      showToast(t("toast.folderPickFailed", { message: String(error) }));
+    }
+  }, [showToast]);
+
+  /** 在系统文件管理器里定位当前工作区目录。 */
+  const revealFolder = useCallback(async () => {
+    const root = filesRef.current?.root;
+    if (!root) return;
+    try {
+      await desktopFs.reveal(root);
+    } catch (error) {
+      showToast(t("toast.revealFailed", { message: String(error) }));
+    }
   }, [showToast]);
 
   const deleteDoc = useCallback(
@@ -244,6 +348,8 @@ export default function App() {
         showToast(t("toast.cannotDeleteLast"));
         return;
       }
+      // 先撤掉待写任务，再删文件：否则防抖计时器会把文件写回来
+      autosaveRef.current?.cancel(id);
       void backendRef.current?.remove(id);
       showToast(t("toast.docDeleted"));
     },
@@ -305,7 +411,10 @@ export default function App() {
         showToast(editorRef.current?.redo() ? t("toast.redone") : t("toast.nothingToRedo"));
       } else if (key === "n") {
         e.preventDefault();
-        createDoc();
+        void createDoc();
+      } else if (key === "o") {
+        e.preventDefault();
+        void switchFolder();
       } else if (key === "s") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -329,7 +438,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showToast, locale, createDoc, saveNow]);
+  }, [showToast, locale, createDoc, saveNow, switchFolder]);
 
   const changeMode = (m: AppMode) => {
     setMode(m);
@@ -368,10 +477,13 @@ export default function App() {
         );
         break;
       case "new-doc":
-        createDoc();
+        void createDoc();
         break;
       case "save":
         void saveNow();
+        break;
+      case "open-folder":
+        void switchFolder();
         break;
       case "undo":
         showToast(editorRef.current?.undo() ? t("toast.undone") : t("toast.nothingToUndo"));
@@ -433,8 +545,11 @@ export default function App() {
           activeId={activeId}
           collapsed={mode === "focus" || !leftOpen}
           onSelect={selectDoc}
-          onNew={createDoc}
+          onNew={() => void createDoc()}
           onDelete={deleteDoc}
+          workspaceDir={storage.root}
+          onOpenFolder={() => void switchFolder()}
+          onRevealFolder={() => void revealFolder()}
         />
 
         <Editor
@@ -468,6 +583,8 @@ export default function App() {
         savedAt={savedAt}
         docCount={docs.length}
         dirtyCount={docs.filter((doc) => doc.dirty).length}
+        storageKind={storage.kind}
+        storagePath={storage.root}
       />
 
       <CommandPalette

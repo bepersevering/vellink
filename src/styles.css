@@ -1049,3 +1049,62 @@ button.outline-item {
 .ProseMirror:focus-visible {
   outline: none;
 }
+
+/* ---------- 桌面端工作区目录条 ---------- */
+.workspace-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.workspace-path {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.workspace-path:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.workspace-path svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.workspace-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-bar .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+.workspace-bar .icon-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

@@ -22,6 +22,8 @@ export const en: Record<string, string> = {
   "drawer.deleteDoc": "Delete {name}",
   "drawer.confirmDelete": "Click again to delete",
   "drawer.empty": "No documents yet",
+  "drawer.openFolder": "Open workspace folder…",
+  "drawer.revealFolder": "Reveal in file manager",
 
   // Editor
   "editor.loading": "Loading document…",
@@ -57,6 +59,8 @@ export const en: Record<string, string> = {
   "status.lineChars": "Line {line} · {chars} chars",
   "status.pmSource": "PM pos {pm} ↔ source offset {source}",
   "status.pluginsEnabled": "{count} plugins enabled",
+  "status.storageLocal": "Local files",
+  "status.storageBrowser": "Browser storage",
 
   // CommandPalette
   "palette.placeholder": "Type a command, file name, or search notes…",
@@ -76,6 +80,7 @@ export const en: Record<string, string> = {
   "cmd.syncAll": "Sync all documents now",
   "cmd.newDoc": "New document",
   "cmd.save": "Save document",
+  "cmd.openFolder": "Open workspace folder",
 
   // Toasts
   "toast.redone": "Redone",
@@ -98,6 +103,10 @@ export const en: Record<string, string> = {
   "toast.cannotDeleteLast": "Keep at least one document",
   "toast.savedNow": "Saved",
   "toast.saveFailed": "Save failed — storage may be full",
+  "toast.externalUpdated": "Reloaded from disk",
+  "toast.desktopOnly": "Opening folders is available in the desktop app",
+  "toast.folderPickFailed": "Could not open folder: {message}",
+  "toast.revealFailed": "Could not reveal folder: {message}",
   "toast.lightTheme": "Switched to light theme",
   "toast.darkTheme": "Switched to dark theme",
   "toast.localeSwitched": "Language switched to English",

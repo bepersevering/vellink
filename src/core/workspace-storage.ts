@@ -180,6 +180,19 @@ export class Autosave {
     await Promise.all(ids.map((target) => this.write(target)));
   }
 
+  /**
+   * 取消某篇文档的待写任务。
+   *
+   * 删除文档时必须先调它：否则防抖计时器在删除之后才触发，
+   * 会把刚删掉的文件又写回磁盘（文件后端下就是「删了又自己回来了」）。
+   */
+  cancel(id: string): void {
+    const timer = this.timers.get(id);
+    if (timer) clearTimeout(timer);
+    this.timers.delete(id);
+    this.pending.delete(id);
+  }
+
   dispose(): void {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();

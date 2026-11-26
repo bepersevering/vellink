@@ -76,6 +76,19 @@ export class DocumentStore {
   }
 
   /**
+   * 整篇替换为外部内容（磁盘被其它编辑器 / git 改动）。
+   *
+   * 与 apply 不同：这是一次「文件重新载入」，旧的撤销栈指向的已是另一份文档，
+   * 继续回退只会把用户带回到不存在的历史，所以直接清空，并通知视图回灌。
+   */
+  reset(ir: DocumentIR): void {
+    this.doc = ir;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.notifyListeners();
+  }
+
+  /**
    * 应用一组 op，并广播 document:changed 事件。
    *
    * 连续输入合并：同 mergeKey、时间窗内、单条 replaceDocument 事务会合并到

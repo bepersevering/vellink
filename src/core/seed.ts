@@ -73,11 +73,18 @@ publish  →  把结论写成文章，接受反馈
 工具会变，方法会变，但有一件事不变：**你必须亲手把想法写成句子**。剩下的，交给时间。
 `;
 
-/** 首次启动写入的两篇文档；createdAt/updatedAt 用传入时间保证可测。 */
-export function seedDocuments(now: number): WorkspaceDoc[] {
+/**
+ * 首次启动写入的两篇文档。
+ *
+ * `idFor` 让文件后端把 id 绑成磁盘路径；不传时用内存 id（浏览器 localStorage 后端）。
+ */
+export function seedDocuments(
+  now: number,
+  idFor: (title: string, index: number) => string = defaultSeedId,
+): WorkspaceDoc[] {
   return [
     {
-      id: "seed-welcome",
+      id: idFor("Welcome to Vellink", 0),
       title: "Welcome to Vellink",
       source: WELCOME,
       savedSource: WELCOME,
@@ -85,7 +92,7 @@ export function seedDocuments(now: number): WorkspaceDoc[] {
       updatedAt: now,
     },
     {
-      id: "seed-guide",
+      id: idFor("如何建立自己的知识体系", 1),
       title: "如何建立自己的知识体系",
       source: GUIDE,
       savedSource: GUIDE,
@@ -95,12 +102,20 @@ export function seedDocuments(now: number): WorkspaceDoc[] {
   ];
 }
 
+function defaultSeedId(_title: string, index: number): string {
+  return index === 0 ? "seed-welcome" : "seed-guide";
+}
+
 /** 只用于空工作区的兜底文档。 */
-export function fallbackDocument(now: number): WorkspaceDoc {
-  const source = "# Untitled\n\n";
+export function fallbackDocument(
+  now: number,
+  id = "doc-fallback",
+  title = "Untitled",
+): WorkspaceDoc {
+  const source = `# ${title}\n\n`;
   return {
-    id: "doc-fallback",
-    title: "Untitled",
+    id,
+    title,
     source,
     savedSource: source,
     createdAt: now,
