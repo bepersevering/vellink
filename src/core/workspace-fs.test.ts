@@ -47,6 +47,20 @@ function fakeDisk(initial: Record<string, { content: string; modified: number }>
       store.delete(path);
       return `${dir}/trashed.md`;
     },
+    async rename(from, to) {
+      const file = store.get(from);
+      if (!file) throw new Error(`没有这个文件: ${from}`);
+      if (store.has(to)) throw new Error(`目标文件已存在: ${to}`);
+      clock += 1;
+      store.delete(from);
+      store.set(to, { content: file.content, modified: clock });
+      return {
+        path: to,
+        name: to.split("/").pop() ?? "",
+        size: file.content.length,
+        modified: clock,
+      };
+    },
   };
 
   return { deps, store, trashed };
@@ -156,5 +170,48 @@ describe("文件后端", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].modified).toBe(7);
     expect(await backend.read(entries[0].path)).toBe("# A");
+  });
+
+  it("pathForTitle：标题没变就原样返回自己，变了则在同一目录里挑不冲突的名字", async () => {
+    const disk = fakeDisk({
+      [`${ROOT}/notes/a.md`]: { content: "# A", modified: 1 },
+      [`${ROOT}/notes/新标题.md`]: { content: "# 别人占了这个名字", modified: 2 },
+    });
+    const backend = createFileWorkspaceBackend(ROOT, disk.deps);
+
+    // 标题仍是 A：文件名已经是它了，不需要改名
+    expect(await backend.pathForTitle("A", `${ROOT}/notes/a.md`)).toBe(
+      `${ROOT}/notes/a.md`,
+    );
+    // 换成「新标题」：同目录下已被占用，顺延
+    expect(await backend.pathForTitle("新标题", `${ROOT}/notes/a.md`)).toBe(
+      `${ROOT}/notes/新标题-2.md`,
+    );
+    // 保留原有子目录，不会把文件搬到根目录
+    expect(await backend.pathForTitle("搬到别处", `${ROOT}/notes/a.md`)).toBe(
+      `${ROOT}/notes/搬到别处.md`,
+    );
+  });
+
+  it("rename：改完路径就是新的 id，内容不变", async () => {
+    const disk = fakeDisk({ [`${ROOT}/a.md`]: { content: "# 旧", modified: 1 } });
+    const backend = createFileWorkspaceBackend(ROOT, disk.deps);
+
+    await backend.rename(`${ROOT}/a.md`, `${ROOT}/新名字.md`);
+
+    expect(disk.store.has(`${ROOT}/a.md`)).toBe(false);
+    expect(disk.store.get(`${ROOT}/新名字.md`)?.content).toBe("# 旧");
+    const listed = await backend.listMeta();
+    expect(listed.map((entry) => entry.path)).toEqual([`${ROOT}/新名字.md`]);
+  });
+
+  it("rename 之后新名字可以立刻被再次新建（占位不会泄漏）", async () => {
+    const disk = fakeDisk({ [`${ROOT}/a.md`]: { content: "# A", modified: 1 } });
+    const backend = createFileWorkspaceBackend(ROOT, disk.deps);
+
+    const target = await backend.pathForTitle("B", `${ROOT}/a.md`);
+    await backend.rename(`${ROOT}/a.md`, target);
+
+    expect(await backend.newPath("B")).toBe(`${ROOT}/B-2.md`);
   });
 });

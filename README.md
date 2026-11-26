@@ -20,7 +20,7 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **WYSIWYG + source dual view**: both views share cursor position and undo stack via a unified document IR
 - **Unified document IR**: an AST with bidirectional source maps — the common foundation for the editor, AI rewriting, plugins and collaboration
 - **Plugin-first**: six contribution points (commands, menus, view panels, block renderers, syntax, providers); plugins are written in TypeScript
-- **Your files stay yours**: the desktop app reads and writes a regular folder of `.md` files — nothing is locked in a database; deletions move to `.vellink-trash`, external edits reload automatically
+- **Your files stay yours**: the desktop app reads and writes a regular folder of `.md` files — nothing is locked in a database; the file name follows the first heading, deletions move to `.vellink-trash`, and a filesystem watcher reloads external edits the moment they land
 - **Local-first cloud sync**: the VFS abstraction unifies local and cloud storage; WebDAV / S3 / GitHub / Yuque are all plugins; Yjs handles offline merge
 - **AI knowledge base**: structure-aware semantic chunking, vector retrieval + backlink graph recall, swappable AI providers (DeepSeek / Ollama / any OpenAI-compatible endpoint)
 - **MCP bridging (planned)**: act as an MCP client calling external tools, and as an MCP server exposing documents and retrieval to other agents
@@ -29,7 +29,7 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 
 ## Getting Started
 
-> The project is in early development (M4.6 local files). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop, an installable plugin system, and two official plugins — WebDAV cloud sync and AI knowledge-base Q&A.
+> The project is in early development (M4.7 file names & watching). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, and two official plugins: WebDAV cloud sync and AI knowledge-base Q&A.
 
 ```bash
 # Prerequisites: Node.js 20+, Rust toolchain, Xcode Command Line Tools (macOS)
@@ -38,7 +38,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (148 tests)
+npm test               # run unit tests (170 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -92,6 +92,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M4 | Official plugins: WebDAV + DeepSeek Q&A | VFS abstraction + WebDAV provider + ETag offline sync (conflicts preserved as copies); IR semantic chunking + vector retrieval + OpenAI-compatible AIProvider; both official plugins and config panel wired in. ([notes](./M4-官方插件说明.md), Chinese) |
 | M4.5 | Workspace: real documents, autosave, live outline | Document list with create / switch / two-step delete, a separate undo stack per document, title derived from the first heading, debounced autosave with reload recovery, outline built from the IR and clickable in both views, ⌘N / ⌘S wired, and a ProseMirror base keymap (Enter / Backspace / Mod-B / Mod-I). ([notes](./M4.5-文档工作区说明.md), Chinese) |
 | M4.6 | Local Markdown files: Tauri fs backend | Open or switch a workspace folder; one document = one real `.md` file; atomic write (temp file + rename), BOM/CRLF normalisation on read, recursive listing that skips `node_modules` / hidden dirs, deletion to `.vellink-trash`, folder picker + reveal in file manager, and a 4s poll that reloads externally edited files while never overwriting unsaved local edits. ([notes](./M4.6-本地文件后端说明.md), Chinese) |
+| M4.7 | File names follow titles, live watching | Renaming a heading renames the file on disk after a 900ms pause (atomic, collision-suffixed, undo stack and cursor preserved); only local edits count, so an external tool changing the H1 is never overruled. A `notify`-based recursive watcher replaces the 4s poll (200ms event coalescing, self-write suppression, stale-scan guard, 30s fallback). ([notes](./M4.7-文件名跟随与实时监听说明.md), Chinese) |
 | M5 | Three-platform packaging + CI + auto-update | Not started |
 | M6 | 10-user beta polish → public release | Not started |
 

@@ -61,6 +61,9 @@ export const zhCN: Record<string, string> = {
   "status.pluginsEnabled": "{count} 个插件已启用",
   "status.storageLocal": "本地文件",
   "status.storageBrowser": "浏览器存储",
+  "status.watchLive": "实时监听",
+  "status.watchPoll": "定时检查",
+  "status.watchHint": "在应用之外改动文件会自动同步回来",
 
   // CommandPalette
   "palette.placeholder": "输入命令、文件名，或搜索笔记…",
@@ -107,6 +110,7 @@ export const zhCN: Record<string, string> = {
   "toast.desktopOnly": "打开文件夹仅在桌面端可用",
   "toast.folderPickFailed": "打开文件夹失败：{message}",
   "toast.revealFailed": "无法打开文件管理器：{message}",
+  "toast.renameFailed": "重命名文件失败：{message}",
   "toast.lightTheme": "已切换到亮色主题",
   "toast.darkTheme": "已切换到暗色主题",
   "toast.localeSwitched": "已切换到简体中文",

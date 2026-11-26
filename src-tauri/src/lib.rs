@@ -4,6 +4,7 @@ mod fs;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(fs::WatchState::default())
         .invoke_handler(tauri::generate_handler![
             fs::fs_default_root,
             fs::fs_ensure_dir,
@@ -12,6 +13,8 @@ pub fn run() {
             fs::fs_write_markdown,
             fs::fs_trash_markdown,
             fs::fs_rename_markdown,
+            fs::fs_watch_start,
+            fs::fs_watch_stop,
             fs::fs_reveal,
         ])
         .run(tauri::generate_context!())

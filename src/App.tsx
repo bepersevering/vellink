@@ -7,8 +7,10 @@ import { buildOutline, type OutlineEntry } from "./core/outline";
 import { fallbackDocument, seedDocuments } from "./core/seed";
 import { Workspace, type DocSummary, type ExternalFile } from "./core/workspace";
 import { persistRoot, resolveWorkspaceEnv } from "./core/workspace-env";
-import { desktopFs, isDesktop, pickFolder } from "./core/desktop/bridge";
+import { desktopFs, isDesktop, onFsChanged, pickFolder } from "./core/desktop/bridge";
 import type { FileWorkspaceBackend } from "./core/workspace-fs";
+import { FileChangeDetector } from "./core/file-changes";
+import { TitleRenamer } from "./core/title-rename";
 import {
   Autosave,
   type SaveState,
@@ -28,6 +30,17 @@ import { StatusBar } from "./ui/StatusBar";
 import { CommandPalette } from "./ui/CommandPalette";
 import { IconSprite } from "./ui/Icon";
 import { commands as commandItems, type PluginInfo, type CommandItem } from "./ui/data";
+
+/** Tauri 命令的错误是字符串；本地异常走 message。 */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** 路径里的文件名（文件后端下 id 就是绝对路径）。 */
+function baseName(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index >= 0 ? path.slice(index + 1) : path;
+}
 
 export default function App() {
   const { locale } = useLocale();
@@ -75,6 +88,18 @@ export default function App() {
   const [runtimeReady, setRuntimeReady] = useState<PluginRuntime | null>(null);
   const activeIdRef = useRef<string | null>(null);
   activeIdRef.current = activeId;
+  /** 标题跟随文件名：改完标题静一会儿就把磁盘文件也改名。 */
+  const renamerRef = useRef<TitleRenamer | null>(null);
+  /** 外部变更检测器，由下面的监听 effect 装配。 */
+  const detectorRef = useRef<FileChangeDetector | null>(null);
+  /**
+   * 本地结构性改动（重命名、删除）的计数器。
+   *
+   * 扫描是异步的：如果扫描途中文件被改名，它拿到的快照就会「旧路径在、新路径
+   * 不在」，照此执行会把刚改名的文档当成被外部删除。计数器一变就丢弃这一轮。
+   */
+  const mutationRef = useRef(0);
+  const [liveWatch, setLiveWatch] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -107,6 +132,8 @@ export default function App() {
           onSaved: (id, source) => {
             workspaceRef.current?.markSaved(id, source);
             setSavedAt(Date.now());
+            // 自己写盘也会触发监听事件：标记一下，别把它当成外部改动再读一遍
+            detectorRef.current?.markOwn(id);
           },
           onError: () => showToast(t("toast.saveFailed")),
         },
@@ -136,6 +163,22 @@ export default function App() {
 
       const workspace = new Workspace(initial);
       workspaceRef.current = workspace;
+
+      // 文件后端专属：标题变化即重命名对应文件
+      if (env.files) {
+        renamerRef.current = new TitleRenamer({
+          files: env.files,
+          workspace,
+          autosave,
+          beforeRename: (from, to) => {
+            detectorRef.current?.markOwn(from, to);
+            mutationRef.current += 1;
+          },
+          onError: (error) =>
+            showToast(t("toast.renameFailed", { message: errorMessage(error) })),
+        });
+      }
+
       const sync = () => {
         setDocs(workspace.summaries());
         setActiveId(workspace.activeId);
@@ -148,6 +191,8 @@ export default function App() {
     return () => {
       cancelled = true;
       unsubscribe();
+      renamerRef.current?.dispose();
+      renamerRef.current = null;
       autosaveRef.current?.dispose();
     };
   }, [showToast]);
@@ -176,52 +221,107 @@ export default function App() {
     }
   }, [docs]);
 
-  // 磁盘轮询：外部编辑器 / git pull 改了文件就同步回来（只对本地文件夹生效）
+  // 磁盘变化：文件系统事件为主，30 秒轮询只是兜底（网络盘 / 事件丢失时）
   useEffect(() => {
     const files = filesRef.current;
     if (!ready || storage.kind !== "files" || !files) return;
 
     let stopped = false;
-    const known = new Map<string, number>();
+    let debounce: number | null = null;
+    const detector = new FileChangeDetector();
+    detectorRef.current = detector;
 
-    const tick = async () => {
+    const scan = async () => {
       if (stopped) return;
+      const generation = mutationRef.current;
       try {
         const entries = await files.listMeta();
         if (stopped) return;
+        // 扫描期间本地改过名 / 删过文件：这一份快照已经不可信
+        if (generation !== mutationRef.current) {
+          schedule();
+          return;
+        }
+        const { candidates, present } = detector.diff(entries);
         const changed: ExternalFile[] = [];
-        for (const entry of entries) {
-          const previous = known.get(entry.path);
-          known.set(entry.path, entry.modified);
-          // 第一次见到这个文件只记基线，不触发重载
-          if (previous === undefined || previous === entry.modified) continue;
-          const doc = workspaceRef.current?.get(entry.path);
-          // 内存里有未保存的改动：以内存为准，等用户自己保存
+        for (const candidate of candidates) {
+          const doc = workspaceRef.current?.get(candidate.path);
+          // 内存里有未保存改动：以内存为准，等用户自己保存
           if (doc && doc.source !== doc.savedSource) continue;
           changed.push({
-            id: entry.path,
-            source: await files.read(entry.path),
-            updatedAt: entry.modified,
+            id: candidate.path,
+            source: await files.read(candidate.path),
+            updatedAt: candidate.modified,
           });
         }
-        if (stopped) return;
-        const result = workspaceRef.current?.syncExternal(
-          changed,
-          entries.map((entry) => entry.path),
-        );
+        if (stopped || generation !== mutationRef.current) {
+          if (!stopped) schedule();
+          return;
+        }
+        const result = workspaceRef.current?.syncExternal(changed, present);
         if (result && result.updated.length > 0) showToast(t("toast.externalUpdated"));
       } catch {
         // 目录被拔掉 / 权限变化：这一轮先跳过，下一轮再试
       }
     };
 
-    const timer = window.setInterval(() => void tick(), 4000);
-    void tick();
+    const schedule = () => {
+      if (stopped) return;
+      if (debounce) window.clearTimeout(debounce);
+      // 一次保存会连发好几条事件，合并成一个窗口再扫
+      debounce = window.setTimeout(() => {
+        debounce = null;
+        void scan();
+      }, 200);
+    };
+
+    let unlisten = () => undefined as void;
+    void (async () => {
+      // 先记一份基线，启动时不该把整库文档当外部改动重读一遍
+      const initial = await files.listMeta().catch(() => []);
+      if (stopped) return;
+      detector.rebaseline(initial);
+
+      try {
+        unlisten = await onFsChanged(() => schedule());
+        if (stopped) {
+          unlisten();
+          return;
+        }
+        await desktopFs.watch(files.root);
+        if (!stopped) setLiveWatch(true);
+      } catch (error) {
+        // 监听不可用就只靠轮询，功能不残
+        console.warn("[vellink] 目录监听不可用，退回轮询", error);
+      }
+    })();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") schedule();
+    };
+    // 合盖 / 切回来时 FSEvents 可能漏事件，重新扫一次
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(() => void scan(), 30_000);
+
     return () => {
       stopped = true;
+      if (debounce) window.clearTimeout(debounce);
+      document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(timer);
+      unlisten();
+      detectorRef.current = null;
     };
   }, [ready, storage.kind, showToast]);
+
+  // 标题变了就让文件名跟上（文件后端专属，防抖在 TitleRenamer 内部）
+  useEffect(() => {
+    const renamer = renamerRef.current;
+    if (!renamer || !activeId) return;
+    const summary = docs.find((doc) => doc.id === activeId);
+    if (!summary) return;
+    // 只有本地编辑才改名：外部工具改了 H1 不动它的文件名
+    renamer.observe(summary.id, summary.uid, summary.title, summary.dirty);
+  }, [docs, activeId]);
 
   // 大纲跟随当前文档，输入时防抖，避免每个字符都全量解析
   const activeSource = useMemo(
@@ -320,12 +420,13 @@ export default function App() {
     try {
       const picked = await pickFolder();
       if (!picked) return;
-      // 换目录前把没落盘的改动写掉，避免 700ms 防抖窗口里的内容丢在内存里
+      // 换目录前把「待改的名」和没落盘的改动都写掉，避免丢在防抖窗口里
+      await renamerRef.current?.flush();
       await autosaveRef.current?.flush();
       persistRoot(picked);
       window.location.reload();
     } catch (error) {
-      showToast(t("toast.folderPickFailed", { message: String(error) }));
+      showToast(t("toast.folderPickFailed", { message: errorMessage(error) }));
     }
   }, [showToast]);
 
@@ -336,20 +437,25 @@ export default function App() {
     try {
       await desktopFs.reveal(root);
     } catch (error) {
-      showToast(t("toast.revealFailed", { message: String(error) }));
+      showToast(t("toast.revealFailed", { message: errorMessage(error) }));
     }
   }, [showToast]);
 
   const deleteDoc = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const workspace = workspaceRef.current;
+      const autosave = autosaveRef.current;
       if (!workspace) return;
       if (!workspace.remove(id)) {
         showToast(t("toast.cannotDeleteLast"));
         return;
       }
-      // 先撤掉待写任务，再删文件：否则防抖计时器会把文件写回来
-      autosaveRef.current?.cancel(id);
+      // 先撤掉待改的名与待写任务，再等飞行中的那次写完，最后才动文件：
+      // 否则防抖计时器或进行中的写入会把刚删掉的文件又写回来
+      renamerRef.current?.cancel(id);
+      autosave?.cancel(id);
+      await autosave?.settled(id);
+      mutationRef.current += 1;
       void backendRef.current?.remove(id);
       showToast(t("toast.docDeleted"));
     },
@@ -365,6 +471,8 @@ export default function App() {
     if (!doc) return;
     autosave.schedule(doc);
     await autosave.flush(id);
+    // ⌘S 顺带落实待改的文件名：用户手动保存时，文件名也该当场对齐
+    await renamerRef.current?.flush();
     showToast(t("toast.savedNow"));
   }, [showToast]);
 
@@ -508,6 +616,7 @@ export default function App() {
 
   /* ------------------------------ 渲染 ------------------------------ */
 
+  const activeSummary = activeId ? docs.find((doc) => doc.id === activeId) : undefined;
   const activeDoc = activeId ? workspaceRef.current?.get(activeId) : undefined;
   const docTitle = activeDoc?.title ?? "Vellink";
   const saveState: SaveState | "dirty" = (() => {
@@ -541,7 +650,13 @@ export default function App() {
 
       <div className="body">
         <FileDrawer
-          docs={docs.map((doc) => ({ id: doc.id, title: doc.title, dirty: doc.dirty }))}
+          docs={docs.map((doc) => ({
+            id: doc.id,
+            uid: doc.uid,
+            title: doc.title,
+            dirty: doc.dirty,
+            fileName: storage.kind === "files" ? baseName(doc.id) : undefined,
+          }))}
           activeId={activeId}
           collapsed={mode === "focus" || !leftOpen}
           onSelect={selectDoc}
@@ -553,10 +668,11 @@ export default function App() {
         />
 
         <Editor
-          key={activeId ?? "empty"}
+          key={activeSummary?.uid ?? "empty"}
           ref={editorRef}
           store={active && active.id === activeId ? active.store : null}
           docId={activeId ?? ""}
+          docUid={activeSummary?.uid ?? ""}
           docName={docTitle}
           mode={editorMode}
           onStats={handleStats}
@@ -585,6 +701,7 @@ export default function App() {
         dirtyCount={docs.filter((doc) => doc.dirty).length}
         storageKind={storage.kind}
         storagePath={storage.root}
+        liveWatch={liveWatch}
       />
 
       <CommandPalette

@@ -12,6 +12,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    // 只有测试会碰 node: 内置模块（真磁盘集成测试），业务代码不依赖 Node
+    "types": ["node"],
 
     "strict": true,
     "noUnusedLocals": true,

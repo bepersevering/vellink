@@ -14,6 +14,8 @@ interface Props {
   /** 文档存在本地文件夹还是浏览器里。 */
   storageKind: "files" | "browser";
   storagePath: string | null;
+  /** 目录实时监听是否可用（不可用时退回定时检查）。 */
+  liveWatch?: boolean;
 }
 
 function saveLabel(state: SaveState | "dirty", savedAt: number | null): string {
@@ -39,6 +41,7 @@ export function StatusBar({
   dirtyCount,
   storageKind,
   storagePath,
+  liveWatch = false,
 }: Props) {
   const icon: IconName = saveState === "error" ? "cloud" : "check";
   return (
@@ -55,6 +58,12 @@ export function StatusBar({
         <Icon name="folder" />
         {storageKind === "files" ? t("status.storageLocal") : t("status.storageBrowser")}
       </div>
+      {storageKind === "files" && (
+        <div className="status-i" title={t("status.watchHint")}>
+          <Icon name="eye" />
+          {liveWatch ? t("status.watchLive") : t("status.watchPoll")}
+        </div>
+      )}
       <div className="sp" />
       <div>
         {t("status.lineChars", {

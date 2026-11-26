@@ -4,8 +4,12 @@ import { t } from "../i18n";
 
 export interface FileItem {
   id: string;
+  /** 稳定标识：改名后 id（路径）会变，uid 不变，用它做 React key。 */
+  uid: string;
   title: string;
   dirty: boolean;
+  /** 磁盘上的文件名（文件后端才有）：改标题会跟着重命名，摆在 tooltip 里可核对。 */
+  fileName?: string;
 }
 
 interface Props {
@@ -14,7 +18,7 @@ interface Props {
   collapsed: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
   /** 桌面端的工作区目录；浏览器版为 null（不显示目录条）。 */
   workspaceDir?: string | null;
   onOpenFolder?: () => void;
@@ -109,7 +113,7 @@ export function FileDrawer({
           const pending = pendingDelete === doc.id;
           return (
             <div
-              key={doc.id}
+              key={doc.uid || doc.id}
               className={`tree-row ${active ? "active" : ""} ${pending ? "pending" : ""}`}
               onClick={() => onSelect(doc.id)}
               role="button"
@@ -123,7 +127,10 @@ export function FileDrawer({
               }}
             >
               <span className="filedot" />
-              <span className="tree-label" title={doc.title}>
+              <span
+                className="tree-label"
+                title={doc.fileName ? `${doc.title}\n${doc.fileName}` : doc.title}
+              >
                 {doc.title}
               </span>
               {doc.dirty && <span className="dirty-dot" title={t("drawer.unsaved")} />}

@@ -154,6 +154,8 @@ export interface AutosaveHooks {
 export class Autosave {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly pending = new Map<string, WorkspaceDoc>();
+  /** 正在写盘的那一次；同一篇文档的写入串行，改名/删除前可以等它落地。 */
+  private readonly running = new Map<string, Promise<void>>();
   private readonly delay: number;
 
   constructor(
@@ -174,10 +176,23 @@ export class Autosave {
     );
   }
 
-  /** 立即落盘；不传 id 则清空全部待写。 */
+  /** 立即落盘；不传 id 则清空全部待写，并等所有在写的都结束。 */
   async flush(id?: string): Promise<void> {
-    const ids = id ? [id] : [...this.pending.keys()];
+    const ids = id
+      ? [id]
+      : [...new Set([...this.pending.keys(), ...this.running.keys()])];
     await Promise.all(ids.map((target) => this.write(target)));
+    await Promise.all(ids.map((target) => this.settled(target)));
+  }
+
+  /**
+   * 等这篇文档正在进行的写入结束。
+   *
+   * 删除文件前必须先等：否则那次写盘会在文件被移走之后才落盘，
+   * 凭空把刚删掉的稿子写回来（与防抖计时器那个坑是同一类）。
+   */
+  settled(id: string): Promise<void> {
+    return this.running.get(id) ?? Promise.resolve();
   }
 
   /**
@@ -197,6 +212,7 @@ export class Autosave {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     this.pending.clear();
+    this.running.clear();
   }
 
   private async write(id: string): Promise<void> {
@@ -205,18 +221,31 @@ export class Autosave {
       clearTimeout(timer);
       this.timers.delete(id);
     }
+    // 同一篇文档不并发写：等上一次结束，再取最新的快照
+    await this.settled(id);
+
     const doc = this.pending.get(id);
     if (!doc) return;
     this.pending.delete(id);
 
-    this.hooks.onState?.(id, "saving");
+    const task = this.run(doc);
+    this.running.set(id, task);
+    try {
+      await task;
+    } finally {
+      if (this.running.get(id) === task) this.running.delete(id);
+    }
+  }
+
+  private async run(doc: WorkspaceDoc): Promise<void> {
+    this.hooks.onState?.(doc.id, "saving");
     try {
       await this.backend.save(doc);
-      this.hooks.onState?.(id, "idle");
-      this.hooks.onSaved?.(id, doc.source);
+      this.hooks.onState?.(doc.id, "idle");
+      this.hooks.onSaved?.(doc.id, doc.source);
     } catch (error) {
-      this.hooks.onState?.(id, "error");
-      this.hooks.onError?.(id, error);
+      this.hooks.onState?.(doc.id, "error");
+      this.hooks.onError?.(doc.id, error);
     }
   }
 }

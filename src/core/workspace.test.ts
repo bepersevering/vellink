@@ -114,6 +114,40 @@ describe("Workspace", () => {
     typeSource(store, "# A\n\n更新的内容");
     expect(listener).not.toHaveBeenCalled();
   });
+
+  it("rekey：换 id 保留 uid、撤销栈与激活状态，编辑继续回灌", () => {
+    const workspace = new Workspace([doc("a", "# A\n\n正文")]);
+    const store = workspace.store("a")!;
+    const uid = workspace.summaries()[0].uid;
+    typeSource(store, "# A\n\n改过");
+
+    expect(workspace.rekey("a", "/docs/A.md")).toBe(true);
+
+    expect(workspace.activeId).toBe("/docs/A.md");
+    expect(workspace.get("a")).toBeUndefined();
+    expect(workspace.summaries()[0]).toMatchObject({ id: "/docs/A.md", uid, dirty: true });
+    // 同一个 store（撤销历史还在），换 id 不等于换文档
+    expect(workspace.store("/docs/A.md")).toBe(store);
+    expect(store.canUndo()).toBe(true);
+
+    // 订阅回调绑的是文档对象而不是 id：改名后继续编辑仍能回灌
+    typeSource(store, "# A\n\n再改一次");
+    expect(workspace.get("/docs/A.md")?.source).toContain("再改一次");
+
+    // 落盘也认新 id
+    workspace.markSaved("/docs/A.md");
+    expect(workspace.summaries()[0].dirty).toBe(false);
+  });
+
+  it("rekey 拒绝空改与已占用的 id", () => {
+    const workspace = new Workspace([doc("a", "# A"), doc("b", "# B")]);
+
+    expect(workspace.rekey("a", "a")).toBe(false);
+    expect(workspace.rekey("a", "b")).toBe(false);
+    expect(workspace.rekey("missing", "c")).toBe(false);
+    expect(workspace.summaries().map((item) => item.id)).toEqual(["a", "b"]);
+    expect(workspace.activeId).toBe("a");
+  });
 });
 
 describe("Workspace 外部变更校正", () => {
@@ -264,6 +298,35 @@ describe("Autosave", () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(backend.docs.has("a")).toBe(false);
+    autosave.dispose();
+  });
+
+  it("同一篇文档的写入串行，flush 返回时磁盘已是最后内容", async () => {
+    const written: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+    const slow = {
+      load: async () => null,
+      save: async (target: WorkspaceDoc) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        written.push(target.source);
+        active -= 1;
+      },
+      remove: async () => undefined,
+    };
+    const autosave = new Autosave(slow, {}, 800);
+
+    autosave.schedule(doc("a", "# A\n\n第一版"));
+    const first = autosave.flush("a");
+    // 第一次还没写完就又改了：第二次 flush 必须排在它后面
+    autosave.schedule(doc("a", "# A\n\n第二版"));
+    const second = autosave.flush("a");
+    await Promise.all([first, second]);
+
+    expect(maxActive).toBe(1);
+    expect(written[written.length - 1]).toBe("# A\n\n第二版");
     autosave.dispose();
   });
 

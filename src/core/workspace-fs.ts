@@ -36,6 +36,8 @@ export interface FileBackendDeps {
   write(path: string, contents: string): Promise<FileEntry>;
   /** 移到回收目录，返回新路径。 */
   trash(path: string, trashDir: string): Promise<string>;
+  /** 同目录内改名（原子 move）；目标已存在时应当报错。 */
+  rename(from: string, to: string): Promise<FileEntry>;
 }
 
 export interface FileWorkspaceBackend extends WorkspaceBackend {
@@ -46,7 +48,14 @@ export interface FileWorkspaceBackend extends WorkspaceBackend {
   pathFor(title: string): string;
   /** 异步拼一个唯一路径（新建文档用；避开目录里已有文件）。 */
   newPath(title: string): Promise<string>;
-  /** 只列举元信息，供轮询对比。 */
+  /**
+   * 按标题算重命名目标；`keep` 是文档当前路径（允许算回自己，表示不用改）。
+   * 返回 `keep` 即「文件名已经是这个标题了」。
+   */
+  pathForTitle(title: string, keep?: string): Promise<string>;
+  /** 把文件改名到 `to`（同目录）。 */
+  rename(from: string, to: string): Promise<void>;
+  /** 只列举元信息，供外部变更检测对比。 */
   listMeta(): Promise<FileEntry[]>;
   read(id: string): Promise<string>;
 }
@@ -74,9 +83,16 @@ function joinPath(root: string, name: string): string {
   return `${base}/${name}`;
 }
 
-function parentOf(path: string): string {
+/** 取父目录（`/docs/notes/a.md` → `/docs/notes`）。 */
+export function parentOf(path: string): string {
   const index = path.lastIndexOf("/");
   return index > 0 ? path.slice(0, index) : "/";
+}
+
+/** 取文件名（`/docs/a.md` → `a.md`）。 */
+export function fileNameOf(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index >= 0 ? path.slice(index + 1) : path;
 }
 
 export function createFileWorkspaceBackend(
@@ -98,6 +114,45 @@ export function createFileWorkspaceBackend(
     updatedAt: entry.modified,
   });
 
+  const rootKey = () => root.replace(/[\\/]+$/, "");
+
+  /**
+   * 在 `dir` 里挑一个不冲突的 `.md` 文件名。
+   *
+   * `keep` 是文档当前路径：它自己在磁盘上当然「已存在」，不算占位，
+   * 所以标题没变时会原样算回自己（调用方据此判断不用改名）。
+   */
+  const uniquePathIn = async (
+    dir: string,
+    title: string,
+    keep?: string,
+  ): Promise<string> => {
+    const entries = await deps.list(root);
+    const taken = new Set(
+      entries
+        .filter((entry) => parentOf(entry.path) === dir)
+        .map((entry) => entry.name.toLowerCase()),
+    );
+    const keepName = keep ? fileNameOf(keep).toLowerCase() : null;
+    const base = slugifyTitle(title);
+    // 同名就往后加序号，与 Finder / 资源管理器的行为一致
+    for (let index = 1; index <= 999; index += 1) {
+      const name = index === 1 ? `${base}.md` : `${base}-${index}.md`;
+      const candidate = joinPath(dir, name);
+      // 只差大小写不算改名：macOS / Windows 的文件系统本来就不区分大小写，
+      // 来回重命名只会制造一堆无意义的磁盘事件
+      if (candidate.toLowerCase() === keep?.toLowerCase()) return keep!;
+      const lower = name.toLowerCase();
+      if (taken.has(lower) && lower !== keepName) continue;
+      if (reserved.has(candidate)) continue;
+      reserved.add(candidate);
+      return candidate;
+    }
+    const fallback = joinPath(dir, `${base}-${Date.now().toString(36)}.md`);
+    reserved.add(fallback);
+    return fallback;
+  };
+
   return {
     kind: "files",
     root,
@@ -107,26 +162,25 @@ export function createFileWorkspaceBackend(
       return joinPath(root, `${slugifyTitle(title)}.md`);
     },
 
-    async newPath(title) {
-      const rootKey = root.replace(/[\\/]+$/, "");
-      const entries = await deps.list(root);
-      const taken = new Set(
-        entries
-          .filter((entry) => parentOf(entry.path) === rootKey)
-          .map((entry) => entry.name.toLowerCase()),
-      );
-      const base = slugifyTitle(title);
-      // 同名就往后加序号，与 Finder / 资源管理器的行为一致
-      for (let index = 1; index <= 999; index += 1) {
-        const name = index === 1 ? `${base}.md` : `${base}-${index}.md`;
-        const candidate = joinPath(rootKey, name);
-        if (taken.has(name.toLowerCase()) || reserved.has(candidate)) continue;
-        reserved.add(candidate);
-        return candidate;
+    newPath(title) {
+      return uniquePathIn(rootKey(), title);
+    },
+
+    async pathForTitle(title, keep) {
+      const dir = keep ? parentOf(keep) : rootKey();
+      const target = await uniquePathIn(dir, title, keep);
+      // 已选出但还没落盘的路径先占住，避免同一秒内两篇文档抢同一个名字
+      if (target !== keep) reserved.add(target);
+      return target;
+    },
+
+    async rename(from, to) {
+      try {
+        await deps.rename(from, to);
+      } finally {
+        reserved.delete(to);
+        reserved.delete(from);
       }
-      const fallback = joinPath(rootKey, `${base}-${Date.now().toString(36)}.md`);
-      reserved.add(fallback);
-      return fallback;
     },
 
     async load() {

@@ -37,7 +37,31 @@ export const desktopFs = {
   rename: (from: string, to: string) =>
     call<FsEntry>("fs_rename_markdown", { from, to }),
   reveal: (path: string) => call<void>("fs_reveal", { path }),
+  /** 递归监听目录；事件通过 onFsChanged 推回来。 */
+  watch: (root: string) => call<void>("fs_watch_start", { root }),
+  unwatch: () => call<void>("fs_watch_stop"),
 };
+
+/** 监听器事件名，与 `src-tauri/src/fs.rs` 的 WATCH_EVENT 保持一致。 */
+const FS_CHANGED = "vellink://fs-changed";
+
+/**
+ * 订阅目录变更事件。
+ *
+ * 返回退订函数；网页版（无 Tauri 运行时）返回空操作，调用方无需分支。
+ */
+export async function onFsChanged(
+  handler: (paths: string[]) => void,
+): Promise<() => void> {
+  if (!isDesktop()) return () => undefined;
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<string[]>(FS_CHANGED, (event) => {
+    handler(Array.isArray(event.payload) ? event.payload : []);
+  });
+  return () => {
+    void unlisten();
+  };
+}
 
 /** 系统文件夹选择器；网页版返回 null（UI 据此提示仅桌面端可用）。 */
 export async function pickFolder(): Promise<string | null> {

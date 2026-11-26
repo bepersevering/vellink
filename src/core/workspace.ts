@@ -28,6 +28,11 @@ export interface WorkspaceDoc {
 /** 给 UI 的只读摘要，不含正文。 */
 export interface DocSummary {
   id: string;
+  /**
+   * 与 `id` 相对的稳定标识：文件后端改标题会重命名文件，`id`（路径）随之变化，
+   * 但 `uid` 不变。React 用它做 key，改名时编辑器不会被重建、光标和焦点不丢。
+   */
+  uid: string;
   title: string;
   dirty: boolean;
   updatedAt: number;
@@ -65,6 +70,9 @@ export class Workspace {
   private active: string | null;
   private readonly stores = new Map<string, DocumentStore>();
   private readonly unsubscribes = new Map<string, () => void>();
+  /** 文档 → 稳定 uid；改 id（重命名文件）时一起搬过去。 */
+  private readonly uids = new Map<string, number>();
+  private uidSeq = 0;
   private readonly listeners = new Set<() => void>();
   private readonly now: () => number;
   private readonly idFactory: (title: string) => string;
@@ -72,6 +80,7 @@ export class Workspace {
 
   constructor(initial: WorkspaceDoc[] = [], options: WorkspaceOptions = {}) {
     this.docs = initial.map((doc) => ({ ...doc }));
+    for (const doc of this.docs) this.uids.set(doc.id, ++this.uidSeq);
     this.active = this.docs[0]?.id ?? null;
     this.now = options.now ?? (() => Date.now());
     this.idFactory = options.idFactory ?? defaultId;
@@ -83,6 +92,7 @@ export class Workspace {
   summaries(): DocSummary[] {
     return this.docs.map((doc) => ({
       id: doc.id,
+      uid: `uid-${this.uids.get(doc.id) ?? 0}`,
       title: doc.title,
       dirty: doc.source !== doc.savedSource,
       updatedAt: doc.updatedAt,
@@ -127,6 +137,7 @@ export class Workspace {
       updatedAt: timestamp,
     };
     this.docs.unshift(doc);
+    this.uids.set(doc.id, ++this.uidSeq);
     this.active = doc.id;
     this.notify();
     return doc;
@@ -139,10 +150,44 @@ export class Workspace {
     if (index === -1) return false;
 
     this.disposeStore(id);
+    this.uids.delete(id);
     this.docs.splice(index, 1);
     if (this.active === id) {
       this.active = this.docs[Math.min(index, this.docs.length - 1)].id;
     }
+    this.notify();
+    return true;
+  }
+
+  /**
+   * 换一个 id（文件后端 = 磁盘文件重命名）。
+   *
+   * id 是路径，改标题就变了；但撤销栈、uid、激活状态都得跟着走，否则改名
+   * 等于把这篇文档的编辑上下文整体丢掉。目标 id 已被占用时返回 false。
+   */
+  rekey(oldId: string, nextId: string): boolean {
+    if (oldId === nextId) return false;
+    const doc = this.get(oldId);
+    if (!doc || this.get(nextId)) return false;
+
+    doc.id = nextId;
+
+    const uid = this.uids.get(oldId);
+    this.uids.delete(oldId);
+    if (uid !== undefined) this.uids.set(nextId, uid);
+
+    const store = this.stores.get(oldId);
+    if (store) {
+      this.stores.delete(oldId);
+      this.stores.set(nextId, store);
+    }
+    const unsubscribe = this.unsubscribes.get(oldId);
+    if (unsubscribe) {
+      this.unsubscribes.delete(oldId);
+      this.unsubscribes.set(nextId, unsubscribe);
+    }
+    if (this.active === oldId) this.active = nextId;
+
     this.notify();
     return true;
   }
@@ -186,6 +231,7 @@ export class Workspace {
           createdAt: file.updatedAt,
           updatedAt: file.updatedAt,
         });
+        this.uids.set(file.id, ++this.uidSeq);
         added.push(file.id);
         continue;
       }
@@ -233,16 +279,15 @@ export class Workspace {
       createRegistry(),
     );
     this.stores.set(id, store);
+    // 捕获文档对象而不是 id：重命名后 id 会变，靠 id 再查就查不到了
     this.unsubscribes.set(
       id,
       store.subscribe(() => {
-        const current = this.get(id);
-        if (!current) return;
         const { source } = store.getDocument();
-        if (source === current.source) return;
-        current.source = source;
-        current.title = docTitle(source, this.fallbackTitle);
-        current.updatedAt = this.now();
+        if (source === doc.source) return;
+        doc.source = source;
+        doc.title = docTitle(source, this.fallbackTitle);
+        doc.updatedAt = this.now();
         this.notify();
       }),
     );

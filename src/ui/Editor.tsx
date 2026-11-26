@@ -40,6 +40,11 @@ interface Props {
   /** 当前文档的撤销权威，由 Workspace 持有，切换文档时整体替换。 */
   store: DocumentStore | null;
   docId: string;
+  /**
+   * 稳定标识：改标题会重命名文件、`docId`（路径）随之变化，但 `docUid` 不变。
+   * 源码视图用它做 key，改名时不会重建 CodeMirror、光标不跳。
+   */
+  docUid: string;
   docName: string;
   mode: EditorMode;
   onStats?: (stats: DocStats) => void;
@@ -55,7 +60,7 @@ interface Props {
  * 由 store.subscribe 通知后回灌，两者用 internalRef 区分，避免自触发。
  */
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
-  { store, docId, docName, mode, onStats },
+  { store, docId, docUid, docName, mode, onStats },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -392,7 +397,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         />
         <div className={`source-wrap ${mode === "source" ? "" : "hidden"}`}>
           <SourceEditor
-            key={docId}
+            key={docUid || docId}
             ref={sourceEditorRef}
             initialValue={initialSource}
             onChange={handleSourceChange}

@@ -61,6 +61,9 @@ export const en: Record<string, string> = {
   "status.pluginsEnabled": "{count} plugins enabled",
   "status.storageLocal": "Local files",
   "status.storageBrowser": "Browser storage",
+  "status.watchLive": "Live watch",
+  "status.watchPoll": "Polling",
+  "status.watchHint": "Changes made outside the app are picked up automatically",
 
   // CommandPalette
   "palette.placeholder": "Type a command, file name, or search notes…",
@@ -107,6 +110,7 @@ export const en: Record<string, string> = {
   "toast.desktopOnly": "Opening folders is available in the desktop app",
   "toast.folderPickFailed": "Could not open folder: {message}",
   "toast.revealFailed": "Could not reveal folder: {message}",
+  "toast.renameFailed": "Could not rename the file: {message}",
   "toast.lightTheme": "Switched to light theme",
   "toast.darkTheme": "Switched to dark theme",
   "toast.localeSwitched": "Language switched to English",

@@ -5,14 +5,22 @@
 //! 而不是真删，避免编辑器误删用户唯一一份稿子。
 //!
 //! 写入走「临时文件 + rename」，Crash 或断电时不会留下半截文件。
+//!
+//! 另外提供一个目录监听器：外部编辑器、git pull、同步盘改动会以事件形式推给
+//! 前端，取代固定间隔轮询。
 
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+/// 前端监听的事件名；payload 是发生变化的路径列表。
+const WATCH_EVENT: &str = "vellink://fs-changed";
 
 /// 一份 Markdown 文件的元信息；`path` 是绝对路径，也被前端当作文档 id。
 #[derive(Serialize)]
@@ -35,6 +43,20 @@ fn is_markdown(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| MARKDOWN_EXTS.contains(&ext.to_ascii_lowercase().as_str()))
         .unwrap_or(false)
+}
+
+/// 自己制造的噪音：回收目录、原子写的临时文件、隐藏文件。
+fn is_ignored(path: &Path) -> bool {
+    if path
+        .components()
+        .any(|part| part.as_os_str() == ".vellink-trash")
+    {
+        return true;
+    }
+    let Some(name) = path.file_name().map(|name| name.to_string_lossy()) else {
+        return true;
+    };
+    name.starts_with('.') || name.ends_with(".vellink.tmp")
 }
 
 fn to_string_path(path: &Path) -> String {
@@ -218,6 +240,74 @@ pub fn fs_rename_markdown(from: String, to: String) -> Result<FsEntry, String> {
     Ok(entry_of(&target))
 }
 
+/// 当前工作区的目录监听器；换目录时整体替换，旧的自然被 drop 停止。
+#[derive(Default)]
+pub struct WatchState(pub Mutex<Option<RecommendedWatcher>>);
+
+/// 开始监听一个目录（递归）。
+///
+/// 事件只带路径，前端自己决定要不要读：一次保存会触发多条事件，
+/// 去重与判定放在前端，Rust 侧不做节流，避免两边各有一套时间窗口。
+#[tauri::command]
+pub fn fs_watch_start(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WatchState>,
+    root: String,
+) -> Result<(), String> {
+    let path = PathBuf::from(&root);
+    if !path.is_dir() {
+        return Err(format!("目录不存在: {root}"));
+    }
+
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "监听器状态异常".to_string())?;
+    *guard = None;
+
+    let app_handle = app.clone();
+    let mut watcher = notify::recommended_watcher(
+        move |result: notify::Result<notify::Event>| {
+            let Ok(event) = result else {
+                return;
+            };
+            let changed: Vec<String> = event
+                .paths
+                .iter()
+                .filter(|item| !is_ignored(item) && is_markdown(item))
+                .map(|item| to_string_path(item))
+                .collect();
+            if changed.is_empty() {
+                return;
+            }
+            // 调试构建里留一行痕迹：桌面上没法自动点 UI，日志是唯一可观测证据
+            #[cfg(debug_assertions)]
+            eprintln!("[vellink] fs-changed: {changed:?}");
+            let _ = app_handle.emit(WATCH_EVENT, changed);
+        },
+    )
+    .map_err(|err| format!("创建监听器失败: {err}"))?;
+
+    watcher
+        .watch(&path, RecursiveMode::Recursive)
+        .map_err(|err| format!("监听目录失败 {root}: {err}"))?;
+
+    *guard = Some(watcher);
+    #[cfg(debug_assertions)]
+    eprintln!("[vellink] watching {root}");
+    Ok(())
+}
+
+#[tauri::command]
+pub fn fs_watch_stop(state: tauri::State<'_, WatchState>) -> Result<(), String> {
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "监听器状态异常".to_string())?;
+    *guard = None;
+    Ok(())
+}
+
 /// 在系统文件管理器里定位文件（macOS 选中，其它平台打开所在目录）。
 #[tauri::command]
 pub fn fs_reveal(path: String) -> Result<(), String> {
@@ -325,6 +415,74 @@ mod tests {
         let listed = fs_list_markdown(to_string_path(&root)).unwrap();
         assert_eq!(listed.len(), 1);
         assert!(listed[0].path.ends_with("notes/x.md"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn ignores_own_noise() {
+        assert!(is_ignored(Path::new("/docs/.vellink-trash/1-a.md")));
+        assert!(is_ignored(Path::new("/docs/.a.md.vellink.tmp")));
+        assert!(is_ignored(Path::new("/docs/.hidden.md")));
+        assert!(!is_ignored(Path::new("/docs/a.md")));
+    }
+
+    #[test]
+    fn renames_and_refuses_occupied_target() {
+        let root = temp_dir("rename");
+        let source = root.join("旧.md");
+        fs_write_markdown(to_string_path(&source), "# 旧".into()).unwrap();
+
+        let target = root.join("新.md");
+        let entry = fs_rename_markdown(to_string_path(&source), to_string_path(&target)).unwrap();
+        assert_eq!(entry.name, "新.md");
+        assert!(!source.exists());
+        assert_eq!(fs_read_markdown(to_string_path(&target)).unwrap(), "# 旧");
+
+        // 目标已存在时拒绝，不覆盖别人的稿子
+        fs_write_markdown(to_string_path(&source), "# 又建了一个".into()).unwrap();
+        assert!(fs_rename_markdown(to_string_path(&source), to_string_path(&target)).is_err());
+        assert_eq!(
+            fs_read_markdown(to_string_path(&target)).unwrap(),
+            "# 旧"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn watcher_reports_new_markdown_files() {
+        let root = temp_dir("watch");
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<String>>();
+
+        let mut watcher = notify::recommended_watcher(
+            move |result: notify::Result<notify::Event>| {
+                let Ok(event) = result else {
+                    return;
+                };
+                let changed: Vec<String> = event
+                    .paths
+                    .iter()
+                    .filter(|item| !is_ignored(item) && is_markdown(item))
+                    .map(|item| to_string_path(item))
+                    .collect();
+                if !changed.is_empty() {
+                    let _ = tx.send(changed);
+                }
+            },
+        )
+        .unwrap();
+        watcher
+            .watch(&root, RecursiveMode::Recursive)
+            .unwrap();
+
+        let target = root.join("新文件.md");
+        fs::write(&target, "# 新").unwrap();
+
+        let hits = rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("监听器没有上报新建的 Markdown 文件");
+        assert!(hits.iter().any(|path| path.ends_with("新文件.md")));
+
+        drop(watcher);
         let _ = fs::remove_dir_all(&root);
     }
 }
