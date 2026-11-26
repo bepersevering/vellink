@@ -25,7 +25,9 @@ export type IconName =
   | "close"
   | "lang"
   | "external"
-  | "down";
+  | "down"
+  | "up"
+  | "dwn";
 
 export function Icon({
   name,
@@ -128,6 +130,12 @@ export function IconSprite() {
         <path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
       </symbol>
       <symbol id="i-down" viewBox="0 0 24 24">
+        <path d="M12 3v11M7 10l5 5 5-5M4 20h16" />
+      </symbol>
+      <symbol id="i-up" viewBox="0 0 24 24">
+        <path d="M12 21V10M7 14l5-5 5 5M4 4h16" />
+      </symbol>
+      <symbol id="i-dwn" viewBox="0 0 24 24">
         <path d="M12 3v11M7 10l5 5 5-5M4 20h16" />
       </symbol>
     </svg>

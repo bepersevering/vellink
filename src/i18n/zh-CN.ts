@@ -175,4 +175,21 @@ export const zhCN: Record<string, string> = {
   "update.desktopOnly": "应用内更新仅在桌面端可用",
   "status.checkUpdate": "检查更新",
   "cmd.checkUpdate": "检查更新",
+
+  // 查找替换
+  "cmd.find": "查找与替换",
+  "find.open": "查找与替换",
+  "find.placeholder": "查找",
+  "find.replacePlaceholder": "替换为",
+  "find.prev": "上一处",
+  "find.next": "下一处",
+  "find.close": "关闭查找",
+  "find.caseSensitive": "区分大小写",
+  "find.regex": "使用正则表达式",
+  "find.replace": "替换",
+  "find.replaceAll": "全部替换",
+  "find.toggleReplace": "展开 / 收起替换",
+  "find.noResults": "无结果",
+  "find.invalidRegex": "正则表达式无效",
+  "find.replacedAll": "已替换 {count} 处",
 };

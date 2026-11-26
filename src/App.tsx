@@ -506,13 +506,19 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) {
-        if (e.key === "Escape") setPaletteOpen(false);
+        if (e.key === "Escape") {
+          setPaletteOpen(false);
+          editorRef.current?.closeFind();
+        }
         return;
       }
       const key = e.key.toLowerCase();
       if (key === "p") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+      } else if (key === "f") {
+        e.preventDefault();
+        editorRef.current?.openFind();
       } else if (key === "z") {
         e.preventDefault();
         const ok = e.shiftKey
@@ -597,6 +603,9 @@ export default function App() {
         break;
       case "save":
         void saveNow();
+        break;
+      case "find":
+        editorRef.current?.openFind();
         break;
       case "open-folder":
         void switchFolder();
@@ -687,6 +696,7 @@ export default function App() {
           docName={docTitle}
           mode={editorMode}
           onStats={handleStats}
+          onNotify={showToast}
         />
 
         <SideDrawer

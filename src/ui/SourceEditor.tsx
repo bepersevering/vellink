@@ -5,14 +5,22 @@
  * Markdown 语言包复用 @lezer/markdown，与 M1 的解析器同源，不引入第二棵语法树。
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { EditorSelection, EditorState } from "@codemirror/state";
 import {
+  EditorSelection,
+  EditorState,
+  StateEffect,
+  StateField,
+  type Range,
+} from "@codemirror/state";
+import {
+  Decoration,
   EditorView,
   drawSelection,
   highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
+  type DecorationSet,
 } from "@codemirror/view";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import {
@@ -29,6 +37,12 @@ export interface SourceEditorHandle {
   /** 切到源码模式：聚焦并把光标放到指定 offset。 */
   focusAt(caret: number): void;
   getSelection(): number;
+  /** 当前选区文本（打开查找时作为初始查询）。 */
+  getSelectedText(): string;
+  /** 查找高亮：全部命中 + 当前一处，交给 CM 的装饰器画。 */
+  setFindHits(ranges: ReadonlyArray<{ from: number; to: number }>, current: number): void;
+  /** 选中一处命中并滚动到可见（不抢焦点，输入框要保持可输入）。 */
+  selectRange(from: number, to: number): void;
 }
 
 interface Props {
@@ -64,6 +78,45 @@ const vellinkTheme = EditorView.theme({
   },
   ".cm-cursor": { borderLeftColor: "var(--accent)" },
   ".cm-selectionBackground": { backgroundColor: "var(--accent-soft) !important" },
+});
+
+/**
+ * 查找高亮。
+ *
+ * 用 StateField 而不是每次整体重建扩展：命中列表随输入频繁变化，走 effect
+ * 只换装饰集，视图与撤销栈都不受扰动（查找不该产生任何文档变更）。
+ */
+interface FindHits {
+  ranges: ReadonlyArray<{ from: number; to: number }>;
+  current: number;
+}
+
+const applyFindHits = StateEffect.define<FindHits>();
+
+const findHighlight = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(decorations, tr) {
+    // 文档一变，旧的偏移立刻失效；等上层算完新命中再画
+    let next = tr.docChanged ? Decoration.none : decorations.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (!effect.is(applyFindHits)) continue;
+      const { ranges, current } = effect.value;
+      const marks: Array<Range<Decoration>> = [];
+      for (let index = 0; index < ranges.length; index += 1) {
+        const from = Math.max(0, Math.min(ranges[index].from, tr.state.doc.length));
+        const to = Math.max(from, Math.min(ranges[index].to, tr.state.doc.length));
+        if (to <= from) continue;
+        marks.push(
+          Decoration.mark({
+            class: index === current ? "find-hit find-hit-on" : "find-hit",
+          }).range(from, to),
+        );
+      }
+      next = Decoration.set(marks, true);
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
 });
 
 export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
@@ -109,6 +162,28 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
         getSelection() {
           return viewRef.current?.state.selection.main.head ?? 0;
         },
+        getSelectedText() {
+          const view = viewRef.current;
+          if (!view) return "";
+          const { from, to } = view.state.selection.main;
+          return view.state.sliceDoc(from, to);
+        },
+        setFindHits(ranges, current) {
+          const view = viewRef.current;
+          if (!view) return;
+          view.dispatch({ effects: applyFindHits.of({ ranges, current }) });
+        },
+        selectRange(from, to) {
+          const view = viewRef.current;
+          if (!view) return;
+          const length = view.state.doc.length;
+          const start = Math.max(0, Math.min(from, length));
+          const end = Math.max(start, Math.min(to, length));
+          view.dispatch({
+            selection: EditorSelection.range(start, end),
+            scrollIntoView: true,
+          });
+        },
       }),
       [],
     );
@@ -128,6 +203,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
           bracketMatching(),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           markdown(),
+          findHighlight,
           keymap.of([...defaultKeymap, indentWithTab]),
           EditorView.lineWrapping,
           vellinkTheme,

@@ -1285,3 +1285,177 @@ button.outline-item {
   background: var(--bg-hover);
   color: var(--text);
 }
+
+/* ---------- find & replace ---------- */
+.editor-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.find-bar {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  z-index: 32;
+}
+.find-card {
+  width: 392px;
+  max-width: calc(100vw - 44px);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  animation: find-in 0.16s ease-out;
+}
+@keyframes find-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.find-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+.find-input::placeholder {
+  color: var(--text-hint);
+}
+.find-count {
+  flex: none;
+  padding: 0 5px;
+  font-size: 10.5px;
+  color: var(--text-hint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.find-count.empty {
+  color: var(--red);
+}
+.find-toggle,
+.find-icon-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+.find-toggle:hover,
+.find-icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.find-icon-btn:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+.find-toggle svg,
+.find-icon-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.15s ease;
+}
+.find-toggle.on svg {
+  transform: rotate(90deg);
+}
+.find-flag {
+  flex: none;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-hint);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+.find-flag:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.find-flag.on {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.find-spacer {
+  flex: none;
+  width: 24px;
+}
+.find-btn {
+  flex: none;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-sub);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.find-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.find-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 命中高亮：两个视图共用同一套类名 */
+.find-hit {
+  background: #fbe79a;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(180, 140, 20, 0.18);
+}
+.find-hit-on {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+body[data-t="dark"] .find-hit {
+  background: rgba(240, 200, 70, 0.26);
+  color: inherit;
+  box-shadow: none;
+}
+body[data-t="dark"] .find-hit-on {
+  background: var(--accent);
+  color: #fff;
+}

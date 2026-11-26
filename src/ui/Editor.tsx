@@ -1,20 +1,24 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
 } from "react";
-import { EditorState, TextSelection } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
+import { EditorState, Plugin, PluginKey, TextSelection } from "prosemirror-state";
+import { Decoration, DecorationSet, EditorView } from "prosemirror-view";
 import { baseKeymap, toggleMark } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
 import type { DocumentIR } from "../core/ir/types";
 import type { DocumentStore } from "../core/store";
 import { vellinkSchema } from "../core/view/schema";
 import { ViewBridge } from "../core/view/sync";
+import { expandReplacement, findMatches } from "../core/find";
+import { buildPMTextMap, locateInPM } from "../core/find-pm";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
+import { FindBar } from "./FindBar";
 
 export type EditorMode = "wysiwyg" | "source";
 
@@ -34,6 +38,9 @@ export interface EditorHandle {
   canRedo(): boolean;
   /** 跳到源码偏移（大纲点击），两种视图都支持。 */
   seek(offset: number): void;
+  /** 打开查找替换浮层（⌘F）；已有选区时以选区为初始查询。 */
+  openFind(): void;
+  closeFind(): void;
 }
 
 interface Props {
@@ -48,6 +55,62 @@ interface Props {
   docName: string;
   mode: EditorMode;
   onStats?: (stats: DocStats) => void;
+  /** 替换结果之类的轻提示，交给 App 的 toast。 */
+  onNotify?: (message: string) => void;
+}
+
+/* ------------------------------ 查找高亮（PM 侧） ------------------------------ */
+
+interface FindDecorState {
+  ranges: ReadonlyArray<{ from: number; to: number }>;
+  current: number;
+}
+
+const emptyFind: FindDecorState = { ranges: [], current: -1 };
+
+const findPluginKey = new PluginKey<FindDecorState>("vellink-find");
+
+/**
+ * 命中高亮。
+ *
+ * 走 plugin meta 而不是整篇重绘：查找不产生任何文档变更，装饰器只负责
+ * 让用户看见「都在哪、现在在哪一处」。
+ */
+const findPlugin = new Plugin<FindDecorState>({
+  key: findPluginKey,
+  state: {
+    init: () => emptyFind,
+    apply(tr, value) {
+      const meta = tr.getMeta(findPluginKey) as FindDecorState | undefined;
+      if (meta) return meta;
+      // 文档一变，旧偏移立即失效；上层算完新命中会再发一次 meta
+      return tr.docChanged ? emptyFind : value;
+    },
+  },
+  props: {
+    decorations(state) {
+      const value = findPluginKey.getState(state);
+      if (!value || value.ranges.length === 0) return null;
+      const size = state.doc.content.size;
+      const decorations = value.ranges.map((range, index) =>
+        Decoration.inline(
+          Math.min(range.from, size),
+          Math.min(range.to, size),
+          { class: index === value.current ? "find-hit find-hit-on" : "find-hit" },
+        ),
+      );
+      return DecorationSet.create(state.doc, decorations);
+    },
+  },
+});
+
+/** 一处命中在「当前视图坐标」里的位置。 */
+interface Hit {
+  from: number;
+  to: number;
+  /** 命中原文，替换时回填 $&。 */
+  text: string;
+  groups: readonly string[];
 }
 
 /**
@@ -60,7 +123,7 @@ interface Props {
  * 由 store.subscribe 通知后回灌，两者用 internalRef 区分，避免自触发。
  */
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
-  { store, docId, docUid, docName, mode, onStats },
+  { store, docId, docUid, docName, mode, onStats, onNotify },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -81,6 +144,20 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   const initialSource = store?.getDocument().source ?? "";
   const [source, setSource] = useState(initialSource);
   const [cursor, setCursor] = useState({ pm: 1, source: 0 });
+
+  /* ------------------------------ 查找状态 ------------------------------ */
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findReplaceText, setFindReplaceText] = useState("");
+  const [findCase, setFindCase] = useState(false);
+  const [findRegex, setFindRegex] = useState(false);
+  const [findShowReplace, setFindShowReplace] = useState(false);
+  const [hits, setHits] = useState<Hit[]>([]);
+  /** `hits` 是在哪个视图里算出来的：切换视图的那一帧要跳过旧坐标系。 */
+  const [hitsMode, setHitsMode] = useState<EditorMode>(mode);
+  const [hitIndex, setHitIndex] = useState(-1);
+  const [findError, setFindError] = useState("");
+  const [findTruncated, setFindTruncated] = useState(false);
 
   /** 本组件主动写 store：期间屏蔽订阅回调。 */
   const applyInternal = (ops: Parameters<DocumentStore["apply"]>[0], mergeKey: string) => {
@@ -161,6 +238,241 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     } finally {
       fromSourceRef.current = false;
     }
+  };
+
+  /* ------------------------------ 查找与替换 ------------------------------ */
+
+  /**
+   * 把命中画到当前视图上。
+   *
+   * 两个视图的坐标系不是一回事（PM 位置 vs 源码偏移），绝不能把一份区间同时
+   * 发给两边：切视图时隐藏的那一侧会拿到错位的装饰，等再切回来就正好错一格。
+   * 所以只画当前视图，另一侧显式清空。
+   */
+  const paintHits = useCallback((list: Hit[], current: number) => {
+    const ranges = list.map(({ from, to }) => ({ from, to }));
+    const view = viewRef.current;
+    const sourceView = sourceEditorRef.current;
+    const toSource = modeRef.current === "source";
+
+    if (view) {
+      view.dispatch(
+        view.state.tr.setMeta(findPluginKey, {
+          ranges: toSource ? [] : ranges,
+          current: toSource ? -1 : current,
+        }),
+      );
+    }
+    sourceView?.setFindHits(toSource ? ranges : [], toSource ? current : -1);
+  }, []);
+
+  /**
+   * 算命中。
+   *
+   * WYSIWYG 搜「可见文本」（拍平后的 PM 文档），源码视图搜原始 Markdown：
+   * 两边都是「搜你看见的字」，不把 `**`、`#` 这类标记卷进结果。
+   */
+  const computeHits = useCallback((): {
+    list: Hit[];
+    error: string;
+    truncated: boolean;
+  } => {
+    if (!findQuery) return { list: [], error: "", truncated: false };
+    const options = { caseSensitive: findCase, regex: findRegex };
+
+    if (mode === "wysiwyg") {
+      const view = viewRef.current;
+      if (!view) return { list: [], error: "", truncated: false };
+      const map = buildPMTextMap(view.state.doc);
+      const result = findMatches(map.text, findQuery, options);
+      if (result.error) {
+        return { list: [], error: "find.invalidRegex", truncated: false };
+      }
+      const list: Hit[] = [];
+      for (const match of result.matches) {
+        const range = locateInPM(map, match.from, match.to);
+        // 跨块的命中在 WYSIWYG 里没有对应区间：不列出，也好过高亮错位
+        if (!range) continue;
+        list.push({
+          from: range.from,
+          to: range.to,
+          text: match.text,
+          groups: match.groups,
+        });
+      }
+      return { list, error: "", truncated: result.truncated };
+    }
+
+    const result = findMatches(source, findQuery, options);
+    if (result.error) return { list: [], error: "find.invalidRegex", truncated: false };
+    return {
+      list: result.matches.map((match) => ({
+        from: match.from,
+        to: match.to,
+        text: match.text,
+        groups: match.groups,
+      })),
+      error: "",
+      truncated: result.truncated,
+    };
+  }, [findQuery, findCase, findRegex, mode, source]);
+
+  // 查询 / 选项 / 正文 / 视图任一变化都重算命中
+  useEffect(() => {
+    if (!findOpen) {
+      setHits([]);
+      setHitIndex(-1);
+      setFindError("");
+      setFindTruncated(false);
+      paintHits([], -1);
+      return;
+    }
+    const { list, error, truncated } = computeHits();
+    setHits(list);
+    setHitsMode(mode);
+    setFindError(error);
+    setFindTruncated(truncated);
+    // 替换掉一处后停在原序号，等于「接着往下找」
+    setHitIndex((prev) =>
+      list.length === 0 ? -1 : Math.min(Math.max(prev, 0), list.length - 1),
+    );
+  }, [findOpen, computeHits, paintHits, mode]);
+
+  // 高亮 + 把当前一处选中并滚进视野
+  useEffect(() => {
+    if (!findOpen) return;
+    // 命中还是上一个视图的坐标系：等重算完再画，避免错位一帧
+    if (hitsMode !== mode) return;
+    paintHits(hits, hitIndex);
+    const hit = hits[hitIndex];
+    if (!hit) return;
+
+    if (modeRef.current === "source") {
+      // 不抢焦点：用户还要在查找框里继续敲
+      sourceEditorRef.current?.selectRange(hit.from, hit.to);
+      return;
+    }
+    const view = viewRef.current;
+    if (!view) return;
+    const size = view.state.doc.content.size;
+    view.dispatch(
+      view.state.tr
+        .setSelection(
+          TextSelection.create(
+            view.state.doc,
+            Math.min(hit.from, size),
+            Math.min(hit.to, size),
+          ),
+        )
+        .scrollIntoView(),
+    );
+  }, [findOpen, hits, hitIndex, hitsMode, mode, paintHits]);
+
+  const focusTokenRef = useRef(0);
+  const [findFocusToken, setFindFocusToken] = useState(0);
+
+  const openFind = useCallback(() => {
+    if (findOpen) {
+      // 已经开着：⌘F 只是把焦点交回查找框
+      focusTokenRef.current += 1;
+      setFindFocusToken(focusTokenRef.current);
+      return;
+    }
+    // 有选区就以选区为初始查询，符合直觉
+    let selected = "";
+    if (modeRef.current === "source") {
+      selected = sourceEditorRef.current?.getSelectedText() ?? "";
+    } else {
+      const view = viewRef.current;
+      if (view) {
+        const { from, to } = view.state.selection;
+        if (to > from) selected = view.state.doc.textBetween(from, to, "\n");
+      }
+    }
+    const usable = selected.length <= 80 && !selected.includes("\n") ? selected : "";
+    setFindQuery(usable);
+    focusTokenRef.current += 1;
+    setFindFocusToken(focusTokenRef.current);
+    setFindOpen(true);
+    // 查询词可能是选区，先算一轮命中，浮层出现时就有高亮
+  }, [findOpen]);
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    paintHits([], -1);
+    if (modeRef.current === "source") {
+      sourceEditorRef.current?.focusAt(cursorRef.current.source);
+    } else {
+      viewRef.current?.focus();
+    }
+  }, [paintHits]);
+
+  const stepHit = useCallback(
+    (delta: number) => {
+      setHitIndex((prev) => {
+        if (hits.length === 0) return -1;
+        if (prev < 0) return delta > 0 ? 0 : hits.length - 1;
+        return (prev + delta + hits.length) % hits.length;
+      });
+    },
+    [hits.length],
+  );
+
+  /** 替换给定的命中（一处或全部）。两种视图各走各的原生写入路径。 */
+  const replaceHits = useCallback(
+    (targets: Hit[]) => {
+      if (targets.length === 0) return;
+
+      if (modeRef.current === "source") {
+        const current = bridgeRef.current?.source ?? source;
+        let next = current;
+        for (let i = targets.length - 1; i >= 0; i -= 1) {
+          const hit = targets[i];
+          next =
+            next.slice(0, hit.from) +
+            expandReplacement(findReplaceText, hit) +
+            next.slice(hit.to);
+        }
+        if (next === current) return;
+        const caret = Math.min(
+          next.length,
+          targets[0].from + expandReplacement(findReplaceText, targets[0]).length,
+        );
+        commitSource(next, caret);
+        // 程序化改文本：commitSource 只回写 PM 与 store，CM 得单独同步
+        sourceEditorRef.current?.setDocument(next, caret);
+        return;
+      }
+
+      const view = viewRef.current;
+      if (!view) return;
+      const tr = view.state.tr;
+      // 从后往前改，前面的偏移才不会失效
+      for (const hit of [...targets].sort((a, b) => b.from - a.from)) {
+        const size = tr.doc.content.size;
+        const from = Math.max(0, Math.min(hit.from, size));
+        const to = Math.max(from, Math.min(hit.to, size));
+        if (to <= from) continue;
+        // insertText 会继承插入点的 mark（跟手打一致）；replaceWith 会把粗体弄丢
+        tr.insertText(expandReplacement(findReplaceText, hit), from, to);
+      }
+      if (!tr.docChanged) return;
+      view.dispatch(tr.scrollIntoView());
+    },
+    [findReplaceText, source],
+  );
+
+  const replaceOne = () => {
+    const hit = hits[hitIndex];
+    if (!hit) return;
+    replaceHits([hit]);
+  };
+
+  const replaceAll = () => {
+    if (hits.length === 0) return;
+    const count = hits.length;
+    replaceHits(hits);
+    onNotify?.(t("find.replacedAll", { count }));
   };
 
   /** 把 IR 回灌到两个视图（撤销 / 插件写入 / 外部变更共用的唯一入口）。 */
@@ -250,8 +562,10 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         cursorRef.current = { pm: pos, source: safe };
         setCursor(cursorRef.current);
       },
+      openFind,
+      closeFind,
     }),
-    [],
+    [openFind, closeFind],
   );
 
   // 挂载 ProseMirror；store 变化（切换文档）时整体重建视图
@@ -275,6 +589,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
           "Mod-`": toggleMark(vellinkSchema.marks.code),
         }),
         keymap(baseKeymap),
+        findPlugin,
       ],
     });
     const view = new EditorView(host, {
@@ -386,29 +701,56 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   };
 
   return (
-    <main className="editor" id="editor">
-      <div className="doc-wrap" data-editor-id={docId} data-editor-host={docName}>
-        {!store && <div className="doc-empty">{t("editor.loading")}</div>}
-        <div
-          ref={hostRef}
-          className={`doc-body pm-host ${mode === "wysiwyg" ? "" : "hidden"}`}
-          data-view="wysiwyg"
-          aria-hidden={mode !== "wysiwyg"}
-        />
-        <div className={`source-wrap ${mode === "source" ? "" : "hidden"}`}>
-          <SourceEditor
-            key={docUid || docId}
-            ref={sourceEditorRef}
-            initialValue={initialSource}
-            onChange={handleSourceChange}
-            onSelection={(caret) => {
-              cursorRef.current = { ...cursorRef.current, source: caret };
-              setCursor(cursorRef.current);
-            }}
-            onCompositionEnd={handleSourceCompositionEnd}
+    <main className="editor-shell">
+      <div className="editor" id="editor">
+        <div className="doc-wrap" data-editor-id={docId} data-editor-host={docName}>
+          {!store && <div className="doc-empty">{t("editor.loading")}</div>}
+          <div
+            ref={hostRef}
+            className={`doc-body pm-host ${mode === "wysiwyg" ? "" : "hidden"}`}
+            data-view="wysiwyg"
+            aria-hidden={mode !== "wysiwyg"}
           />
+          <div className={`source-wrap ${mode === "source" ? "" : "hidden"}`}>
+            <SourceEditor
+              key={docUid || docId}
+              ref={sourceEditorRef}
+              initialValue={initialSource}
+              onChange={handleSourceChange}
+              onSelection={(caret) => {
+                cursorRef.current = { ...cursorRef.current, source: caret };
+                setCursor(cursorRef.current);
+              }}
+              onCompositionEnd={handleSourceCompositionEnd}
+            />
+          </div>
         </div>
       </div>
+
+      {findOpen && (
+        <FindBar
+          query={findQuery}
+          onQueryChange={setFindQuery}
+          replaceText={findReplaceText}
+          onReplaceChange={setFindReplaceText}
+          showReplace={findShowReplace}
+          onToggleReplace={() => setFindShowReplace((v) => !v)}
+          caseSensitive={findCase}
+          regex={findRegex}
+          onToggleCase={() => setFindCase((v) => !v)}
+          onToggleRegex={() => setFindRegex((v) => !v)}
+          total={hits.length}
+          current={hitIndex}
+          truncated={findTruncated}
+          error={findError}
+          focusToken={findFocusToken}
+          onNext={() => stepHit(1)}
+          onPrev={() => stepHit(-1)}
+          onReplaceOne={replaceOne}
+          onReplaceAll={replaceAll}
+          onClose={closeFind}
+        />
+      )}
     </main>
   );
 });

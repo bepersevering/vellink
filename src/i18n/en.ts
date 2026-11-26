@@ -175,4 +175,21 @@ export const en: Record<string, string> = {
   "update.desktopOnly": "In-app updates are available in the desktop app",
   "status.checkUpdate": "Check for updates",
   "cmd.checkUpdate": "Check for updates",
+
+  // Find & replace
+  "cmd.find": "Find and replace",
+  "find.open": "Find and replace",
+  "find.placeholder": "Find",
+  "find.replacePlaceholder": "Replace with",
+  "find.prev": "Previous match",
+  "find.next": "Next match",
+  "find.close": "Close find",
+  "find.caseSensitive": "Match case",
+  "find.regex": "Use regular expression",
+  "find.replace": "Replace",
+  "find.replaceAll": "Replace all",
+  "find.toggleReplace": "Toggle replace",
+  "find.noResults": "No results",
+  "find.invalidRegex": "Invalid pattern",
+  "find.replacedAll": "Replaced {count} matches",
 };

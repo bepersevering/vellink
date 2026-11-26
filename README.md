@@ -24,6 +24,7 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **Local-first cloud sync**: the VFS abstraction unifies local and cloud storage; WebDAV / S3 / GitHub / Yuque are all plugins; Yjs handles offline merge
 - **AI knowledge base**: structure-aware semantic chunking, vector retrieval + backlink graph recall, swappable AI providers (DeepSeek / Ollama / any OpenAI-compatible endpoint)
 - **MCP bridging (planned)**: act as an MCP client calling external tools, and as an MCP server exposing documents and retrieval to other agents
+- **Find & replace**: both views search the text you actually see (WYSIWYG text vs raw Markdown), highlight every hit, and replace one or all in a single undo step
 - **i18n**: English and Simplified Chinese UI, extensible locale packs
 - **Three platforms**: macOS / Windows / Linux
 
@@ -40,7 +41,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (184 tests)
+npm test               # run unit tests (207 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -97,7 +98,8 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M4.6 | Local Markdown files: Tauri fs backend | Open or switch a workspace folder; one document = one real `.md` file; atomic write (temp file + rename), BOM/CRLF normalisation on read, recursive listing that skips `node_modules` / hidden dirs, deletion to `.vellink-trash`, folder picker + reveal in file manager, and a 4s poll that reloads externally edited files while never overwriting unsaved local edits. ([notes](./M4.6-本地文件后端说明.md), Chinese) |
 | M4.7 | File names follow titles, live watching | Renaming a heading renames the file on disk after a 900ms pause (atomic, collision-suffixed, undo stack and cursor preserved); only local edits count, so an external tool changing the H1 is never overruled. A `notify`-based recursive watcher replaces the 4s poll (200ms event coalescing, self-write suppression, stale-scan guard, 30s fallback). ([notes](./M4.7-文件名跟随与实时监听说明.md), Chinese) |
 | M5 | Three-platform packaging + CI + auto-update | Signed installers for macOS (dmg/app, both arches), Windows (NSIS/MSI) and Linux (deb/AppImage), published to Releases by tag. In-app updater: quiet check 4s after launch (6h throttle), progress + signature verification, restart to apply; `⌘U` / status-bar version badge / command palette to check manually. Version numbers come from `package.json` only — `npm version` syncs the other three files and CI enforces it. ([notes](./M5-三平台打包与自动更新说明.md), Chinese) |
-| M6 | 10-user beta polish → public release | Not started |
+| M6.1 | Find & replace across both views | `⌘F` opens a compact bar instead of a browser dialog: WYSIWYG searches visible text (block-aware, never stitches two paragraphs together), the source view searches raw Markdown, cross-view coordinates are never mixed. All hits highlighted, current one selected and scrolled into view, `Enter` / `Shift+Enter` to step, case + regex toggles, replace-one and replace-all commit as a single undo step. ([notes](./M6.1-查找替换说明.md), Chinese) |
+| M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles
 
