@@ -98,6 +98,17 @@ export function useUpdater(): UpdaterController {
     };
   }, []);
 
+  /**
+   * 关掉手上这个原生句柄（Update 在 Rust 侧握着资源）。
+   *
+   * 只释放资源、不清 `update` 元数据：装完之后还要拿版本号显示「已安装，重启生效」。
+   */
+  const releasePending = useCallback(() => {
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (pending) void pending.dismiss().catch(() => undefined);
+  }, []);
+
   const check = useCallback(async (manual: boolean) => {
     if (checkingRef.current) return;
     if (!isDesktop()) {
@@ -126,6 +137,8 @@ export function useUpdater(): UpdaterController {
         setPhase("idle");
         return;
       }
+      // 之前那次（例如用户已经点了关闭）先释放，避免新旧两个资源并存
+      releasePending();
       pendingRef.current = found;
       setUpdate(found);
       setProgress({ downloaded: 0, total: null });
@@ -144,7 +157,7 @@ export function useUpdater(): UpdaterController {
     } finally {
       checkingRef.current = false;
     }
-  }, []);
+  }, [releasePending]);
 
   useEffect(() => {
     if (!isDesktop()) return;
@@ -171,31 +184,38 @@ export function useUpdater(): UpdaterController {
           setPhase("installing");
         }
       });
-      if (aliveRef.current) setPhase("ready");
+      if (aliveRef.current) {
+        // 装完就不需要这个句柄了，留着只是占着一个原生资源
+        releasePending();
+        setPhase("ready");
+      }
     } catch (err) {
       if (aliveRef.current) {
+        releasePending();
         setError(errorMessage(err));
         setPhase("error");
       }
     }
-  }, []);
+  }, [releasePending]);
 
   const later = useCallback(() => {
     const pending = pendingRef.current;
-    pendingRef.current = null;
+    if (pending) write(SKIP_KEY, pending.version);
+    releasePending();
     setUpdate(null);
     setPhase("idle");
-    if (pending) {
-      write(SKIP_KEY, pending.version);
-      void pending.dismiss();
-    }
-  }, []);
+  }, [releasePending]);
 
   const restart = useCallback(async () => {
     await relaunchApp();
   }, []);
 
-  const dismiss = useCallback(() => setPhase("idle"), []);
+  // 关闭卡片：释放句柄但**不**记「跳过」，下次检查（或下次启动）还会提示
+  const dismiss = useCallback(() => {
+    releasePending();
+    setUpdate(null);
+    setPhase("idle");
+  }, [releasePending]);
 
   // 「已是最新」是一次性反馈，5 秒后自己收起来，不用用户动手
   useEffect(() => {
