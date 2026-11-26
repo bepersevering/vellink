@@ -15,6 +15,7 @@ interface Props {
   onToggleLeft: () => void;
   onToggleRight: () => void;
   onOpenPalette: () => void;
+  onOpenSettings: () => void;
 }
 
 export function TitleBar({
@@ -28,6 +29,7 @@ export function TitleBar({
   onToggleLeft,
   onToggleRight,
   onOpenPalette,
+  onOpenSettings,
 }: Props) {
   return (
     <header className="titlebar">
@@ -103,7 +105,12 @@ export function TitleBar({
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
-        <button className="icon-btn" title={t("titlebar.settings")} aria-label={t("titlebar.settings")}>
+        <button
+          className="icon-btn"
+          onClick={onOpenSettings}
+          title={t("titlebar.settings")}
+          aria-label={t("titlebar.settings")}
+        >
           <Icon name="set" />
         </button>
       </div>

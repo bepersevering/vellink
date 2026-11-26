@@ -63,7 +63,8 @@ const vellinkTheme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
     fontFamily: "var(--font-mono)",
-    fontSize: "13px",
+    // 跟着设置里的正文字号走，但代码看起来要比衬线正文小一号
+    fontSize: "calc(var(--doc-font, 16px) * 0.8125)",
     lineHeight: "1.75",
   },
   ".cm-content": { padding: "20px 0", caretColor: "var(--accent)" },

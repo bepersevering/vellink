@@ -20,6 +20,9 @@
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-doc: Georgia, "Songti SC", "Noto Serif SC", serif;
   --font-mono: "SF Mono", Menlo, Consolas, monospace;
+  /* 写作区排版：由设置面板在 <html> 上覆盖（core/settings.ts 的 applySettings） */
+  --doc-font: 16px;
+  --doc-width: 720px;
 }
 
 * {
@@ -275,9 +278,11 @@ svg {
   background: var(--bg);
 }
 .doc-wrap {
-  max-width: 720px;
+  max-width: var(--doc-width);
   margin: 0 auto;
   padding: 64px 56px 120px;
+  /* 标题用 em 跟随字号设置，正文由 .doc-body 自己声明 */
+  font-size: var(--doc-font);
 }
 .kicker {
   font-size: 12px;
@@ -289,7 +294,7 @@ svg {
 }
 .doc-wrap h1 {
   font-family: var(--font-doc);
-  font-size: 34px;
+  font-size: 2.125em;
   line-height: 1.3;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -304,7 +309,7 @@ svg {
 }
 .doc-body {
   font-family: var(--font-doc);
-  font-size: 16px;
+  font-size: var(--doc-font);
   line-height: 1.9;
   color: #373734;
 }
@@ -313,14 +318,14 @@ svg {
 }
 .doc-body h2 {
   font-family: var(--font-doc);
-  font-size: 22px;
+  font-size: 1.375em;
   font-weight: 600;
   margin: 40px 0 16px;
   letter-spacing: -0.01em;
 }
 .doc-body h3 {
   font-family: var(--font-doc);
-  font-size: 18px;
+  font-size: 1.125em;
   font-weight: 600;
   margin: 30px 0 12px;
 }
@@ -353,7 +358,7 @@ svg {
 }
 .doc-body pre {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 0.78em;
   line-height: 1.7;
   background: var(--bg-sub);
   border: 1px solid var(--border);
@@ -387,7 +392,7 @@ svg {
   border-collapse: collapse;
   width: 100%;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125em;
   margin: 22px 0;
 }
 .doc-body th,
@@ -961,9 +966,11 @@ body[data-t="dark"] .service-block {
 }
 
 /* ---------- 工作区：真实文档列表 / 标题 / 状态 ---------- */
+/* 文档 H1 在 ProseMirror 里（.doc-body 内部），字号必须跟 --doc-font 缩放，
+   写成 em 才会随设置面板一起变；写死 34px 会让「字号」只对正文生效。 */
 .doc-body h1 {
   font-family: var(--font-doc);
-  font-size: 34px;
+  font-size: 2.125em;
   line-height: 1.3;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -1635,6 +1642,89 @@ body[data-t="dark"] .find-hit-on {
 }
 .export-actions .service-btn {
   min-width: 74px;
+}
+
+/* ---------- settings dialog ---------- */
+.settings-dialog {
+  width: 436px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 16px 16px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  outline: none;
+  animation: export-in 0.16s ease-out;
+}
+.set-row {
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
+}
+/* 第一行紧贴标题，不要顶出一条多余的分隔线 */
+.set-row:first-of-type {
+  border-top: none;
+  padding-top: 2px;
+}
+.set-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.set-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+.set-value {
+  font-size: 11.5px;
+  color: var(--text-sub);
+  font-variant-numeric: tabular-nums;
+}
+.set-range {
+  display: block;
+  width: 100%;
+  height: 18px;
+  cursor: pointer;
+  /* 只染轨道与滑块，不重造一个 range：各平台原生控件的手感更好 */
+  accent-color: var(--accent);
+}
+.set-hint {
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-hint);
+}
+.set-seg {
+  display: flex;
+  gap: 6px;
+}
+.set-seg-btn {
+  flex: 1;
+  height: 28px;
+  /* 未选中项用 border-strong：纯 --border 在白色对话框上几乎看不见边界 */
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text-sub);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.set-seg-btn:hover {
+  background: var(--bg-sub);
+  color: var(--text);
+}
+.set-seg-btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.settings-dialog .export-actions {
+  margin-top: 14px;
 }
 
 /* ---------- print sheet (PDF 走系统打印) ---------- */

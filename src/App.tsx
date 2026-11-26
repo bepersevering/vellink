@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DocumentStore } from "./core/store";
 import type { PluginRuntime, PluginSummary } from "./core/plugin/runtime";
 import { createPluginRuntime, persistPluginEnabled } from "./plugins/loader";
@@ -19,6 +19,13 @@ import {
 import { buildExport, type ExportFormat } from "./core/export";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
+import {
+  applySettings,
+  loadSettings,
+  resolveTheme,
+  saveSettings,
+  type Settings,
+} from "./core/settings";
 import { t, useLocale } from "./i18n";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
@@ -34,6 +41,7 @@ import { UpdateNotice } from "./ui/UpdateNotice";
 import { useUpdater } from "./ui/useUpdater";
 import { CommandPalette } from "./ui/CommandPalette";
 import { ExportDialog, type ExportScope } from "./ui/ExportDialog";
+import { SettingsDialog } from "./ui/SettingsDialog";
 import { IconSprite } from "./ui/Icon";
 import { commands as commandItems, type PluginInfo, type CommandItem } from "./ui/data";
 
@@ -58,9 +66,18 @@ export default function App() {
     pm: 1,
     source: 0,
   });
-  const [theme, setTheme] = useState<Theme>(() =>
-    (localStorage.getItem("vellink-theme") as Theme) === "dark" ? "dark" : "light",
+  const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** 系统是否深色：只在设置选了「跟随系统」时参与决定。 */
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
+  const theme = resolveTheme(settings.theme, systemDark);
+  /**
+   * 只跑一次的启动 effect（工作区初始化）需要读最新设置。
+   * 用 ref 而不是把 settings 放进依赖：那会让整个工作区被重新初始化一遍。
+   */
+  const settingsRef = useRef(settings);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<PanelTab>("outline");
@@ -158,7 +175,8 @@ export default function App() {
           },
           onError: () => showToast(t("toast.saveFailed")),
         },
-        700,
+        // 用 ref 读：这个 effect 只跑一次，直接闭包 settings 会拿到首帧旧值
+        settingsRef.current.autosaveMs,
       );
       autosaveRef.current = autosave;
 
@@ -657,11 +675,34 @@ export default function App() {
     [locale],
   );
 
-  /* ------------------------------ 主题与快捷键 ------------------------------ */
+  /* ------------------------------ 设置 · 主题与快捷键 ------------------------------ */
+
+  /**
+   * 设置改动立即生效、立即保存。
+   *
+   * 写 CSS 变量 + 调 Autosave.setDelay 都放在这里：设置面板只负责改 state，
+   * 副作用集中在一处，避免「面板里改了字号，导出预览没跟着变」这类偏差。
+   */
+  useLayoutEffect(() => {
+    settingsRef.current = settings;
+    // 布局阶段写 CSS 变量：晚一帧的话，存的字号是 20px 的用户会先看到一眼 16px
+    applySettings(settings);
+    saveSettings(settings);
+    autosaveRef.current?.setDelay(settings.autosaveMs);
+  }, [settings]);
+
+  useEffect(() => {
+    // 跟随系统时，系统外观一变就跟着变；固定浅/深色时这个监听不起作用
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) return;
+    const sync = () => setSystemDark(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     document.body.dataset.t = theme;
-    localStorage.setItem("vellink-theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -712,6 +753,10 @@ export default function App() {
       } else if (key === "e") {
         e.preventDefault();
         openExport();
+      } else if (key === ",") {
+        // 平台惯例：设置就是 ⌘,（Preferences）
+        e.preventDefault();
+        setSettingsOpen((v) => !v);
       } else if (key === "u") {
         e.preventDefault();
         void updater.check(true);
@@ -815,6 +860,9 @@ export default function App() {
       case "export":
         openExport();
         break;
+      case "settings":
+        setSettingsOpen(true);
+        break;
       default:
         showToast(label);
     }
@@ -844,14 +892,15 @@ export default function App() {
         docName={docTitle}
         onModeChange={changeMode}
         onThemeToggle={() => {
-          setTheme((prev) => {
-            showToast(prev === "dark" ? t("toast.lightTheme") : t("toast.darkTheme"));
-            return prev === "dark" ? "light" : "dark";
-          });
+          // 点一下太阳/月亮 = 明确选择浅色或深色；不再跟随系统（这也是用户的意图）
+          const next: Theme = theme === "dark" ? "light" : "dark";
+          setSettings((prev) => ({ ...prev, theme: next }));
+          showToast(next === "dark" ? t("toast.darkTheme") : t("toast.lightTheme"));
         }}
         onToggleLeft={() => setLeftOpen((v) => !v)}
         onToggleRight={() => setRightOpen((v) => !v)}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <div className="body">
@@ -930,6 +979,13 @@ export default function App() {
         busy={exporting}
         onClose={() => setExportOpen(false)}
         onExport={(format, scope) => void runExport(format, scope)}
+      />
+
+      <SettingsDialog
+        open={settingsOpen}
+        settings={settings}
+        onChange={setSettings}
+        onClose={() => setSettingsOpen(false)}
       />
 
       {printSheet && (

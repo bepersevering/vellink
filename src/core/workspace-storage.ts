@@ -156,7 +156,8 @@ export class Autosave {
   private readonly pending = new Map<string, WorkspaceDoc>();
   /** 正在写盘的那一次；同一篇文档的写入串行，改名/删除前可以等它落地。 */
   private readonly running = new Map<string, Promise<void>>();
-  private readonly delay: number;
+  /** 可在运行时改（设置面板的「自动保存间隔」）：所以不是 readonly。 */
+  private delay: number;
 
   constructor(
     private readonly backend: WorkspaceBackend,
@@ -164,6 +165,18 @@ export class Autosave {
     delay = 800,
   ) {
     this.delay = delay;
+  }
+
+  /**
+   * 改防抖间隔。
+   *
+   * 已经在等的那几篇要重新排一次：否则改完设置还得再敲几个字才生效，
+   * 用户会以为设置没起作用。
+   */
+  setDelay(ms: number): void {
+    if (!Number.isFinite(ms) || ms <= 0 || ms === this.delay) return;
+    this.delay = ms;
+    for (const doc of [...this.pending.values()]) this.schedule(doc);
   }
 
   schedule(doc: WorkspaceDoc): void {

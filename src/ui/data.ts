@@ -14,7 +14,7 @@ export interface CommandItem {
   id: string;
   /** i18n key；显示文案经 t() 解析，运行时翻译。 */
   label: string;
-  icon: "edit" | "ai" | "cloud" | "file" | "folder" | "search" | "down";
+  icon: "edit" | "ai" | "cloud" | "file" | "folder" | "search" | "down" | "set";
   hint?: string;
   group: string;
   action: string;
@@ -92,6 +92,14 @@ export const commands: CommandItem[] = [
     hint: "⌘E",
     group: "group.recent",
     action: "export",
+  },
+  {
+    id: "c-settings",
+    label: "cmd.settings",
+    icon: "set",
+    hint: "⌘,",
+    group: "group.recent",
+    action: "settings",
   },
   {
     id: "c-sync",
