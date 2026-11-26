@@ -30,17 +30,35 @@ jobs:
           REF: ${{ github.ref }}
           REF_TYPE: ${{ github.ref_type }}
         run: |
-          if [ -n "$KEY" ]; then
-            echo "签名密钥已配置（${#KEY} 字符）"
-            echo "### 更新签名：已配置" >> "$GITHUB_STEP_SUMMARY"
+          # 去掉可能被带进来的换行/空格：从密码管理器复制常常会多一个回车
+          KEY_TRIMMED="$(printf '%s' "$KEY" | tr -d '[:space:]')"
+
+          if [ -z "$KEY_TRIMMED" ]; then
+            if [ "$REF_TYPE" = "tag" ] || [[ "$REF" == refs/tags/v* ]]; then
+              echo "::error title=缺少更新签名密钥::tag 发版需要 TAURI_SIGNING_PRIVATE_KEY：没有它就不会产出 latest.json，已安装的用户收不到更新。请在 Settings → Secrets and variables → Actions 添加该 secret（名字必须一字不差，值是 ~/.vellink/updater.key 的全文）；只想出包不发版，请改用「手动触发」。"
+              exit 1
+            fi
+            echo "::notice title=未配置签名密钥::手动触发：只产出安装包，不含自动更新产物。"
+            echo "### 更新签名：未配置（手动触发，仅安装包）" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          if [ "$REF_TYPE" = "tag" ] || [[ "$REF" == refs/tags/v* ]]; then
-            echo "::error title=缺少更新签名密钥::tag 发版需要 TAURI_SIGNING_PRIVATE_KEY：没有它就不会产出 latest.json，已安装的用户收不到更新。请在 Settings → Secrets and variables → Actions 添加该 secret（值是 ~/.vellink/updater.key 的全文）；只想出包不发版，请改用「手动触发」。"
+
+          # 名字对了、值填错也要拦。minisign 私钥是 base64，首段解码是
+          # "untrusted comment: "；随手编一个字符串过不了签名，报错还很难懂。
+          case "$KEY_TRIMMED" in
+            dW50cnVzdGVk*) ;;
+            *)
+              echo "::error title=签名密钥格式不对::TAURI_SIGNING_PRIVATE_KEY 的值必须是 ~/.vellink/updater.key 的全文：base64 单行、以 dW50cnVzdGVk 开头、约 348 个字符。当前这个值不是密钥（长度 ${#KEY_TRIMMED}），签名一定失败。"
+              exit 1
+              ;;
+          esac
+          if [ "${#KEY_TRIMMED}" -lt 200 ]; then
+            echo "::error title=签名密钥不完整::值只有 ${#KEY_TRIMMED} 个字符，私钥至少 200 字符，复制时可能被截断了。"
             exit 1
           fi
-          echo "::notice title=未配置签名密钥::手动触发：只产出安装包，不含自动更新产物。"
-          echo "### 更新签名：未配置（手动触发，仅安装包）" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "签名密钥已配置（${#KEY_TRIMMED} 字符）"
+          echo "### 更新签名：已配置" >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: ${{ matrix.label }}
