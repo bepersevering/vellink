@@ -19,6 +19,8 @@ pub fn run() {
             fs::fs_watch_start,
             fs::fs_watch_stop,
             fs::fs_reveal,
+            fs::export_write_text,
+            fs::export_print,
         ])
         .run(tauri::generate_context!())
         .expect("error while running vellink");

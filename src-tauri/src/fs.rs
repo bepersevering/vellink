@@ -170,10 +170,12 @@ pub fn fs_read_markdown(path: String) -> Result<String, String> {
     Ok(normalize_text(raw))
 }
 
-/// 写入 Markdown：必要时补建目录，先写临时文件再 rename 覆盖。
-#[tauri::command]
-pub fn fs_write_markdown(path: String, contents: String) -> Result<FsEntry, String> {
-    let target = markdown_path(&path)?;
+/// 原子写：先写同目录临时文件并 fsync，再 rename 覆盖。
+///
+/// 半截文件和「写完但还在页缓存里」的结果都不该被用户看到：断电或崩溃时
+/// 目标文件要么是旧内容，要么是新内容。
+fn write_atomic(target: &Path, contents: &str) -> Result<(), String> {
+    let path = to_string_path(target);
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("创建目录失败: {err}"))?;
     }
@@ -192,11 +194,17 @@ pub fn fs_write_markdown(path: String, contents: String) -> Result<FsEntry, Stri
             .map_err(|err| format!("落盘失败 {path}: {err}"))?;
     }
 
-    fs::rename(&temp, &target).map_err(|err| {
+    fs::rename(&temp, target).map_err(|err| {
         let _ = fs::remove_file(&temp);
         format!("替换文件失败 {path}: {err}")
-    })?;
+    })
+}
 
+/// 写入 Markdown：必要时补建目录，先写临时文件再 rename 覆盖。
+#[tauri::command]
+pub fn fs_write_markdown(path: String, contents: String) -> Result<FsEntry, String> {
+    let target = markdown_path(&path)?;
+    write_atomic(&target, &contents)?;
     Ok(entry_of(&target))
 }
 
@@ -238,6 +246,49 @@ pub fn fs_rename_markdown(from: String, to: String) -> Result<FsEntry, String> {
     }
     fs::rename(&source, &target).map_err(|err| format!("重命名失败: {err}"))?;
     Ok(entry_of(&target))
+}
+
+/// 导出允许落盘的扩展名。这里不含 `.pdf`：PDF 由系统打印面板写出，
+/// 应用自己不做 PDF 编码。
+const EXPORT_EXTS: [&str; 4] = ["md", "markdown", "html", "htm"];
+
+/// 校验导出目标：必须是绝对路径，且扩展名在白名单里。
+///
+/// 与 `markdown_path` 分开是刻意的：工作区只认 `.md`（防止编辑器把任意文件
+/// 当笔记打开），导出要能写 `.html`；两套白名单混用迟早会放开错的那一个。
+fn export_target(raw: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(raw);
+    if !path.is_absolute() {
+        return Err(format!("导出路径必须是绝对路径: {raw}"));
+    }
+    let allowed = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| EXPORT_EXTS.contains(&ext.to_ascii_lowercase().as_str()))
+        .unwrap_or(false);
+    if !allowed {
+        return Err(format!("不支持导出的扩展名: {raw}"));
+    }
+    Ok(path)
+}
+
+/// 写一个导出文件（Markdown / HTML），同样是原子写。
+#[tauri::command]
+pub fn export_write_text(path: String, contents: String) -> Result<(), String> {
+    let target = export_target(&path)?;
+    write_atomic(&target, &contents)
+}
+
+/// 调起系统打印对话框。
+///
+/// PDF 不走自建渲染器：系统打印面板本来就能「存储为 PDF」，字体、分页、
+/// 中文断行全交给平台，比在应用里重造一套排版可靠得多。
+#[tauri::command]
+pub fn export_print(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "找不到主窗口".to_string())?;
+    window.print().map_err(|err| format!("调起打印失败: {err}"))
 }
 
 /// 当前工作区的目录监听器；换目录时整体替换，旧的自然被 drop 停止。
@@ -353,6 +404,39 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn accepts_export_extensions_only() {
+        assert!(export_target("/tmp/note.md").is_ok());
+        assert!(export_target("/tmp/note.MARKDOWN").is_ok());
+        assert!(export_target("/tmp/report.html").is_ok());
+        assert!(export_target("/tmp/report.HTM").is_ok());
+        // PDF 由系统打印面板写，应用不自己编码
+        assert!(export_target("/tmp/report.pdf").is_err());
+        assert!(export_target("/tmp/run.sh").is_err());
+        assert!(export_target("/tmp/noext").is_err());
+        // 相对路径一律拒绝：导出路径必须来自保存对话框
+        assert!(export_target("note.md").is_err());
+    }
+
+    #[test]
+    fn writes_export_atomically() {
+        let dir = temp_dir("export-write");
+        let target = dir.join("导出.html");
+        export_target(target.to_str().unwrap()).unwrap();
+        write_atomic(&target, "<h1>hi</h1>").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "<h1>hi</h1>");
+        // 覆盖写：不残留临时文件
+        write_atomic(&target, "<h1>bye</h1>").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "<h1>bye</h1>");
+        let leftovers: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".vellink.tmp"))
+            .collect();
+        assert!(leftovers.is_empty());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -16,6 +16,9 @@ import {
   type SaveState,
   type WorkspaceBackend,
 } from "./core/workspace-storage";
+import { buildExport, type ExportFormat } from "./core/export";
+import { printCurrentWindow, saveExportFile } from "./core/export/save";
+import { docCss } from "./core/export/html";
 import { t, useLocale } from "./i18n";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
@@ -30,6 +33,7 @@ import { StatusBar } from "./ui/StatusBar";
 import { UpdateNotice } from "./ui/UpdateNotice";
 import { useUpdater } from "./ui/useUpdater";
 import { CommandPalette } from "./ui/CommandPalette";
+import { ExportDialog, type ExportScope } from "./ui/ExportDialog";
 import { IconSprite } from "./ui/Icon";
 import { commands as commandItems, type PluginInfo, type CommandItem } from "./ui/data";
 
@@ -64,6 +68,18 @@ export default function App() {
   const [pluginErrors, setPluginErrors] = useState<string[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState("");
+  /** 导出面板与它打开那一刻的选区（选区一变就失效，所以开面板时快照）。 */
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportSelection, setExportSelection] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+  const [exporting, setExporting] = useState(false);
+  /** 待打印的正文：PDF 由系统打印面板渲染，不自己编码。 */
+  const [printSheet, setPrintSheet] = useState<{
+    html: string;
+    title: string;
+  } | null>(null);
 
   /** 自动更新：启动后静默查一次，右下角版本号可手动查。 */
   const updater = useUpdater();
@@ -481,6 +497,102 @@ export default function App() {
     showToast(t("toast.savedNow"));
   }, [showToast]);
 
+  /* ------------------------------ 导出 ------------------------------ */
+
+  const openExport = useCallback(() => {
+    // 打开那一刻快照选区：面板是模态的，之后不会有变化的可能
+    setExportSelection(editorRef.current?.selectionRange() ?? null);
+    setExportOpen(true);
+  }, []);
+
+  const runExport = useCallback(
+    async (format: ExportFormat, scope: ExportScope) => {
+      const workspace = workspaceRef.current;
+      const id = activeIdRef.current;
+      const doc = id ? workspace?.get(id) : undefined;
+      if (!doc) {
+        showToast(t("export.failed", { message: t("export.noDoc") }));
+        return;
+      }
+      setExporting(true);
+      try {
+        // 导出的是「眼前的正文」：还没落盘的改动也照导，不等自动保存
+        const payload = buildExport({
+          format,
+          title: doc.title,
+          source: doc.source,
+          range: scope === "selection" ? exportSelection : null,
+          selectionSuffix: t("export.fileSuffix.selection"),
+          lang: locale,
+        });
+
+        if (format === "pdf") {
+          // 先关面板再挂打印快照：面板本身不该出现在纸上
+          setExportOpen(false);
+          setPrintSheet({
+            html: payload.contents,
+            // 打印对话框的默认文件名取自 document.title
+            title: payload.fileName.replace(/\.pdf$/i, ""),
+          });
+          return;
+        }
+
+        const result = await saveExportFile(payload, {
+          defaultDir: filesRef.current?.root ?? null,
+        });
+        if (!result.saved) return;
+        setExportOpen(false);
+        showToast(t("export.done", { name: payload.fileName }));
+      } catch (error) {
+        showToast(t("export.failed", { message: errorMessage(error) }));
+      } finally {
+        setExporting(false);
+      }
+    },
+    [exportSelection, locale, showToast],
+  );
+
+  /**
+   * PDF：正文挂进打印面板 → 两帧后调起系统打印。
+   *
+   * 两帧不是玄学：第一帧 React 才把 DOM 提交上去，第二帧样式表与字体替换
+   * 完成；少等一帧，打印面板可能拿到还没排版的空白页。
+   */
+  useEffect(() => {
+    const sheet = printSheet;
+    if (!sheet) return;
+    let cancelled = false;
+    const previousTitle = document.title;
+    if (sheet.title) document.title = sheet.title;
+
+    const clear = () => {
+      if (cancelled) return;
+      document.title = previousTitle;
+      setPrintSheet(null);
+    };
+    window.addEventListener("afterprint", clear);
+
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        void printCurrentWindow().catch((error) => {
+          if (!cancelled) {
+            showToast(t("export.failed", { message: errorMessage(error) }));
+          }
+        });
+      });
+    });
+    // 少数平台不派发 afterprint：兜底清掉，别让打印面板一直挂在外层
+    const timer = window.setTimeout(clear, 120_000);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", clear);
+      document.title = previousTitle;
+    };
+  }, [printSheet, showToast]);
+
   const selectDoc = useCallback((id: string) => {
     const workspace = workspaceRef.current;
     if (!workspace) return;
@@ -597,6 +709,9 @@ export default function App() {
         } else {
           void saveNow();
         }
+      } else if (key === "e") {
+        e.preventDefault();
+        openExport();
       } else if (key === "u") {
         e.preventDefault();
         void updater.check(true);
@@ -614,7 +729,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showToast, locale, createDoc, saveNow, switchFolder]);
+  }, [showToast, locale, createDoc, saveNow, switchFolder, openExport, updater]);
 
   const changeMode = (m: AppMode) => {
     setMode(m);
@@ -697,6 +812,9 @@ export default function App() {
       case "check-update":
         void updater.check(true);
         break;
+      case "export":
+        openExport();
+        break;
       default:
         showToast(label);
     }
@@ -716,7 +834,7 @@ export default function App() {
   })();
 
   return (
-    <div className="app">
+    <div className={`app ${printSheet ? "has-print-sheet" : ""}`}>
       <IconSprite />
       <TitleBar
         mode={mode}
@@ -804,6 +922,26 @@ export default function App() {
       />
 
       <UpdateNotice updater={updater} />
+
+      <ExportDialog
+        open={exportOpen}
+        title={docTitle}
+        selection={exportSelection}
+        busy={exporting}
+        onClose={() => setExportOpen(false)}
+        onExport={(format, scope) => void runExport(format, scope)}
+      />
+
+      {printSheet && (
+        <>
+          {/* 打印面板的样式与应用互不影响：所有选择器都挂在 .print-sheet 下 */}
+          <style>{docCss(".print-sheet", { dark: false })}</style>
+          <div
+            className="print-sheet"
+            dangerouslySetInnerHTML={{ __html: printSheet.html }}
+          />
+        </>
+      )}
 
       <div className={`hint ${toast ? "show" : ""}`}>{toast}</div>
     </div>

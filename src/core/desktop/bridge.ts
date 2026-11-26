@@ -42,6 +42,19 @@ export const desktopFs = {
   unwatch: () => call<void>("fs_watch_stop"),
 };
 
+/**
+ * 导出相关的原生能力。
+ *
+ * `writeText` 与工作区写入分开：工作区只认 `.md`（不允许编辑器把任意文件
+ * 当笔记打开），导出则要写 `.html` 这类「给别人的文件」。
+ */
+export const desktopExport = {
+  writeText: (path: string, contents: string) =>
+    call<void>("export_write_text", { path, contents }),
+  /** 调起系统打印对话框（PDF 由用户在里面选「存储为 PDF」）。 */
+  print: () => call<void>("export_print"),
+};
+
 /** 监听器事件名，与 `src-tauri/src/fs.rs` 的 WATCH_EVENT 保持一致。 */
 const FS_CHANGED = "vellink://fs-changed";
 

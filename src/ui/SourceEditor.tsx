@@ -39,6 +39,8 @@ export interface SourceEditorHandle {
   getSelection(): number;
   /** 当前选区文本（打开查找时作为初始查询）。 */
   getSelectedText(): string;
+  /** 当前选区区间（导出「选中内容」用）；折叠时 from === to。 */
+  getRange(): { from: number; to: number };
   /** 查找高亮：全部命中 + 当前一处，交给 CM 的装饰器画。 */
   setFindHits(ranges: ReadonlyArray<{ from: number; to: number }>, current: number): void;
   /** 选中一处命中并滚动到可见（不抢焦点，输入框要保持可输入）。 */
@@ -167,6 +169,12 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
           if (!view) return "";
           const { from, to } = view.state.selection.main;
           return view.state.sliceDoc(from, to);
+        },
+        getRange() {
+          const view = viewRef.current;
+          if (!view) return { from: 0, to: 0 };
+          const { from, to } = view.state.selection.main;
+          return { from, to };
         },
         setFindHits(ranges, current) {
           const view = viewRef.current;

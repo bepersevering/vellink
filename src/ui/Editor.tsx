@@ -41,6 +41,11 @@ export interface EditorHandle {
    * 给了 `length` 就顺带选中那一段，让用户看见「就是这里」。
    */
   seek(offset: number, length?: number): boolean;
+  /**
+   * 当前选区在源码坐标系里的区间（导出用）。
+   * 两个视图各算各的，`pmToSource` 换到同一套偏移；没有选区返回 null。
+   */
+  selectionRange(): { from: number; to: number } | null;
   /** 打开查找替换浮层（⌘F）；已有选区时以选区为初始查询。 */
   openFind(): void;
   closeFind(): void;
@@ -568,6 +573,20 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         cursorRef.current = { pm: pos, source: safe };
         setCursor(cursorRef.current);
         return true;
+      },
+      selectionRange: () => {
+        if (modeRef.current === "source") {
+          const range = sourceEditorRef.current?.getRange();
+          return range && range.to > range.from ? range : null;
+        }
+        const view = viewRef.current;
+        const bridge = bridgeRef.current;
+        if (!view || !bridge) return null;
+        const { from, to } = view.state.selection;
+        if (to <= from) return null;
+        const start = bridge.pmToSource(from);
+        const end = bridge.pmToSource(to);
+        return { from: Math.min(start, end), to: Math.max(start, end) };
       },
       openFind,
       closeFind,

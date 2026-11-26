@@ -1463,3 +1463,202 @@ body[data-t="dark"] .find-hit-on {
   background: var(--accent);
   color: #fff;
 }
+
+/* ---------- export dialog ---------- */
+.export-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(24, 26, 31, 0.26);
+  animation: export-fade 0.14s ease-out;
+}
+@keyframes export-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.export-dialog {
+  width: 452px;
+  max-width: calc(100vw - 40px);
+  padding: 16px 16px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  outline: none;
+  animation: export-in 0.16s ease-out;
+}
+@keyframes export-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.export-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.export-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.export-heading strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.export-sub {
+  font-size: 11px;
+  color: var(--text-hint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-close {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-hint);
+  cursor: pointer;
+}
+.export-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.export-close svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+.export-formats {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.export-format {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.export-format:hover {
+  background: var(--bg-sub);
+}
+.export-format.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.export-format-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.export-format.on .export-format-name {
+  color: var(--accent-text);
+}
+.export-format-hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-hint);
+}
+.export-scope {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.export-scope-btn {
+  flex: 1;
+  height: 27px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text-sub);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.export-scope-btn:hover:not(:disabled) {
+  background: var(--bg-sub);
+  color: var(--text);
+}
+.export-scope-btn.on {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+.export-scope-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.export-note {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-hint);
+  margin-bottom: 12px;
+}
+.export-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.export-actions .service-btn {
+  min-width: 74px;
+}
+
+/* ---------- print sheet (PDF 走系统打印) ---------- */
+/* 屏幕上完全不占位：只在 @media print 里接管整页 */
+.print-sheet {
+  display: none;
+}
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  .app.has-print-sheet {
+    display: block !important;
+    height: auto !important;
+    min-width: 0 !important;
+  }
+  /* 应用外壳一律不上纸；<style> 除外（它就是打印面板自己的样式表） */
+  .app.has-print-sheet > *:not(.print-sheet):not(style) {
+    display: none !important;
+  }
+  .print-sheet {
+    display: block !important;
+  }
+}
