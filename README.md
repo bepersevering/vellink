@@ -4,15 +4,15 @@
 
 [中文文档](./README.zh-CN.md)
 
-> A Markdown editor built for writers: Typora-style immersive writing, Obsidian-style extensible knowledge management — and every capability is a plugin.
+> A Markdown editor built for writers: an immersive, distraction-free writing surface plus extensible knowledge management — and every capability is a plugin.
 
 Vellink puts two usually mutually exclusive things together: **the UI disappears while you write, and everything is at hand when you manage**. By default you only see the editor and a minimal toolbar; the file tree, outline, plugins, AI assistant and graph view all live in drawers, one click away. More importantly, cloud sync, AI knowledge base, and syntax extensions all exist as plugins — nothing is hard-wired into the kernel.
 
 ## Why
 
-Typora offers the best immersive writing experience, but it's closed-source, has no plugin system, and almost no knowledge-management capability. Obsidian has a powerful plugin ecosystem and backlinks, but its UI is permanently information-dense and hard to focus in.
+Most Markdown editors force a trade-off. The ones that write beautifully tend to be closed and unextendable — no plugin system, little knowledge management. The ones with rich plugin ecosystems keep the interface permanently crowded, so focus is the first thing you lose.
 
-Vellink's answer: **a unified document model (IR) as the kernel, with everything above it built as plugins**. Writing UX as clean as Typora; extensibility owned by the community. Under one architecture, the two no longer conflict.
+Vellink's answer: **a unified document model (IR) as the kernel, with everything above it built as plugins**. The writing surface stays as clean as a plain sheet of paper; extensibility is owned by the community. Under one architecture, the two no longer conflict.
 
 ## Core Features
 
@@ -86,7 +86,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 |---|---|---|
 | M0 | Foundation: scaffold + IR types + commands/transactions | Done (13 tests) |
 | M1 | Kernel: incremental parsing + source maps + dual-view sync | Incremental parsing & source maps done ([report](./M1-技术验证报告.md), Chinese); cursor-sync validation passed, WYSIWYG stays ([report](./M2-光标同步验证报告.md), Chinese) |
-| M2 | UI: Typora-style shell + drawers + dual modes | React shell done: focus/manage modes, drawers, four-tab panel, command palette (⌘P), light/dark theme. ProseMirror + CodeMirror 6 live dual-view sync (⌘1 source / ⌘2 WYSIWYG), undo unified in DocumentStore (⌘Z / ⌘⇧Z), IME composition never pollutes content or undo history. ([notes](./M2-反向序列化说明.md), Chinese) |
+| M2 | UI: minimal writing shell + drawers + dual modes | React shell done: focus/manage modes, drawers, four-tab panel, command palette (⌘P), light/dark theme. ProseMirror + CodeMirror 6 live dual-view sync (⌘1 source / ⌘2 WYSIWYG), undo unified in DocumentStore (⌘Z / ⌘⇧Z), IME composition never pollutes content or undo history. ([notes](./M2-反向序列化说明.md), Chinese) |
 | M3 | Plugin runtime: manifest + loading + contribution points | Strict manifest validation + dynamic ESM loading + six contribution-point registries; lifecycle / permission gating / private storage / failure rollback implemented, with a `word-count` sample plugin wired into UI. ([notes](./M3-插件运行时说明.md), Chinese) |
 | M4 | Official plugins: WebDAV + DeepSeek Q&A | VFS abstraction + WebDAV provider + ETag offline sync (conflicts preserved as copies); IR semantic chunking + vector retrieval + OpenAI-compatible AIProvider; both official plugins and config panel wired in. ([notes](./M4-官方插件说明.md), Chinese) |
 | M5 | Three-platform packaging + CI + auto-update | Not started |
