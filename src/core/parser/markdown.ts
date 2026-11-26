@@ -181,6 +181,7 @@ function isMark(name: string): boolean {
     name === "TaskMarker" ||
     name === "TableDelimiter" ||
     name === "URL" ||
+    name === "LinkTitle" ||
     name === "CodeInfo"
   );
 }
@@ -193,11 +194,16 @@ function parseInline(
   parent: SyntaxNode,
   source: string,
   ids: IdAllocator,
+  opts: { skipLeadingSpaces?: boolean } = {},
 ): InlineNode[] {
   const out: InlineNode[] = [];
   let cursor = parent.from;
 
-  const pushText = (from: number, to: number) => {
+  const pushText = (from0: number, to: number) => {
+    let from = from0;
+    // 标题里 `# ` 的空格是 HeaderMark 之后的空隙，不属于正文。
+    if (out.length === 0 && opts.skipLeadingSpaces)
+      while (from < to && source[from] === " ") from++;
     if (to <= from) return;
     const value = source.slice(from, to);
     out.push({ type: "text", id: ids.next(fingerprint("text", value)), span: { start: from, end: to }, value });
@@ -281,7 +287,13 @@ function mapInline(node: SyntaxNode, source: string, ids: IdAllocator): InlineNo
       return { type: "image", id: ids.next(fingerprint("image", url + alt)), span, url, alt };
     }
     const url = urlNode ? textOf(urlNode, source) : "";
-    const children = parseInline(node, source, ids);
+    let children = parseInline(node, source, ids);
+    // URL 与 LinkTitle 之间的空白是链接语法的一部分，不属于显示文本。
+    // 去掉首尾纯空白的 text 节点，避免重新序列化时把空格带进 [] 内。
+    children = children.filter(
+      (c, i) =>
+        !(c.type === "text" && c.value.trim() === "" && (i === 0 || i === children.length - 1)),
+    );
     const title = raw.match(/"([^"]*)"\s*\)$/)?.[1];
     return {
       type: "link",
@@ -315,7 +327,7 @@ function mapBlock(node: SyntaxNode, source: string, ids: IdAllocator): BlockNode
 
   if (/^(ATXHeading|SetextHeading)[1-6]$/.test(name)) {
     const depth = headingDepth(name);
-    const kids = parseInline(node, source, ids);
+    const kids = parseInline(node, source, ids, { skipLeadingSpaces: true });
     return {
       type: "heading",
       id: ids.next(fingerprint("heading", String(depth), kids.map((k) => k.id))),
@@ -376,10 +388,25 @@ function mapBlock(node: SyntaxNode, source: string, ids: IdAllocator): BlockNode
         const task = itemKids.find((c) => c.name === "Task");
         const marker = task ? childrenOf(task).find((c) => c.name === "TaskMarker") : undefined;
         const checked = marker ? /[xX]/.test(textOf(marker, source)) : undefined;
-        const blocks = itemKids
+        const blocks: BlockNode[] = itemKids
           .filter((c) => c.name !== "ListMark" && c.name !== "Task")
           .map((c) => mapBlock(c, source, ids))
           .filter((b): b is BlockNode => b !== null);
+        // 任务项文本（如 "- [x] 完成项" 的 "完成项"）是 Task 节点内 TaskMarker
+        // 之后的空隙，没有独立 Paragraph 包装。用 parseInline 提取成段落，
+        // 否则整段内容会被 filter 掉。
+        if (task) {
+          const taskKids = parseInline(task, source, ids, { skipLeadingSpaces: true });
+          if (taskKids.length) {
+            const taskSpan: SourceSpan = { start: task.from, end: task.to };
+            blocks.unshift({
+              type: "paragraph",
+              id: ids.next(fingerprint("paragraph", "task", taskKids.map((k) => k.id))),
+              span: taskSpan,
+              children: taskKids,
+            });
+          }
+        }
         const itemSpan: SourceSpan = { start: item.from, end: item.to };
         return {
           type: "listItem" as const,

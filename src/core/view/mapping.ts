@@ -129,7 +129,7 @@ function blockToPM(
     }
     case "table":
       return T.table.create(
-        null,
+        { align: node.align },
         node.children.map((row) =>
           T.tableRow.create(
             null,

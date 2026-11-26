@@ -47,7 +47,14 @@ export const vellinkSchema = new Schema({
       toDOM: (node) => ["pre", node.attrs.lang ? { "data-lang": node.attrs.lang } : {}, ["code", 0]],
     },
     horizontalRule: { group: "block", parseDOM: [{ tag: "hr" }], toDOM: () => ["hr"] },
-    table: { content: "tableRow+", group: "block", parseDOM: [{ tag: "table" }], toDOM: () => ["table", ["tbody", 0]] },
+    table: {
+      content: "tableRow+",
+      group: "block",
+      // 对齐信息必须从 IR 带进来，否则 WYSIWYG 编辑后序列化会丢失 align
+      attrs: { align: { default: null } },
+      parseDOM: [{ tag: "table" }],
+      toDOM: () => ["table", ["tbody", 0]],
+    },
     tableRow: { content: "tableCell+", group: "tableRow", parseDOM: [{ tag: "tr" }], toDOM: () => ["tr", 0] },
     tableCell: { content: "inline*", group: "tableCell", parseDOM: [{ tag: "td" }], toDOM: () => ["td", 0] },
     text: { group: "inline" },
