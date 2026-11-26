@@ -23,15 +23,16 @@ Vellink 的选择是：**以统一文档模型（IR）为内核，把一切上�
 
 ## 快速开始
 
-> 项目处于早期开发阶段（M0 地基）。当前可运行的是 Tauri 空壳窗口 + 已落地的核心类型与事务引擎。
+> 项目处于早期开发阶段（M2 双视图）。当前可运行：React 写作界面 + ProseMirror WYSIWYG 编辑器 + Markdown 源码视图，两者已通过统一映射实时同步。
 
 ```bash
 # 前置：Node.js 20+、Rust 工具链、Xcode Command Line Tools（macOS）
 git clone https://github.com/bepersevering/vellink.git
 cd vellink
 npm install
+npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测
+npm test               # 运行核心单测（62 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -47,7 +48,7 @@ L1  平台内核       IR · 命令 · 事件总线 · 事务
 L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 ```
 
-技术栈：TypeScript（主）+ Rust（Tauri 宿主壳）、React、CodeMirror 6、Tiptap、web-tree-sitter、Yjs、SQLite + sqlite-vec。
+技术栈：TypeScript（主）+ Rust（Tauri 宿主壳）、React、ProseMirror（已接入）、Lezer Markdown 解析（已接入）、CodeMirror 6 / Yjs / SQLite + sqlite-vec（后续阶段接入）。
 
 ## 插件开发
 
@@ -74,7 +75,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 |---|---|---|
 | M0 | 地基：脚手架 + IR 类型 + 命令/事务 | 已完成（13 单测通过） |
 | M1 | 内核：增量解析 + source map + 双视图同步 | 增量解析与 source map 已完成（[验证报告](./M1-技术验证报告.md)）；双视图光标同步验证通过，不砍 WYSIWYG（[验证报告](./M2-光标同步验证报告.md)） |
-| M2 | UI：Typora 骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。光标同步与 PM→Markdown 反向序列化已完成（[说明](./M2-反向序列化说明.md)），待接进真实编辑器 |
+| M2 | UI：Typora 骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。ProseMirror 已挂载到 `data-editor-host`，与 Markdown 源码视图实时双向同步（⌘1 源码 / ⌘2 WYSIWYG），光标位置互通。[说明](./M2-反向序列化说明.md) |
 | M3 | 插件运行时：manifest + 加载 + 贡献点 | 待开始 |
 | M4 | 官方插件：WebDAV + DeepSeek 问答 | 待开始 |
 | M5 | 三平台打包 + CI + 自动更新 | 待开始 |

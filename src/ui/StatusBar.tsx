@@ -1,10 +1,12 @@
 import { Icon } from "./Icon";
+import type { DocStats } from "./Editor";
 
 interface Props {
   pluginCount: number;
+  stats: DocStats;
 }
 
-export function StatusBar({ pluginCount }: Props) {
+export function StatusBar({ pluginCount, stats }: Props) {
   return (
     <footer className="statusbar">
       <div className="status-i">
@@ -14,8 +16,12 @@ export function StatusBar({ pluginCount }: Props) {
         <Icon name="cloud" />WebDAV 已同步
       </div>
       <div className="sp" />
-      <div>第 24 行 · 共 1,182 字</div>
-      <div>UTF-8　Markdown</div>
+      <div>
+        第 {stats.line} 行 · 共 {stats.chars.toLocaleString("zh-CN")} 字
+      </div>
+      <div title={`PM pos ${stats.pm} ↔ 源码 offset ${stats.source}`}>
+        UTF-8　Markdown　PM {stats.pm} ⇄ src {stats.source}
+      </div>
       <div className="status-i">
         <Icon name="plug" />
         {pluginCount} 个插件已启用

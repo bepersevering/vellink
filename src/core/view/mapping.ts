@@ -15,7 +15,7 @@ import type { BlockNode, DocumentIR, InlineNode, SourceSpan } from "../ir/types"
 import { T, M, vellinkSchema } from "./schema";
 
 /** 一个 PM 文本节点与它在源码中对应片段的锚点。 */
-interface TextAnchor {
+export interface TextAnchor {
   /** PM 文档中的起始位置 */
   pmFrom: number;
   /** 源码中的起始偏移 */

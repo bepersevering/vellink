@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
-import { Editor } from "./ui/Editor";
+import { Editor, type DocStats, type EditorMode } from "./ui/Editor";
 import { SideDrawer, type PanelTab } from "./ui/SideDrawer";
 import { StatusBar } from "./ui/StatusBar";
 import { CommandPalette } from "./ui/CommandPalette";
@@ -18,6 +18,13 @@ import {
 
 export default function App() {
   const [mode, setMode] = useState<AppMode>("focus");
+  const [editorMode, setEditorMode] = useState<EditorMode>("wysiwyg");
+  const [stats, setStats] = useState<DocStats>({
+    line: 1,
+    chars: 0,
+    pm: 1,
+    source: 0,
+  });
   const [theme, setTheme] = useState<Theme>(() =>
     (localStorage.getItem("vellink-theme") as Theme) === "dark" ? "dark" : "light",
   );
@@ -36,6 +43,8 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToast(""), 1800);
   }, []);
 
+  const handleStats = useCallback((next: DocStats) => setStats(next), []);
+
   useEffect(() => {
     document.body.dataset.t = theme;
     localStorage.setItem("vellink-theme", theme);
@@ -50,13 +59,21 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "1") {
+        e.preventDefault();
+        setEditorMode("source");
+        showToast("源码模式 · PM ⇄ Markdown 已接通");
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "2") {
+        e.preventDefault();
+        setEditorMode("wysiwyg");
+        showToast("所见即所得模式");
       } else if (e.key === "Escape") {
         setPaletteOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [showToast]);
 
   const changeMode = (m: AppMode) => {
     setMode(m);
@@ -74,7 +91,12 @@ export default function App() {
   const runCommand = (cmd: CommandItem) => {
     switch (cmd.action) {
       case "source":
-        showToast("源码模式 · 将在 M2 接入 CodeMirror");
+        setEditorMode((m) => (m === "wysiwyg" ? "source" : "wysiwyg"));
+        showToast(
+          editorMode === "wysiwyg"
+            ? "源码模式 · PM ⇄ Markdown 已接通"
+            : "所见即所得模式",
+        );
         break;
       case "ai-continue":
         setActiveTab("ai");
@@ -122,7 +144,11 @@ export default function App() {
           onSelect={(item) => setActiveFile(item)}
         />
 
-        <Editor docName={activeFile.label} />
+        <Editor
+          docName={activeFile.label}
+          mode={editorMode}
+          onStats={handleStats}
+        />
 
         <SideDrawer
           tab={activeTab}
@@ -134,7 +160,10 @@ export default function App() {
         />
       </div>
 
-      <StatusBar pluginCount={plugins.filter((p) => p.enabled).length} />
+      <StatusBar
+        pluginCount={plugins.filter((p) => p.enabled).length}
+        stats={stats}
+      />
 
       <CommandPalette
         open={paletteOpen}

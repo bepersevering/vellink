@@ -401,6 +401,60 @@ svg {
   font-weight: 500;
   color: var(--text-sub);
 }
+/* 真实编辑器挂载点：ProseMirror 接管 .pm-host 的 DOM */
+.pm-host {
+  outline: none;
+  min-height: 320px;
+  caret-color: var(--accent);
+}
+.pm-host.ProseMirror :first-child {
+  margin-top: 0;
+}
+.pm-host .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pm-host li[data-checked="true"] {
+  list-style: none;
+  position: relative;
+}
+.pm-host li[data-checked="true"]::before {
+  content: "☑";
+  position: absolute;
+  left: -22px;
+}
+.pm-host li[data-checked="false"] {
+  list-style: none;
+  position: relative;
+}
+.pm-host li[data-checked="false"]::before {
+  content: "☐";
+  position: absolute;
+  left: -22px;
+}
+.hidden {
+  display: none !important;
+}
+.source-editor {
+  display: block;
+  width: 100%;
+  min-height: 520px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-sub);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.75;
+  padding: 20px;
+  outline: none;
+  tab-size: 2;
+}
+.source-editor:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 .caret {
   display: inline-block;
   width: 2px;

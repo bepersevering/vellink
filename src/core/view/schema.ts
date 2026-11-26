@@ -74,7 +74,7 @@ export const vellinkSchema = new Schema({
       attrs: { target: {} },
       inclusive: false,
       parseDOM: [{ tag: "span[data-wikilink]" }],
-      toDOM: (mark) => ["span", { "data-wikilink": mark.attrs.target }],
+      toDOM: (mark) => ["span", { "data-wikilink": mark.attrs.target }, 0],
     },
   },
   topNode: "doc",
