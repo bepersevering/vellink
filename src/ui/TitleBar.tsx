@@ -1,4 +1,5 @@
 import { Icon } from "./Icon";
+import { t, toggleLocale } from "../i18n";
 
 export type AppMode = "focus" | "manage";
 export type Theme = "light" | "dark";
@@ -37,16 +38,16 @@ export function TitleBar({
       </div>
 
       <div className="tb-center">
-        <span className="saved" title="已保存" />
+        <span className="saved" title={t("titlebar.saved")} />
         <span className="doc-name">{docName}.md</span>
-        <div className="mode-switch" role="tablist" aria-label="界面模式">
+        <div className="mode-switch" role="tablist" aria-label={t("titlebar.modeSwitch")}>
           <button
             className={`mode-btn ${mode === "focus" ? "on" : ""}`}
             onClick={() => onModeChange("focus")}
             role="tab"
             aria-selected={mode === "focus"}
           >
-            写作模式
+            {t("titlebar.focusMode")}
           </button>
           <button
             className={`mode-btn ${mode === "manage" ? "on" : ""}`}
@@ -54,7 +55,7 @@ export function TitleBar({
             role="tab"
             aria-selected={mode === "manage"}
           >
-            管理模式
+            {t("titlebar.manageMode")}
           </button>
         </div>
       </div>
@@ -63,16 +64,16 @@ export function TitleBar({
         <button
           className="icon-btn"
           onClick={onOpenPalette}
-          title="命令面板 (Cmd/Ctrl+P)"
-          aria-label="命令面板"
+          title={t("titlebar.palette")}
+          aria-label={t("titlebar.palette")}
         >
           <Icon name="cmd" />
         </button>
         <button
           className={`icon-btn ${leftOpen ? "on" : ""}`}
           onClick={onToggleLeft}
-          title="文件树"
-          aria-label="切换文件树"
+          title={t("titlebar.fileTree")}
+          aria-label={t("titlebar.toggleFileTree")}
           aria-pressed={leftOpen}
         >
           <Icon name="left" />
@@ -80,21 +81,29 @@ export function TitleBar({
         <button
           className={`icon-btn ${rightOpen ? "on" : ""}`}
           onClick={onToggleRight}
-          title="侧边面板"
-          aria-label="切换侧边面板"
+          title={t("titlebar.sidePanel")}
+          aria-label={t("titlebar.toggleSidePanel")}
           aria-pressed={rightOpen}
         >
           <Icon name="right" />
         </button>
         <button
           className="icon-btn"
+          onClick={toggleLocale}
+          title={t("titlebar.language")}
+          aria-label={t("titlebar.language")}
+        >
+          <Icon name="lang" />
+        </button>
+        <button
+          className="icon-btn"
           onClick={onThemeToggle}
-          title="切换主题"
-          aria-label="切换主题"
+          title={t("titlebar.toggleTheme")}
+          aria-label={t("titlebar.toggleTheme")}
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
-        <button className="icon-btn" title="设置" aria-label="设置">
+        <button className="icon-btn" title={t("titlebar.settings")} aria-label={t("titlebar.settings")}>
           <Icon name="set" />
         </button>
       </div>

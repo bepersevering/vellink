@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon, type IconName } from "./Icon";
+import { t } from "../i18n";
 import type { CommandItem } from "./data";
+
+/** 解析 i18n key；不是 key（如插件命令的真实标题）原样返回。 */
+const tr = (value: string) =>
+  value.includes(".") && !value.includes(" ") ? t(value) : value;
 
 interface Props {
   open: boolean;
@@ -19,7 +24,8 @@ export function CommandPalette({ open, commands, onClose, onRun }: Props) {
     if (!q) return commands;
     return commands.filter(
       (c) =>
-        c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q),
+        tr(c.label).toLowerCase().includes(q) ||
+        tr(c.group).toLowerCase().includes(q),
     );
   }, [commands, query]);
 
@@ -69,29 +75,30 @@ export function CommandPalette({ open, commands, onClose, onRun }: Props) {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="输入命令、文件名，或搜索笔记…"
-            aria-label="命令搜索"
+            placeholder={t("palette.placeholder")}
+            aria-label={t("palette.search")}
           />
           <span className="kbd">esc</span>
         </div>
         <div className="palette-list">
           {filtered.length === 0 && (
-            <div className="palette-group">没有匹配的命令</div>
+            <div className="palette-group">{t("palette.noMatch")}</div>
           )}
           {filtered.map((c, i) => {
-            const showGroup = c.group !== lastGroup;
-            lastGroup = c.group;
+            const group = tr(c.group);
+            const showGroup = group !== lastGroup;
+            lastGroup = group;
             return (
               <div key={c.id}>
-                {showGroup && <div className="palette-group">{c.group}</div>}
+                {showGroup && <div className="palette-group">{group}</div>}
                 <div
                   className={`palette-item ${i === sel ? "sel" : ""}`}
                   onMouseEnter={() => setSel(i)}
                   onClick={() => run(c)}
                 >
                   <Icon name={c.icon as IconName} />
-                  {c.label}
-                  {c.hint && <span className="right">{c.hint}</span>}
+                  {tr(c.label)}
+                  {c.hint && <span className="right">{c.hint.includes(".") ? tr(c.hint) : c.hint}</span>}
                 </div>
               </div>
             );

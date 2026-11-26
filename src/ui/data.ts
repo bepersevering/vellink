@@ -93,6 +93,7 @@ export const plugins: PluginInfo[] = [
 
 export interface CommandItem {
   id: string;
+  /** i18n key；显示文案经 t() 解析，运行时翻译。 */
   label: string;
   icon: "edit" | "ai" | "cloud" | "file";
   hint?: string;
@@ -103,57 +104,57 @@ export interface CommandItem {
 export const commands: CommandItem[] = [
   {
     id: "c-source",
-    label: "切换到源码模式",
+    label: "cmd.toggleSource",
     icon: "edit",
     hint: "⌘1",
-    group: "最近使用",
+    group: "group.recent",
     action: "source",
   },
   {
     id: "c-undo",
-    label: "撤销",
+    label: "cmd.undo",
     icon: "edit",
     hint: "⌘Z",
-    group: "最近使用",
+    group: "group.recent",
     action: "undo",
   },
   {
     id: "c-redo",
-    label: "重做",
+    label: "cmd.redo",
     icon: "edit",
     hint: "⌘⇧Z",
-    group: "最近使用",
+    group: "group.recent",
     action: "redo",
   },
   {
     id: "c-continue",
-    label: "AI · 续写当前段落",
+    label: "cmd.aiContinue",
     icon: "ai",
     hint: "⌘J",
-    group: "最近使用",
+    group: "group.recent",
     action: "ai-continue",
   },
   {
     id: "c-sync",
-    label: "立即同步所有文档",
+    label: "cmd.syncAll",
     icon: "cloud",
     hint: "⌘S",
-    group: "最近使用",
+    group: "group.recent",
     action: "sync",
   },
   {
     id: "c-doc-current",
-    label: "如何建立自己的知识体系",
+    label: "cmd.currentDoc",
     icon: "file",
-    hint: "当前",
-    group: "文件",
+    hint: "cmd.hint.current",
+    group: "group.files",
     action: "open-current",
   },
   {
     id: "c-doc-secondbrain",
-    label: "第二大脑 · 总纲",
+    label: "cmd.secondBrain",
     icon: "file",
-    group: "文件",
+    group: "group.files",
     action: "open-secondbrain",
   },
 ];

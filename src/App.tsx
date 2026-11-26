@@ -3,6 +3,7 @@ import type { DocumentStore } from "./core/store";
 import type { PluginRuntime, PluginSummary } from "./core/plugin/runtime";
 import { createPluginRuntime, persistPluginEnabled } from "./plugins/loader";
 import { createLocalCredentialStore } from "./core/vfs/credentials";
+import { t, useLocale } from "./i18n";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
 import {
@@ -25,6 +26,7 @@ import {
 } from "./ui/data";
 
 export default function App() {
+  const { locale } = useLocale();
   const [mode, setMode] = useState<AppMode>("focus");
   const [editorMode, setEditorMode] = useState<EditorMode>("wysiwyg");
   const [stats, setStats] = useState<DocStats>({
@@ -90,13 +92,20 @@ export default function App() {
         desc:
           plugin.error ??
           plugin.description ??
-          (plugin.active ? "已激活" : "已安装 · 未激活"),
-        tag: `v${plugin.version} · ${plugin.commands.length} 命令 · ${plugin.views.length} 视图`,
+          (plugin.active
+            ? t("plugins.activated")
+            : t("plugins.installedInactive")),
+        tag: t("plugins.tagLine", {
+          version: plugin.version,
+          commands: plugin.commands.length,
+          views: plugin.views.length,
+        }),
         icon: (["folder", "ai", "chart"] as const)[index % 3],
         tone: (["i1", "i2", "i3"] as const)[index % 3],
         enabled: plugin.enabled,
       })),
-    [pluginSummaries],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- locale 切换时重新解析文案
+    [pluginSummaries, locale],
   );
 
   const paletteCommands = useMemo(
@@ -107,12 +116,13 @@ export default function App() {
           id: command.command,
           label: command.title,
           icon: "edit" as const,
-          group: `插件 · ${plugin.name}`,
+          group: t("group.plugins", { name: plugin.name }),
           action: `plugin:${command.command}`,
         })),
       ),
     ],
-    [pluginSummaries],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- locale 切换时重新解析文案
+    [pluginSummaries, locale],
   );
 
   useEffect(() => {
@@ -134,32 +144,32 @@ export default function App() {
         const ok = e.shiftKey
           ? editorRef.current?.redo()
           : editorRef.current?.undo();
-        showToast(ok ? (e.shiftKey ? "已重做" : "已撤销") : "没有可撤销的操作");
+        showToast(ok ? (e.shiftKey ? t("toast.redone") : t("toast.undone")) : t("toast.nothingToUndo"));
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
         e.preventDefault();
-        showToast(editorRef.current?.redo() ? "已重做" : "没有可重做的操作");
+        showToast(editorRef.current?.redo() ? t("toast.redone") : t("toast.nothingToRedo"));
       } else if ((e.metaKey || e.ctrlKey) && e.key === "1") {
         e.preventDefault();
         setEditorMode("source");
-        showToast("源码模式 · PM ⇄ Markdown 已接通");
+        showToast(t("toast.sourceMode"));
       } else if ((e.metaKey || e.ctrlKey) && e.key === "2") {
         e.preventDefault();
         setEditorMode("wysiwyg");
-        showToast("所见即所得模式");
+        showToast(t("toast.wysiwygMode"));
       } else if (e.key === "Escape") {
         setPaletteOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showToast]);
+  }, [showToast, locale]);
 
   const changeMode = (m: AppMode) => {
     setMode(m);
     const manage = m === "manage";
     setLeftOpen(manage);
     setRightOpen(manage);
-    showToast(manage ? "管理模式 · 抽屉已展开" : "写作模式 · 界面已隐形");
+    showToast(manage ? t("toast.manageMode") : t("toast.focusMode"));
   };
 
   const togglePlugin = async (id: string) => {
@@ -170,14 +180,16 @@ export default function App() {
     await runtime.setEnabled(id, next);
     persistPluginEnabled(id, next);
     setPluginSummaries(runtime.list());
-    showToast(`${plugin.name} 已${next ? "启用" : "停用"}`);
+    showToast(t(next ? "toast.pluginEnabled" : "toast.pluginDisabled", { name: plugin.name }));
   };
 
   const runCommand = (cmd: CommandItem) => {
+    /** 命令 label/group 存的是 i18n key；插件命令的标题原样透传。 */
+    const label = cmd.label.includes(".") && !cmd.label.includes(" ") ? t(cmd.label) : cmd.label;
     if (cmd.action.startsWith("plugin:")) {
       const id = cmd.action.slice("plugin:".length);
       void runtimeRef.current?.runCommand(id).then(({ ok, notified }) => {
-        if (!notified) showToast(ok ? `已执行 · ${cmd.label}` : `执行失败 · ${cmd.label}`);
+        if (!notified) showToast(ok ? t("toast.executed", { label }) : t("toast.executeFailed", { label }));
       });
       return;
     }
@@ -185,33 +197,31 @@ export default function App() {
       case "source":
         setEditorMode((m) => (m === "wysiwyg" ? "source" : "wysiwyg"));
         showToast(
-          editorMode === "wysiwyg"
-            ? "源码模式 · PM ⇄ Markdown 已接通"
-            : "所见即所得模式",
+          editorMode === "wysiwyg" ? t("toast.sourceMode") : t("toast.wysiwygMode"),
         );
         break;
       case "undo":
-        showToast(editorRef.current?.undo() ? "已撤销" : "没有可撤销的操作");
+        showToast(editorRef.current?.undo() ? t("toast.undone") : t("toast.nothingToUndo"));
         break;
       case "redo":
-        showToast(editorRef.current?.redo() ? "已重做" : "没有可重做的操作");
+        showToast(editorRef.current?.redo() ? t("toast.redone") : t("toast.nothingToRedo"));
         break;
       case "ai-continue":
         setActiveTab("ai");
         if (mode === "focus") changeMode("manage");
-        showToast("AI · 续写当前段落");
+        showToast(t("toast.aiContinue"));
         break;
       case "sync":
         void runtimeRef.current?.runCommand("webdav.sync").then(({ ok, notified }) => {
-          if (!notified) showToast(ok ? "同步完成" : "同步失败，请先配置 WebDAV");
+          if (!notified) showToast(ok ? t("toast.syncDone") : t("toast.syncNeedConfig"));
         });
         break;
       case "open-current":
       case "open-secondbrain":
-        showToast(`打开文档：${cmd.label}`);
+        showToast(t("toast.openedDoc", { label }));
         break;
       default:
-        showToast(cmd.label);
+        showToast(label);
     }
   };
 
@@ -226,9 +236,9 @@ export default function App() {
         docName={activeFile.label}
         onModeChange={changeMode}
         onThemeToggle={() => {
-          setTheme((t) => {
-            showToast(t === "dark" ? "已切换到亮色主题" : "已切换到暗色主题");
-            return t === "dark" ? "light" : "dark";
+          setTheme((prev) => {
+            showToast(prev === "dark" ? t("toast.lightTheme") : t("toast.darkTheme"));
+            return prev === "dark" ? "light" : "dark";
           });
         }}
         onToggleLeft={() => setLeftOpen((v) => !v)}

@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import type { PluginRuntime } from "../core/plugin/runtime";
 import { DEEPSEEK_DEFAULTS } from "../core/ai/provider";
+import { t } from "../i18n";
 
 interface AIConfig {
   baseUrl: string;
@@ -80,9 +81,9 @@ export function ServicePanel({ runtime, notify }: Props) {
     try {
       await ai.configure({ baseUrl, model, account }, apiKey);
       setApiKey("");
-      notify("AI 配置已保存，密钥已交给凭据仓库");
+      notify(t("service.ai.saved"));
     } catch (error) {
-      notify(`配置失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(t("service.configFailed", { message: error instanceof Error ? error.message : String(error) }));
     }
   };
 
@@ -93,10 +94,10 @@ export function ServicePanel({ runtime, notify }: Props) {
       const result = await ai.ask(question.trim());
       setAnswer({
         text: result.answer,
-        sources: result.sources.map((s) => `${s.headings.join(" > ") || "正文"} · ${s.score.toFixed(2)}`),
+        sources: result.sources.map((s) => `${s.headings.join(" > ") || t("service.ai.body")} · ${s.score.toFixed(2)}`),
       });
     } catch (error) {
-      notify(`问答失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(t("service.askFailed", { message: error instanceof Error ? error.message : String(error) }));
     } finally {
       setBusy(false);
     }
@@ -105,7 +106,7 @@ export function ServicePanel({ runtime, notify }: Props) {
   const writeBack = () => {
     if (!ai || !answer) return;
     ai.appendToDocument({ answer: answer.text, sources: [] });
-    notify("回答已写回当前文档（可撤销）");
+    notify(t("service.ai.writeBackDone"));
   };
 
   const saveDav = async () => {
@@ -113,9 +114,9 @@ export function ServicePanel({ runtime, notify }: Props) {
     try {
       await dav.configure({ baseUrl: davUrl, account: davAccount, remotePath: davPath || undefined }, davSecret);
       setDavSecret("");
-      notify("WebDAV 配置已保存");
+      notify(t("service.dav.saved"));
     } catch (error) {
-      notify(`配置失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(t("service.configFailed", { message: error instanceof Error ? error.message : String(error) }));
     }
   };
 
@@ -125,10 +126,14 @@ export function ServicePanel({ runtime, notify }: Props) {
     try {
       const report = await dav.sync();
       notify(
-        `同步完成 · 上传 ${report.actions.filter((a) => a.type === "upload").length} / 下载 ${report.actions.filter((a) => a.type === "download").length} / 冲突 ${report.actions.filter((a) => a.type === "conflict").length}`,
+        t("service.dav.syncReport", {
+          uploads: report.actions.filter((a) => a.type === "upload").length,
+          downloads: report.actions.filter((a) => a.type === "download").length,
+          conflicts: report.actions.filter((a) => a.type === "conflict").length,
+        }),
       );
     } catch (error) {
-      notify(`同步失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(t("service.dav.syncFailed", { message: error instanceof Error ? error.message : String(error) }));
     } finally {
       setBusy(false);
     }
@@ -137,39 +142,41 @@ export function ServicePanel({ runtime, notify }: Props) {
   return (
     <div className="service-panel">
       <section className="service-block">
-        <div className="service-title">AI 知识库问答</div>
+        <div className="service-title">{t("service.ai.title")}</div>
         {!ai ? (
-          <div className="service-empty">AI 插件未安装或未启用</div>
+          <div className="service-empty">{t("service.ai.notInstalled")}</div>
         ) : (
           <>
             <div className="service-fields">
-              <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} aria-label="AI 接口地址" placeholder="接口地址" />
-              <input value={model} onChange={(e) => setModel(e.target.value)} aria-label="模型名" placeholder="模型名" />
-              <input value={account} onChange={(e) => setAccount(e.target.value)} aria-label="账号标识" placeholder="账号标识" />
-              <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} aria-label="API Key" placeholder={aiHasKey ? "API Key（已保存，留空不覆盖）" : "API Key"} />
+              <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} aria-label={t("service.ai.baseUrl")} placeholder={t("service.ai.baseUrlPlaceholder")} />
+              <input value={model} onChange={(e) => setModel(e.target.value)} aria-label={t("service.ai.model")} placeholder={t("service.ai.modelPlaceholder")} />
+              <input value={account} onChange={(e) => setAccount(e.target.value)} aria-label={t("service.ai.account")} placeholder={t("service.ai.accountPlaceholder")} />
+              <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} aria-label={t("service.ai.key")} placeholder={aiHasKey ? t("service.ai.keySaved") : t("service.ai.key")} />
             </div>
             <button className="service-btn" onClick={saveAI} disabled={busy}>
-              保存配置
+              {t("service.ai.save")}
             </button>
             <textarea
               className="service-question"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="问一个关于当前文档的问题…"
-              aria-label="提问"
+              placeholder={t("service.ai.question")}
+              aria-label={t("service.ai.questionLabel")}
             />
             <button className="service-btn primary" onClick={ask} disabled={busy || !aiHasKey}>
-              {busy ? "处理中…" : "检索并提问"}
+              {busy ? t("service.ai.busy") : t("service.ai.ask")}
             </button>
             {answer && (
               <div className="service-answer">
-                <div className="service-label">回答</div>
+                <div className="service-label">{t("service.ai.answer")}</div>
                 <div>{answer.text}</div>
                 {answer.sources.length > 0 && (
-                  <div className="service-sources">引用：{answer.sources.join("；")}</div>
+                  <div className="service-sources">
+                    {t("service.ai.sources", { sources: answer.sources.join("; ") })}
+                  </div>
                 )}
                 <button className="service-btn" onClick={writeBack}>
-                  写回文档
+                  {t("service.ai.writeBack")}
                 </button>
               </div>
             )}
@@ -178,26 +185,26 @@ export function ServicePanel({ runtime, notify }: Props) {
       </section>
 
       <section className="service-block">
-        <div className="service-title">WebDAV 云同步</div>
+        <div className="service-title">{t("service.dav.title")}</div>
         {!dav ? (
-          <div className="service-empty">WebDAV 插件未安装或未启用</div>
+          <div className="service-empty">{t("service.dav.notInstalled")}</div>
         ) : (
           <>
             <div className="service-fields">
-              <input value={davUrl} onChange={(e) => setDavUrl(e.target.value)} aria-label="WebDAV 地址" placeholder="https://dav.example.com" />
-              <input value={davAccount} onChange={(e) => setDavAccount(e.target.value)} aria-label="WebDAV 账号" placeholder="账号" />
-              <input value={davPath} onChange={(e) => setDavPath(e.target.value)} aria-label="远端根目录" placeholder="远端根目录（可选）" />
-              <input type="password" value={davSecret} onChange={(e) => setDavSecret(e.target.value)} aria-label="密码或应用密码" placeholder="密码 / 应用密码" />
+              <input value={davUrl} onChange={(e) => setDavUrl(e.target.value)} aria-label={t("service.dav.url")} placeholder="https://dav.example.com" />
+              <input value={davAccount} onChange={(e) => setDavAccount(e.target.value)} aria-label={t("service.dav.account")} placeholder={t("service.dav.accountPlaceholder")} />
+              <input value={davPath} onChange={(e) => setDavPath(e.target.value)} aria-label={t("service.dav.remotePath")} placeholder={t("service.dav.remotePathPlaceholder")} />
+              <input type="password" value={davSecret} onChange={(e) => setDavSecret(e.target.value)} aria-label={t("service.dav.secret")} placeholder={t("service.dav.secretPlaceholder")} />
             </div>
             <div className="service-actions">
               <button className="service-btn" onClick={saveDav} disabled={busy}>
-                保存连接
+                {t("service.dav.save")}
               </button>
               <button className="service-btn primary" onClick={syncNow} disabled={busy || !dav.configured()}>
-                {busy ? "处理中…" : "立即同步"}
+                {busy ? t("service.ai.busy") : t("service.dav.syncNow")}
               </button>
             </div>
-            <div className="service-note">断网编辑会先落本地，联网后按 ETag 合并；冲突保留 .conflict 副本。</div>
+            <div className="service-note">{t("service.dav.note")}</div>
           </>
         )}
       </section>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Icon } from "./Icon";
+import { t } from "../i18n";
 import type { TreeItem } from "./data";
 
 interface Props {
@@ -20,12 +21,12 @@ export function FileDrawer({ items, activeId, collapsed, onSelect }: Props) {
   return (
     <aside
       className={`drawer left ${collapsed ? "closed" : ""}`}
-      aria-label="文件树"
+      aria-label={t("drawer.fileTree")}
       aria-hidden={collapsed}
     >
       <div className="drawer-head">
-        <span className="drawer-title">文件</span>
-        <button className="icon-btn" title="新建文档" aria-label="新建文档">
+        <span className="drawer-title">{t("drawer.files")}</span>
+        <button className="icon-btn" title={t("drawer.newDoc")} aria-label={t("drawer.newDoc")}>
           <Icon name="plus" />
         </button>
       </div>

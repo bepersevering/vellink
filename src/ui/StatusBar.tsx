@@ -1,4 +1,5 @@
 import { Icon } from "./Icon";
+import { t } from "../i18n";
 import type { DocStats } from "./Editor";
 
 interface Props {
@@ -10,21 +11,26 @@ export function StatusBar({ pluginCount, stats }: Props) {
   return (
     <footer className="statusbar">
       <div className="status-i">
-        <Icon name="check" />已保存
+        <Icon name="check" />
+        {t("status.saved")}
       </div>
       <div className="status-i sync">
-        <Icon name="cloud" />WebDAV 已同步
+        <Icon name="cloud" />
+        {t("status.webdavSynced")}
       </div>
       <div className="sp" />
       <div>
-        第 {stats.line} 行 · 共 {stats.chars.toLocaleString("zh-CN")} 字
+        {t("status.lineChars", {
+          line: stats.line,
+          chars: stats.chars.toLocaleString(),
+        })}
       </div>
-      <div title={`PM pos ${stats.pm} ↔ 源码 offset ${stats.source}`}>
+      <div title={t("status.pmSource", { pm: stats.pm, source: stats.source })}>
         UTF-8　Markdown　PM {stats.pm} ⇄ src {stats.source}
       </div>
       <div className="status-i">
         <Icon name="plug" />
-        {pluginCount} 个插件已启用
+        {t("status.pluginsEnabled", { count: pluginCount })}
       </div>
     </footer>
   );

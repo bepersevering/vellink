@@ -1,5 +1,6 @@
 import { Icon, type IconName } from "./Icon";
 import { ServicePanel } from "./ServicePanel";
+import { t } from "../i18n";
 import type { PluginRuntime } from "../core/plugin/runtime";
 import type { OutlineItem, PluginInfo } from "./data";
 
@@ -17,11 +18,11 @@ interface Props {
   notify: (message: string) => void;
 }
 
-const TABS: { id: PanelTab; label: string }[] = [
-  { id: "outline", label: "大纲" },
-  { id: "plugins", label: "插件" },
-  { id: "ai", label: "AI 助手" },
-  { id: "graph", label: "图谱" },
+const TABS: { id: PanelTab; labelKey: string }[] = [
+  { id: "outline", labelKey: "tab.outline" },
+  { id: "plugins", labelKey: "tab.plugins" },
+  { id: "ai", labelKey: "tab.ai" },
+  { id: "graph", labelKey: "tab.graph" },
 ];
 
 export function SideDrawer({
@@ -38,19 +39,19 @@ export function SideDrawer({
   return (
     <aside
       className={`drawer right ${collapsed ? "closed" : ""}`}
-      aria-label="侧边面板"
+      aria-label={t("drawer.sidePanel")}
       aria-hidden={collapsed}
     >
       <div className="tabs" role="tablist">
-        {TABS.map((t) => (
+        {TABS.map((item) => (
           <button
-            key={t.id}
-            className={`tab ${tab === t.id ? "on" : ""}`}
-            onClick={() => onTabChange(t.id)}
+            key={item.id}
+            className={`tab ${tab === item.id ? "on" : ""}`}
+            onClick={() => onTabChange(item.id)}
             role="tab"
-            aria-selected={tab === t.id}
+            aria-selected={tab === item.id}
           >
-            {t.label}
+            {t(item.labelKey)}
           </button>
         ))}
       </div>
@@ -76,7 +77,7 @@ export function SideDrawer({
           </div>
         ))}
         {plugins.length === 0 && pluginErrors.length === 0 && (
-          <div className="plugin-empty">正在加载插件…</div>
+          <div className="plugin-empty">{t("plugins.loading")}</div>
         )}
         {plugins.map((p) => (
           <div className="plugin-card" key={p.id}>
@@ -88,7 +89,7 @@ export function SideDrawer({
               <button
                 className={`toggle ${p.enabled ? "on" : ""}`}
                 onClick={() => onTogglePlugin(p.id)}
-                aria-label={`${p.enabled ? "停用" : "启用"} ${p.name}`}
+                aria-label={t(p.enabled ? "plugins.disable" : "plugins.enable", { name: p.name })}
                 aria-pressed={p.enabled}
               />
             </div>
@@ -106,7 +107,7 @@ export function SideDrawer({
             padding: 16,
           }}
         >
-          + 从社区安装插件
+          {t("plugins.installHint")}
         </div>
       </div>
 
@@ -124,23 +125,23 @@ export function SideDrawer({
           />
           <circle cx="130" cy="130" r="13" fill="#5b6ec9" />
           <text x="130" y="134" textAnchor="middle" fontSize="8" fill="#fff" fontFamily="sans-serif">
-            核心
+            {t("graph.core")}
           </text>
           <circle cx="62" cy="70" r="8" fill="#8a6fc9" />
           <circle cx="200" cy="76" r="9" fill="#3f9e77" />
           <circle cx="70" cy="195" r="7" fill="#c98a2e" />
           <circle cx="196" cy="198" r="10" fill="#8a6fc9" />
           <text x="62" y="52" textAnchor="middle" fontSize="9" fill="#7a7a75" fontFamily="sans-serif">
-            第二大脑
+            {t("graph.secondBrain")}
           </text>
           <text x="200" y="59" textAnchor="middle" fontSize="9" fill="#7a7a75" fontFamily="sans-serif">
-            原子笔记
+            {t("graph.atomicNotes")}
           </text>
           <text x="70" y="216" textAnchor="middle" fontSize="9" fill="#7a7a75" fontFamily="sans-serif">
-            深度工作
+            {t("graph.deepWork")}
           </text>
           <text x="196" y="222" textAnchor="middle" fontSize="9" fill="#7a7a75" fontFamily="sans-serif">
-            读书笔记
+            {t("graph.readingNotes")}
           </text>
         </svg>
       </div>
