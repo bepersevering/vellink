@@ -1,22 +1,50 @@
-import { Icon } from "./Icon";
-import { t } from "../i18n";
+import { Icon, type IconName } from "./Icon";
+import { t, getLocale } from "../i18n";
 import type { DocStats } from "./Editor";
+import type { SaveState } from "../core/workspace-storage";
 
 interface Props {
   pluginCount: number;
   stats: DocStats;
+  /** 当前文档的落盘状态。 */
+  saveState: SaveState | "dirty";
+  savedAt: number | null;
+  docCount: number;
+  dirtyCount: number;
 }
 
-export function StatusBar({ pluginCount, stats }: Props) {
+function saveLabel(state: SaveState | "dirty", savedAt: number | null): string {
+  if (state === "saving") return t("status.saving");
+  if (state === "error") return t("status.saveFailed");
+  if (state === "dirty") return t("status.dirty");
+  if (savedAt) {
+    const time = new Date(savedAt).toLocaleTimeString(getLocale(), {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return t("status.savedAt", { time });
+  }
+  return t("status.saved");
+}
+
+export function StatusBar({
+  pluginCount,
+  stats,
+  saveState,
+  savedAt,
+  docCount,
+  dirtyCount,
+}: Props) {
+  const icon: IconName = saveState === "error" ? "cloud" : "check";
   return (
     <footer className="statusbar">
-      <div className="status-i">
-        <Icon name="check" />
-        {t("status.saved")}
+      <div className={`status-i ${saveState}`}>
+        <Icon name={icon} />
+        {saveLabel(saveState, savedAt)}
       </div>
-      <div className="status-i sync">
-        <Icon name="cloud" />
-        {t("status.webdavSynced")}
+      <div className="status-i">
+        <Icon name="file" />
+        {t("status.docs", { count: docCount, dirty: dirtyCount })}
       </div>
       <div className="sp" />
       <div>

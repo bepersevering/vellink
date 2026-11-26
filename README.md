@@ -28,7 +28,7 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 
 ## Getting Started
 
-> The project is in early development (M4 official plugins). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, an installable plugin system, and two official plugins — WebDAV cloud sync and AI knowledge-base Q&A.
+> The project is in early development (M4.5 workspace). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace with autosave and a live outline, an installable plugin system, and two official plugins — WebDAV cloud sync and AI knowledge-base Q&A.
 
 ```bash
 # Prerequisites: Node.js 20+, Rust toolchain, Xcode Command Line Tools (macOS)
@@ -89,6 +89,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M2 | UI: minimal writing shell + drawers + dual modes | React shell done: focus/manage modes, drawers, four-tab panel, command palette (⌘P), light/dark theme. ProseMirror + CodeMirror 6 live dual-view sync (⌘1 source / ⌘2 WYSIWYG), undo unified in DocumentStore (⌘Z / ⌘⇧Z), IME composition never pollutes content or undo history. ([notes](./M2-反向序列化说明.md), Chinese) |
 | M3 | Plugin runtime: manifest + loading + contribution points | Strict manifest validation + dynamic ESM loading + six contribution-point registries; lifecycle / permission gating / private storage / failure rollback implemented, with a `word-count` sample plugin wired into UI. ([notes](./M3-插件运行时说明.md), Chinese) |
 | M4 | Official plugins: WebDAV + DeepSeek Q&A | VFS abstraction + WebDAV provider + ETag offline sync (conflicts preserved as copies); IR semantic chunking + vector retrieval + OpenAI-compatible AIProvider; both official plugins and config panel wired in. ([notes](./M4-官方插件说明.md), Chinese) |
+| M4.5 | Workspace: real documents, autosave, live outline | Document list with create / switch / two-step delete, a separate undo stack per document, title derived from the first heading, debounced autosave with reload recovery, outline built from the IR and clickable in both views, ⌘N / ⌘S wired, and a ProseMirror base keymap (Enter / Backspace / Mod-B / Mod-I). ([notes](./M4.5-文档工作区说明.md), Chinese) |
 | M5 | Three-platform packaging + CI + auto-update | Not started |
 | M6 | 10-user beta polish → public release | Not started |
 

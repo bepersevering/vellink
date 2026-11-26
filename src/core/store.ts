@@ -20,6 +20,8 @@ export class DocumentStore {
   private undoStack: Transaction[] = [];
   private redoStack: Transaction[] = [];
   private unregisterCommands: Array<() => void> = [];
+  /** 视图/工作区订阅：任何来源（编辑器、插件命令、撤销）改文档都会收到通知。 */
+  private readonly listeners = new Set<() => void>();
 
   constructor(
     initial: DocumentIR = emptyDocument(),
@@ -51,6 +53,22 @@ export class DocumentStore {
   dispose(): void {
     for (const unregister of this.unregisterCommands) unregister();
     this.unregisterCommands = [];
+    this.listeners.clear();
+  }
+
+  /**
+   * 订阅文档变更（含插件写入、撤销/重做）。
+   *
+   * 视图层用它在「非自己发起」的变更后回灌 IR；工作区用它同步 dirty 状态。
+   * 回调是同步的，调用方需自行用标志位避免自触发循环。
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notifyListeners(): void {
+    for (const listener of this.listeners) listener();
   }
 
   getDocument(): DocumentIR {
@@ -95,6 +113,7 @@ export class DocumentStore {
       transaction: result.transaction,
       version: this.doc.version,
     });
+    this.notifyListeners();
     return result.transaction;
   }
 
@@ -108,6 +127,7 @@ export class DocumentStore {
       transaction: tx,
       version: this.doc.version,
     });
+    this.notifyListeners();
     return true;
   }
 
@@ -122,6 +142,7 @@ export class DocumentStore {
       transaction: tx,
       version: this.doc.version,
     });
+    this.notifyListeners();
     return true;
   }
 

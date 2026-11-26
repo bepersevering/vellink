@@ -28,7 +28,7 @@ Vellink 的选择是：**以统一文档模型（IR）为内核，把一切上�
 
 ## 快速开始
 
-> 项目处于早期开发阶段（M4 官方插件）。当前可运行：React 写作界面 + ProseMirror WYSIWYG / CodeMirror 6 双视图实时同步、可安装启停的插件系统，以及 WebDAV 云同步与 AI 知识库问答两个官方插件。
+> 项目处于早期开发阶段（M4.5 文档工作区）。当前可运行：React 写作界面 + ProseMirror WYSIWYG / CodeMirror 6 双视图实时同步、多文档工作区（自动保存 + 实时大纲）、可安装启停的插件系统，以及 WebDAV 云同步与 AI 知识库问答两个官方插件。
 
 ```bash
 # 前置：Node.js 20+、Rust 工具链、Xcode Command Line Tools（macOS）
@@ -89,6 +89,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 | M2 | UI：极简写作骨架 + 抽屉 + 双模式 | 骨架已落地为 React 组件：写作/管理模式切换、左右抽屉开合、四标签面板、命令面板（⌘P）、亮暗主题。ProseMirror + CodeMirror 6 双视图实时同步（⌘1 源码 / ⌘2 WYSIWYG），撤销栈统一到 DocumentStore（⌘Z / ⌘⇧Z），IME 组合中间态不污染正文与撤销历史。[说明](./M2-反向序列化说明.md) |
 | M3 | 插件运行时：manifest + 加载 + 贡献点 | manifest 严格校验 + ESM 动态加载 + 六类贡献点注册表；生命周期/权限门控/私有存储/失败回滚已实现，附带 `word-count` 示例插件，面板与命令面板已接线。[说明](./M3-插件运行时说明.md) |
 | M4 | 官方插件：WebDAV + DeepSeek 问答 | VFS 抽象 + WebDAV Provider + ETag 离线同步（冲突保留副本）；IR 语义切片 + 向量检索 + OpenAI 兼容 AIProvider；两个官方插件及配置面板已接入。[说明](./M4-官方插件说明.md) |
+| M4.5 | 文档工作区：多文档 + 自动保存 + 真大纲 | 文档列表可新建/切换/二次确认删除，每篇独立撤销栈；标题由首个一级标题派生；停手 700ms 自动落盘、刷新可恢复；大纲从 IR 现算、双视图可点击跳转；⌘N / ⌘S 已接线，并补齐 ProseMirror 基础键位（回车/退格/加粗/斜体）。[说明](./M4.5-文档工作区说明.md) |
 | M5 | 三平台打包 + CI + 自动更新 | 待开始 |
 | M6 | 10 人试用打磨 → 公开发布 | 待开始 |
 

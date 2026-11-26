@@ -3,6 +3,15 @@ import type { DocumentStore } from "./core/store";
 import type { PluginRuntime, PluginSummary } from "./core/plugin/runtime";
 import { createPluginRuntime, persistPluginEnabled } from "./plugins/loader";
 import { createLocalCredentialStore } from "./core/vfs/credentials";
+import { buildOutline, type OutlineEntry } from "./core/outline";
+import { seedDocuments } from "./core/seed";
+import { Workspace, type DocSummary } from "./core/workspace";
+import {
+  Autosave,
+  createLocalWorkspaceBackend,
+  type SaveState,
+  type WorkspaceBackend,
+} from "./core/workspace-storage";
 import { t, useLocale } from "./i18n";
 import { TitleBar, type AppMode, type Theme } from "./ui/TitleBar";
 import { FileDrawer } from "./ui/FileDrawer";
@@ -16,14 +25,7 @@ import { SideDrawer, type PanelTab } from "./ui/SideDrawer";
 import { StatusBar } from "./ui/StatusBar";
 import { CommandPalette } from "./ui/CommandPalette";
 import { IconSprite } from "./ui/Icon";
-import {
-  commands as commandItems,
-  fileTree,
-  outline,
-  type PluginInfo,
-  type TreeItem,
-  type CommandItem,
-} from "./ui/data";
+import { commands as commandItems, type PluginInfo, type CommandItem } from "./ui/data";
 
 export default function App() {
   const { locale } = useLocale();
@@ -40,17 +42,31 @@ export default function App() {
   );
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
-  const [activeFile, setActiveFile] = useState<TreeItem>(fileTree[1]);
   const [activeTab, setActiveTab] = useState<PanelTab>("outline");
   const [pluginSummaries, setPluginSummaries] = useState<PluginSummary[]>([]);
   const [pluginErrors, setPluginErrors] = useState<string[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState("");
+
+  // 工作区状态
+  const [ready, setReady] = useState(false);
+  const [docs, setDocs] = useState<DocSummary[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [active, setActive] = useState<{ id: string; store: DocumentStore } | null>(null);
+  const [outline, setOutline] = useState<OutlineEntry[]>([]);
+  const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
   const toastTimer = useRef<number | null>(null);
   const editorRef = useRef<EditorHandle>(null);
-  const storeRef = useRef<DocumentStore | null>(null);
+  const workspaceRef = useRef<Workspace | null>(null);
+  const backendRef = useRef<WorkspaceBackend | null>(null);
+  const autosaveRef = useRef<Autosave | null>(null);
+  const activeStoreRef = useRef<DocumentStore | null>(null);
   const runtimeRef = useRef<PluginRuntime | null>(null);
   const [runtimeReady, setRuntimeReady] = useState<PluginRuntime | null>(null);
+  const activeIdRef = useRef<string | null>(null);
+  activeIdRef.current = activeId;
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -59,15 +75,101 @@ export default function App() {
   }, []);
 
   const handleStats = useCallback((next: DocStats) => setStats(next), []);
-  const handleStoreReady = useCallback((store: DocumentStore | null) => {
-    storeRef.current = store;
-  }, []);
 
-  // 发现并加载插件：坏 manifest / 入口缺失只记录错误，不影响编辑器启动。
+  /* ------------------------------ 工作区启动 ------------------------------ */
+
+  useEffect(() => {
+    let cancelled = false;
+    const backend = createLocalWorkspaceBackend();
+    backendRef.current = backend;
+
+    const autosave = new Autosave(
+      backend,
+      {
+        onState: (id, state) =>
+          setSaveStates((prev) => (prev[id] === state ? prev : { ...prev, [id]: state })),
+        onSaved: (id, source) => {
+          workspaceRef.current?.markSaved(id, source);
+          setSavedAt(Date.now());
+        },
+        onError: () => showToast(t("toast.saveFailed")),
+      },
+      700,
+    );
+    autosaveRef.current = autosave;
+
+    let unsubscribe = () => undefined as void;
+    void (async () => {
+      const stored = await backend.load();
+      if (cancelled) return;
+
+      // 首次启动：写入种子文档并立即落盘，避免每次启动重新播种
+      let initial = stored && stored.length > 0 ? stored : seedDocuments(Date.now());
+      if (!stored || stored.length === 0) {
+        for (const doc of initial) await backend.save(doc);
+      }
+
+      const workspace = new Workspace(initial);
+      workspaceRef.current = workspace;
+      const sync = () => {
+        setDocs(workspace.summaries());
+        setActiveId(workspace.activeId);
+      };
+      sync();
+      unsubscribe = workspace.subscribe(sync);
+      setReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      autosave.dispose();
+    };
+  }, [showToast]);
+
+  // 当前文档 → 撤销权威实例
+  useEffect(() => {
+    if (!ready || !activeId) {
+      activeStoreRef.current = null;
+      setActive(null);
+      return;
+    }
+    const store = workspaceRef.current?.store(activeId) ?? null;
+    activeStoreRef.current = store;
+    setActive(store ? { id: activeId, store } : null);
+  }, [ready, activeId]);
+
+  // 有未保存改动就排队（防抖在 Autosave 内部）
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    const autosave = autosaveRef.current;
+    if (!workspace || !autosave) return;
+    for (const summary of docs) {
+      if (!summary.dirty) continue;
+      const doc = workspace.get(summary.id);
+      if (doc) autosave.schedule(doc);
+    }
+  }, [docs]);
+
+  // 大纲跟随当前文档，输入时防抖，避免每个字符都全量解析
+  const activeSource = useMemo(
+    () => (activeId ? (workspaceRef.current?.get(activeId)?.source ?? "") : ""),
+    // docs 每次变更即代表正文变化（source 不在摘要里，借 updatedAt 触发）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeId, docs],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setOutline(buildOutline(activeSource)), 200);
+    return () => window.clearTimeout(timer);
+  }, [activeSource]);
+
+  /* ------------------------------ 插件 ------------------------------ */
+
   useEffect(() => {
     let disposed = false;
     void createPluginRuntime({
-      getStore: () => storeRef.current,
+      getStore: () => activeStoreRef.current,
       notify: showToast,
       credentialStore: createLocalCredentialStore(),
     }).then(({ runtime, errors }) => {
@@ -125,6 +227,53 @@ export default function App() {
     [pluginSummaries, locale],
   );
 
+  /* ------------------------------ 文档操作 ------------------------------ */
+
+  const createDoc = useCallback(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    workspace.create(t("doc.untitled"));
+    showToast(t("toast.docCreated"));
+  }, [showToast]);
+
+  const deleteDoc = useCallback(
+    (id: string) => {
+      const workspace = workspaceRef.current;
+      if (!workspace) return;
+      if (!workspace.remove(id)) {
+        showToast(t("toast.cannotDeleteLast"));
+        return;
+      }
+      void backendRef.current?.remove(id);
+      showToast(t("toast.docDeleted"));
+    },
+    [showToast],
+  );
+
+  const saveNow = useCallback(async () => {
+    const workspace = workspaceRef.current;
+    const autosave = autosaveRef.current;
+    const id = activeIdRef.current;
+    if (!workspace || !autosave || !id) return;
+    const doc = workspace.get(id);
+    if (!doc) return;
+    autosave.schedule(doc);
+    await autosave.flush(id);
+    showToast(t("toast.savedNow"));
+  }, [showToast]);
+
+  const selectDoc = useCallback((id: string) => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    workspace.setActive(id);
+  }, []);
+
+  const jumpTo = useCallback((offset: number) => {
+    editorRef.current?.seek(offset);
+  }, []);
+
+  /* ------------------------------ 主题与快捷键 ------------------------------ */
+
   useEffect(() => {
     document.body.dataset.t = theme;
     localStorage.setItem("vellink-theme", theme);
@@ -136,23 +285,41 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) {
+        if (e.key === "Escape") setPaletteOpen(false);
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === "p") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+      } else if (key === "z") {
         e.preventDefault();
         const ok = e.shiftKey
           ? editorRef.current?.redo()
           : editorRef.current?.undo();
         showToast(ok ? (e.shiftKey ? t("toast.redone") : t("toast.undone")) : t("toast.nothingToUndo"));
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
+      } else if (key === "y") {
         e.preventDefault();
         showToast(editorRef.current?.redo() ? t("toast.redone") : t("toast.nothingToRedo"));
-      } else if ((e.metaKey || e.ctrlKey) && e.key === "1") {
+      } else if (key === "n") {
+        e.preventDefault();
+        createDoc();
+      } else if (key === "s") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          void runtimeRef.current?.runCommand("webdav.sync").then(({ ok, notified }) => {
+            if (!notified) showToast(ok ? t("toast.syncDone") : t("toast.syncNeedConfig"));
+          });
+        } else {
+          void saveNow();
+        }
+      } else if (e.key === "1") {
         e.preventDefault();
         setEditorMode("source");
         showToast(t("toast.sourceMode"));
-      } else if ((e.metaKey || e.ctrlKey) && e.key === "2") {
+      } else if (e.key === "2") {
         e.preventDefault();
         setEditorMode("wysiwyg");
         showToast(t("toast.wysiwygMode"));
@@ -162,7 +329,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showToast, locale]);
+  }, [showToast, locale, createDoc, saveNow]);
 
   const changeMode = (m: AppMode) => {
     setMode(m);
@@ -200,6 +367,12 @@ export default function App() {
           editorMode === "wysiwyg" ? t("toast.sourceMode") : t("toast.wysiwygMode"),
         );
         break;
+      case "new-doc":
+        createDoc();
+        break;
+      case "save":
+        void saveNow();
+        break;
       case "undo":
         showToast(editorRef.current?.undo() ? t("toast.undone") : t("toast.nothingToUndo"));
         break;
@@ -216,14 +389,22 @@ export default function App() {
           if (!notified) showToast(ok ? t("toast.syncDone") : t("toast.syncNeedConfig"));
         });
         break;
-      case "open-current":
-      case "open-secondbrain":
-        showToast(t("toast.openedDoc", { label }));
-        break;
       default:
         showToast(label);
     }
   };
+
+  /* ------------------------------ 渲染 ------------------------------ */
+
+  const activeDoc = activeId ? workspaceRef.current?.get(activeId) : undefined;
+  const docTitle = activeDoc?.title ?? "Vellink";
+  const saveState: SaveState | "dirty" = (() => {
+    if (!activeId) return "idle";
+    const doc = workspaceRef.current?.get(activeId);
+    if (saveStates[activeId] === "saving") return "saving";
+    if (saveStates[activeId] === "error") return "error";
+    return doc && doc.source !== doc.savedSource ? "dirty" : "idle";
+  })();
 
   return (
     <div className="app">
@@ -233,7 +414,7 @@ export default function App() {
         theme={theme}
         leftOpen={mode === "manage" && leftOpen}
         rightOpen={mode === "manage" && rightOpen}
-        docName={activeFile.label}
+        docName={docTitle}
         onModeChange={changeMode}
         onThemeToggle={() => {
           setTheme((prev) => {
@@ -248,18 +429,22 @@ export default function App() {
 
       <div className="body">
         <FileDrawer
-          items={fileTree}
-          activeId={activeFile.id}
+          docs={docs.map((doc) => ({ id: doc.id, title: doc.title, dirty: doc.dirty }))}
+          activeId={activeId}
           collapsed={mode === "focus" || !leftOpen}
-          onSelect={(item) => setActiveFile(item)}
+          onSelect={selectDoc}
+          onNew={createDoc}
+          onDelete={deleteDoc}
         />
 
         <Editor
+          key={activeId ?? "empty"}
           ref={editorRef}
-          docName={activeFile.label}
+          store={active && active.id === activeId ? active.store : null}
+          docId={activeId ?? ""}
+          docName={docTitle}
           mode={editorMode}
           onStats={handleStats}
-          onStoreReady={handleStoreReady}
         />
 
         <SideDrawer
@@ -267,6 +452,7 @@ export default function App() {
           collapsed={mode === "focus" || !rightOpen}
           onTabChange={setActiveTab}
           outline={outline}
+          onJump={jumpTo}
           plugins={plugins}
           pluginErrors={pluginErrors}
           onTogglePlugin={togglePlugin}
@@ -278,6 +464,10 @@ export default function App() {
       <StatusBar
         pluginCount={plugins.filter((p) => p.enabled).length}
         stats={stats}
+        saveState={saveState}
+        savedAt={savedAt}
+        docCount={docs.length}
+        dirtyCount={docs.filter((doc) => doc.dirty).length}
       />
 
       <CommandPalette

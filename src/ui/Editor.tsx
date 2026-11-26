@@ -7,11 +7,13 @@ import {
 } from "react";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
+import { baseKeymap, toggleMark } from "prosemirror-commands";
+import { keymap } from "prosemirror-keymap";
 import type { DocumentIR } from "../core/ir/types";
-import { DocumentStore } from "../core/store";
+import type { DocumentStore } from "../core/store";
 import { vellinkSchema } from "../core/view/schema";
 import { ViewBridge } from "../core/view/sync";
-import { SAMPLE_MARKDOWN } from "./sample";
+import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 
 export type EditorMode = "wysiwyg" | "source";
@@ -24,20 +26,23 @@ export interface DocStats {
   source: number;
 }
 
-/** 暴露给 App 的撤销/重做入口——唯一权威是 DocumentStore。 */
+/** 暴露给 App 的编辑入口——撤销权威在 DocumentStore，定位走 source map。 */
 export interface EditorHandle {
   undo(): boolean;
   redo(): boolean;
   canUndo(): boolean;
   canRedo(): boolean;
+  /** 跳到源码偏移（大纲点击），两种视图都支持。 */
+  seek(offset: number): void;
 }
 
 interface Props {
+  /** 当前文档的撤销权威，由 Workspace 持有，切换文档时整体替换。 */
+  store: DocumentStore | null;
+  docId: string;
   docName: string;
   mode: EditorMode;
   onStats?: (stats: DocStats) => void;
-  /** 把唯一撤销栈暴露给 App，插件通过受权限门控的 API 读同一份 IR。 */
-  onStoreReady?: (store: DocumentStore | null) => void;
 }
 
 /**
@@ -45,35 +50,54 @@ interface Props {
  *
  * IME 策略：composition 期间只更新视图，不序列化、不进撤销栈；
  * compositionend 后一次性提交最终文本。避免拼音中间态污染正文和撤销历史。
+ *
+ * 双来源刷新：本组件发起的事务直接更新视图；插件命令 / 撤销等外部写入
+ * 由 store.subscribe 通知后回灌，两者用 internalRef 区分，避免自触发。
  */
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
-  { docName, mode, onStats, onStoreReady },
+  { store, docId, docName, mode, onStats },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorHandle>(null);
   const viewRef = useRef<EditorView | null>(null);
   const bridgeRef = useRef<ViewBridge | null>(null);
-  const storeRef = useRef<DocumentStore | null>(null);
+  const storeRef = useRef<DocumentStore | null>(store);
   /** 源码输入 / 撤销回灌引发 PM dispatch 时，跳过再次提交事务。 */
   const fromSourceRef = useRef(false);
+  /** 本组件发起的写入：store 通知回来时不再回灌。 */
+  const internalRef = useRef(false);
   /** 输入法组合中：暂缓一切序列化与事务提交。 */
   const composingRef = useRef(false);
   const cursorRef = useRef({ pm: 1, source: 0 });
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
-  const [source, setSource] = useState(SAMPLE_MARKDOWN);
+  const initialSource = store?.getDocument().source ?? "";
+  const [source, setSource] = useState(initialSource);
   const [cursor, setCursor] = useState({ pm: 1, source: 0 });
+
+  /** 本组件主动写 store：期间屏蔽订阅回调。 */
+  const applyInternal = (ops: Parameters<DocumentStore["apply"]>[0], mergeKey: string) => {
+    const target = storeRef.current;
+    if (!target) return;
+    internalRef.current = true;
+    try {
+      target.apply(ops, { mergeKey });
+    } finally {
+      internalRef.current = false;
+    }
+  };
 
   /** PM 变更 → 源码/IR/撤销栈。组合输入期间由调用方跳过。 */
   const commitPM = (state: EditorState, docChanged: boolean) => {
     const bridge = bridgeRef.current;
-    const store = storeRef.current;
-    if (!bridge || !store) return;
+    if (!bridge) return;
 
     const before = bridge.source;
     const snap = bridge.fromPM(state, docChanged);
     if (docChanged && snap.source !== before) {
-      store.apply(
+      applyInternal(
         [
           {
             type: "replaceDocument",
@@ -81,7 +105,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
             source: snap.source,
           },
         ],
-        { mergeKey: "wysiwyg" },
+        "wysiwyg",
       );
     }
     cursorRef.current = snap.cursor;
@@ -94,8 +118,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   const commitSource = (next: string, caret: number) => {
     const bridge = bridgeRef.current;
     const view = viewRef.current;
-    const store = storeRef.current;
-    if (!bridge || !view || !store) return;
+    if (!bridge || !view) return;
 
     if (next === bridge.source) {
       const c = { ...cursorRef.current, source: caret };
@@ -116,7 +139,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       tr.setSelection(TextSelection.create(tr.doc, pos));
       view.dispatch(tr);
 
-      store.apply(
+      applyInternal(
         [
           {
             type: "replaceDocument",
@@ -124,7 +147,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
             source: next,
           },
         ],
-        { mergeKey: "source" },
+        "source",
       );
 
       cursorRef.current = snapshot.cursor;
@@ -135,7 +158,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     }
   };
 
-  /** 把 DocumentStore 里的 IR 回灌到两个视图（撤销/重做专用，不产生新事务）。 */
+  /** 把 IR 回灌到两个视图（撤销 / 插件写入 / 外部变更共用的唯一入口）。 */
   const restoreDocument = (ir: DocumentIR) => {
     const view = viewRef.current;
     const bridge = bridgeRef.current;
@@ -170,35 +193,85 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     ref,
     () => ({
       undo: () => {
-        const store = storeRef.current;
-        if (!store?.undo()) return false;
-        restoreDocument(store.getDocument());
+        const current = storeRef.current;
+        if (!current) return false;
+        internalRef.current = true;
+        let ok = false;
+        try {
+          ok = current.undo();
+        } finally {
+          internalRef.current = false;
+        }
+        if (!ok) return false;
+        restoreDocument(current.getDocument());
         return true;
       },
       redo: () => {
-        const store = storeRef.current;
-        if (!store?.redo()) return false;
-        restoreDocument(store.getDocument());
+        const current = storeRef.current;
+        if (!current) return false;
+        internalRef.current = true;
+        let ok = false;
+        try {
+          ok = current.redo();
+        } finally {
+          internalRef.current = false;
+        }
+        if (!ok) return false;
+        restoreDocument(current.getDocument());
         return true;
       },
       canUndo: () => storeRef.current?.canUndo() ?? false,
       canRedo: () => storeRef.current?.canRedo() ?? false,
+      seek: (offset: number) => {
+        const view = viewRef.current;
+        const bridge = bridgeRef.current;
+        if (!view || !bridge) return;
+        const safe = Math.max(0, Math.min(offset, bridge.source.length));
+
+        if (modeRef.current === "source") {
+          cursorRef.current = { ...cursorRef.current, source: safe };
+          setCursor(cursorRef.current);
+          sourceEditorRef.current?.focusAt(safe);
+          return;
+        }
+
+        const pos = Math.min(bridge.sourceToPM(safe), view.state.doc.content.size);
+        view.dispatch(
+          view.state.tr
+            .setSelection(TextSelection.create(view.state.doc, pos))
+            .scrollIntoView(),
+        );
+        view.focus();
+        cursorRef.current = { pm: pos, source: safe };
+        setCursor(cursorRef.current);
+      },
     }),
     [],
   );
 
-  // 挂载 ProseMirror 与唯一撤销栈
+  // 挂载 ProseMirror；store 变化（切换文档）时整体重建视图
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host || !store) return;
 
-    const bridge = new ViewBridge(SAMPLE_MARKDOWN);
-    bridgeRef.current = bridge;
-    const store = new DocumentStore(bridge.ir);
     storeRef.current = store;
-    onStoreReady?.(store);
+    const bridge = new ViewBridge(store.getDocument().source);
+    bridgeRef.current = bridge;
 
-    const state = EditorState.create({ doc: bridge.doc, schema: vellinkSchema });
+    const state = EditorState.create({
+      doc: bridge.doc,
+      schema: vellinkSchema,
+      plugins: [
+        // 基础编辑行为（回车拆分、退格合并、方向键）必须由 keymap 提供，
+        // 否则浏览器原生编辑会绕过 PM，直接改写 DOM。
+        keymap({
+          "Mod-b": toggleMark(vellinkSchema.marks.strong),
+          "Mod-i": toggleMark(vellinkSchema.marks.em),
+          "Mod-`": toggleMark(vellinkSchema.marks.code),
+        }),
+        keymap(baseKeymap),
+      ],
+    });
     const view = new EditorView(host, {
       state,
       dispatchTransaction(tr) {
@@ -212,6 +285,12 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       },
     });
     viewRef.current = view;
+
+    // 外部写入（插件命令、工作区恢复）→ 回灌两个视图
+    const unsubscribe = store.subscribe(() => {
+      if (internalRef.current) return;
+      restoreDocument(store.getDocument());
+    });
 
     const onCompositionStart = () => {
       composingRef.current = true;
@@ -231,18 +310,33 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     cursorRef.current = initial.cursor;
     setSource(initial.source);
     setCursor(initial.cursor);
+    sourceEditorRef.current?.setDocument(initial.source, initial.cursor.source);
+
+    // 新建文档只有一行标题时补一个空正文段落：PM 必须有真实文本块才能把光标
+    // 渲染在标题之后，否则浏览器会把输入直接拼进标题。空段落序列化后不产出
+    // 额外字符（块间由 "\n" 连接），所以正文与脏标记都不受影响。
+    const onlyHeading =
+      bridge.ir.children.length === 1 && bridge.ir.children[0].type === "heading";
+    if (onlyHeading) {
+      const tr = view.state.tr.insert(
+        view.state.doc.content.size,
+        vellinkSchema.nodes.paragraph.create(),
+      );
+      tr.setSelection(TextSelection.create(tr.doc, tr.doc.content.size - 1));
+      view.dispatch(tr);
+      if (modeRef.current === "wysiwyg") view.focus();
+      else sourceEditorRef.current?.focusAt(initial.source.length);
+    }
 
     return () => {
+      unsubscribe();
       host.removeEventListener("compositionstart", onCompositionStart);
       host.removeEventListener("compositionend", onCompositionEnd);
       view.destroy();
-      store.dispose();
-      onStoreReady?.(null);
       viewRef.current = null;
       bridgeRef.current = null;
-      storeRef.current = null;
     };
-  }, [docName, onStoreReady]);
+  }, [store]);
 
   // 切换视图时把光标带到另一侧：同一份映射，不重新解析、不重排文档。
   useEffect(() => {
@@ -288,11 +382,8 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
 
   return (
     <main className="editor" id="editor">
-      <div className="doc-wrap" data-editor-host={docName}>
-        <div className="kicker">写作 · 方法论</div>
-        <h1>如何建立自己的知识体系</h1>
-        <div className="meta">2026-11-25　·　约 2,400 字　·　预计阅读 8 分钟</div>
-
+      <div className="doc-wrap" data-editor-id={docId} data-editor-host={docName}>
+        {!store && <div className="doc-empty">{t("editor.loading")}</div>}
         <div
           ref={hostRef}
           className={`doc-body pm-host ${mode === "wysiwyg" ? "" : "hidden"}`}
@@ -301,9 +392,9 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         />
         <div className={`source-wrap ${mode === "source" ? "" : "hidden"}`}>
           <SourceEditor
-            key={docName}
+            key={docId}
             ref={sourceEditorRef}
-            initialValue={SAMPLE_MARKDOWN}
+            initialValue={initialSource}
             onChange={handleSourceChange}
             onSelection={(caret) => {
               cursorRef.current = { ...cursorRef.current, source: caret };

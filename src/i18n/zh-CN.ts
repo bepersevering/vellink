@@ -18,6 +18,14 @@ export const zhCN: Record<string, string> = {
   "drawer.fileTree": "文件树",
   "drawer.files": "文件",
   "drawer.newDoc": "新建文档",
+  "drawer.unsaved": "有未保存的修改",
+  "drawer.deleteDoc": "删除 {name}",
+  "drawer.confirmDelete": "再次点击确认删除",
+  "drawer.empty": "还没有文档",
+
+  // Editor
+  "editor.loading": "正在加载文档…",
+  "doc.untitled": "未命名文档",
 
   // SideDrawer
   "drawer.sidePanel": "侧边面板",
@@ -25,6 +33,7 @@ export const zhCN: Record<string, string> = {
   "tab.plugins": "插件",
   "tab.ai": "AI 助手",
   "tab.graph": "图谱",
+  "outline.empty": "还没有标题——用 # 开始一行",
   "plugins.loading": "正在加载插件…",
   "plugins.enable": "启用 {name}",
   "plugins.disable": "停用 {name}",
@@ -40,7 +49,11 @@ export const zhCN: Record<string, string> = {
 
   // StatusBar
   "status.saved": "已保存",
-  "status.webdavSynced": "WebDAV 已同步",
+  "status.savedAt": "已保存 · {time}",
+  "status.saving": "正在保存…",
+  "status.dirty": "未保存",
+  "status.saveFailed": "保存失败",
+  "status.docs": "共 {count} 篇 · {dirty} 篇未保存",
   "status.lineChars": "第 {line} 行 · 共 {chars} 字",
   "status.pmSource": "PM pos {pm} ↔ 源码 offset {source}",
   "status.pluginsEnabled": "{count} 个插件已启用",
@@ -61,9 +74,8 @@ export const zhCN: Record<string, string> = {
   "cmd.redo": "重做",
   "cmd.aiContinue": "AI · 续写当前段落",
   "cmd.syncAll": "立即同步所有文档",
-  "cmd.currentDoc": "如何建立自己的知识体系",
-  "cmd.secondBrain": "第二大脑 · 总纲",
-  "cmd.hint.current": "当前",
+  "cmd.newDoc": "新建文档",
+  "cmd.save": "保存文档",
 
   // Toasts
   "toast.redone": "已重做",
@@ -81,7 +93,11 @@ export const zhCN: Record<string, string> = {
   "toast.aiContinue": "AI · 续写当前段落",
   "toast.syncDone": "同步完成",
   "toast.syncNeedConfig": "同步失败，请先配置 WebDAV",
-  "toast.openedDoc": "打开文档：{label}",
+  "toast.docCreated": "已新建文档",
+  "toast.docDeleted": "文档已删除",
+  "toast.cannotDeleteLast": "至少保留一篇文档",
+  "toast.savedNow": "已保存",
+  "toast.saveFailed": "保存失败，存储空间可能已满",
   "toast.lightTheme": "已切换到亮色主题",
   "toast.darkTheme": "已切换到暗色主题",
   "toast.localeSwitched": "已切换到简体中文",

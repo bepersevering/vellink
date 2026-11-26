@@ -2,7 +2,8 @@ import { Icon, type IconName } from "./Icon";
 import { ServicePanel } from "./ServicePanel";
 import { t } from "../i18n";
 import type { PluginRuntime } from "../core/plugin/runtime";
-import type { OutlineItem, PluginInfo } from "./data";
+import type { OutlineEntry } from "../core/outline";
+import type { PluginInfo } from "./data";
 
 export type PanelTab = "outline" | "plugins" | "ai" | "graph";
 
@@ -10,7 +11,8 @@ interface Props {
   tab: PanelTab;
   collapsed: boolean;
   onTabChange: (t: PanelTab) => void;
-  outline: OutlineItem[];
+  outline: OutlineEntry[];
+  onJump: (offset: number) => void;
   plugins: PluginInfo[];
   pluginErrors?: string[];
   onTogglePlugin: (id: string) => void;
@@ -30,6 +32,7 @@ export function SideDrawer({
   collapsed,
   onTabChange,
   outline,
+  onJump,
   plugins,
   pluginErrors = [],
   onTogglePlugin,
@@ -57,16 +60,17 @@ export function SideDrawer({
       </div>
 
       <div className={`panel ${tab === "outline" ? "on" : ""}`}>
-        {outline.map((item, idx) => (
-          <div key={item.id}>
-            {idx === 4 && <div style={{ height: 24 }} />}
-            <div
-              className={`outline-item lv${item.level} ${item.current ? "cur" : ""}`}
-            >
-              <span className="bar" />
-              {item.label}
-            </div>
-          </div>
+        {outline.length === 0 && <div className="panel-empty">{t("outline.empty")}</div>}
+        {outline.map((item) => (
+          <button
+            key={item.id}
+            className={`outline-item lv${item.level}`}
+            onClick={() => onJump(item.offset)}
+            title={item.label}
+          >
+            <span className="bar" />
+            {item.label}
+          </button>
         ))}
       </div>
 

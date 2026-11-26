@@ -18,6 +18,14 @@ export const en: Record<string, string> = {
   "drawer.fileTree": "File tree",
   "drawer.files": "Files",
   "drawer.newDoc": "New document",
+  "drawer.unsaved": "Unsaved changes",
+  "drawer.deleteDoc": "Delete {name}",
+  "drawer.confirmDelete": "Click again to delete",
+  "drawer.empty": "No documents yet",
+
+  // Editor
+  "editor.loading": "Loading document…",
+  "doc.untitled": "Untitled",
 
   // SideDrawer
   "drawer.sidePanel": "Side panel",
@@ -25,6 +33,7 @@ export const en: Record<string, string> = {
   "tab.plugins": "Plugins",
   "tab.ai": "AI Assistant",
   "tab.graph": "Graph",
+  "outline.empty": "No headings yet — start a line with #",
   "plugins.loading": "Loading plugins…",
   "plugins.enable": "Enable {name}",
   "plugins.disable": "Disable {name}",
@@ -40,7 +49,11 @@ export const en: Record<string, string> = {
 
   // StatusBar
   "status.saved": "Saved",
-  "status.webdavSynced": "WebDAV synced",
+  "status.savedAt": "Saved · {time}",
+  "status.saving": "Saving…",
+  "status.dirty": "Unsaved",
+  "status.saveFailed": "Save failed",
+  "status.docs": "{count} docs · {dirty} unsaved",
   "status.lineChars": "Line {line} · {chars} chars",
   "status.pmSource": "PM pos {pm} ↔ source offset {source}",
   "status.pluginsEnabled": "{count} plugins enabled",
@@ -61,9 +74,8 @@ export const en: Record<string, string> = {
   "cmd.redo": "Redo",
   "cmd.aiContinue": "AI · Continue current paragraph",
   "cmd.syncAll": "Sync all documents now",
-  "cmd.currentDoc": "How to build a personal knowledge system",
-  "cmd.secondBrain": "Second Brain · Overview",
-  "cmd.hint.current": "current",
+  "cmd.newDoc": "New document",
+  "cmd.save": "Save document",
 
   // Toasts
   "toast.redone": "Redone",
@@ -81,7 +93,11 @@ export const en: Record<string, string> = {
   "toast.aiContinue": "AI · Continuing current paragraph",
   "toast.syncDone": "Sync finished",
   "toast.syncNeedConfig": "Sync failed — configure WebDAV first",
-  "toast.openedDoc": "Opened document: {label}",
+  "toast.docCreated": "New document created",
+  "toast.docDeleted": "Document deleted",
+  "toast.cannotDeleteLast": "Keep at least one document",
+  "toast.savedNow": "Saved",
+  "toast.saveFailed": "Save failed — storage may be full",
   "toast.lightTheme": "Switched to light theme",
   "toast.darkTheme": "Switched to dark theme",
   "toast.localeSwitched": "Language switched to English",
