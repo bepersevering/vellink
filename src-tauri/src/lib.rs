@@ -20,6 +20,7 @@ pub fn run() {
             fs::fs_watch_stop,
             fs::fs_reveal,
             fs::export_write_text,
+            fs::export_write_bytes,
             fs::export_print,
             fs::fs_write_asset,
             fs::fs_read_asset,

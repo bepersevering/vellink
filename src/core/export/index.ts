@@ -13,8 +13,9 @@
 import type { DocumentIR } from "../ir/types";
 import { parseMarkdown } from "../parser/markdown";
 import { renderBody, renderHtmlDocument } from "./html";
+import { renderDocx } from "./docx";
 
-export type ExportFormat = "markdown" | "html" | "pdf";
+export type ExportFormat = "markdown" | "html" | "pdf" | "docx";
 
 /** 源码偏移区间（UTF-16），与编辑器内部坐标一致。 */
 export interface ExportRange {
@@ -55,7 +56,8 @@ export interface ExportPayload {
    * Markdown / HTML 是完整文件内容；PDF 是待打印的正文片段
    * （打印面板会自己套上 docCss，不需要 <html> 外壳）。
    */
-  contents: string;
+  /** 二进制格式（DOCX）是 Uint8Array，其余是字符串。 */
+  contents: string | Uint8Array;
   mime: string;
   extension: string;
 }
@@ -67,6 +69,10 @@ const FORMAT_META: Record<
   markdown: { extension: "md", mime: "text/markdown;charset=utf-8" },
   html: { extension: "html", mime: "text/html;charset=utf-8" },
   pdf: { extension: "pdf", mime: "application/pdf" },
+  docx: {
+    extension: "docx",
+    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  },
 };
 
 /**
@@ -139,18 +145,20 @@ function sourceOf(
  * 做法是把选区那一段源码重新解析成 IR，再走同一条渲染链：结构可能被规范化
  * （比如从段落中间开始选），但产出的永远是一份合法的文档。
  */
-export function buildExport(request: ExportRequest): ExportPayload {
+export async function buildExport(request: ExportRequest): Promise<ExportPayload> {
   const meta = FORMAT_META[request.format];
   const { source, ir, partial } = sourceOf(request.source, request.range);
   const title = request.title || "Untitled";
   const isPartial = request.partial ?? partial;
   const name = isPartial ? `${title}${request.selectionSuffix ?? ""}` : title;
 
-  let contents: string;
+  let contents: string | Uint8Array;
   if (request.format === "markdown") {
     contents = normalizeMarkdown(source);
   } else if (request.format === "html") {
     contents = renderHtmlDocument(ir, { title, lang: request.lang });
+  } else if (request.format === "docx") {
+    contents = await renderDocx(ir);
   } else {
     contents = renderBody(ir);
   }

@@ -208,6 +208,8 @@ export const en: Record<string, string> = {
   "export.format.htmlHint": "One self-contained file, styled — just send it",
   "export.format.pdf": "PDF",
   "export.format.pdfHint": "Typeset for printing or sharing",
+  "export.format.docx": "Word document",
+  "export.format.docxHint": "Editable .docx with headings, lists, tables and images",
   "export.scopeLabel": "Scope",
   "export.scope.all": "Whole document",
   "export.scope.selection": "Selection · {count} chars",

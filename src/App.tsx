@@ -691,7 +691,7 @@ export default function App() {
           format === "markdown"
             ? (selected ?? doc.source)
             : await inlineImagesForExport(selected ?? doc.source);
-        const payload = buildExport({
+        const payload = await buildExport({
           format,
           title: doc.title,
           source: exportSource,
@@ -704,7 +704,7 @@ export default function App() {
           // 先关面板再挂打印快照：面板本身不该出现在纸上
           setExportOpen(false);
           setPrintSheet({
-            html: payload.contents,
+            html: String(payload.contents),
             // 打印对话框的默认文件名取自 document.title
             title: payload.fileName.replace(/\.pdf$/i, ""),
           });

@@ -208,6 +208,8 @@ export const zhCN: Record<string, string> = {
   "export.format.htmlHint": "单文件、样式内联，发出去就能读",
   "export.format.pdf": "PDF",
   "export.format.pdfHint": "排好版，打印或发人都合适",
+  "export.format.docx": "Word 文档",
+  "export.format.docxHint": "可编辑的 .docx，标题 / 列表 / 表格 / 图片保留",
   "export.scopeLabel": "范围",
   "export.scope.all": "整篇",
   "export.scope.selection": "选中 · {count} 字",

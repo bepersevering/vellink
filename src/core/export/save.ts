@@ -57,13 +57,20 @@ export async function saveExportFile(
   });
   if (!path) return { saved: false, location: "" };
 
-  await desktopExport.writeText(path, payload.contents);
+  if (typeof payload.contents === "string") {
+    await desktopExport.writeText(path, payload.contents);
+  } else {
+    await desktopExport.writeBytes(path, payload.contents);
+  }
   return { saved: true, location: path };
 }
 
 /** 浏览器端下载：Blob + 一次点击，不进任何外部服务。 */
 function download(payload: ExportPayload): void {
-  const blob = new Blob([payload.contents], { type: payload.mime });
+  const blob = new Blob(
+    [typeof payload.contents === "string" ? payload.contents : payload.contents.slice()],
+    { type: payload.mime },
+  );
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

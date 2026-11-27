@@ -259,7 +259,7 @@ pub fn fs_rename_markdown(from: String, to: String) -> Result<FsEntry, String> {
 
 /// 导出允许落盘的扩展名。这里不含 `.pdf`：PDF 由系统打印面板写出，
 /// 应用自己不做 PDF 编码。
-const EXPORT_EXTS: [&str; 4] = ["md", "markdown", "html", "htm"];
+const EXPORT_EXTS: [&str; 7] = ["md", "markdown", "html", "htm", "docx", "epub", "odt"];
 
 /// 校验导出目标：必须是绝对路径，且扩展名在白名单里。
 ///
@@ -286,6 +286,13 @@ fn export_target(raw: &str) -> Result<PathBuf, String> {
 pub fn export_write_text(path: String, contents: String) -> Result<(), String> {
     let target = export_target(&path)?;
     write_atomic(&target, &contents)
+}
+
+/// 导出二进制格式（DOCX / EPUB / ODT）：字节经 IPC 传来，同样原子写。
+#[tauri::command]
+pub fn export_write_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
+    let target = export_target(&path)?;
+    write_atomic_bytes(&target, &data)
 }
 
 /// 调起系统打印对话框。

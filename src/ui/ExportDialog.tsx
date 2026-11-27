@@ -21,12 +21,13 @@ const FORMATS: ReadonlyArray<{
   { id: "markdown", label: "export.format.markdown", hint: "export.format.markdownHint" },
   { id: "html", label: "export.format.html", hint: "export.format.htmlHint" },
   { id: "pdf", label: "export.format.pdf", hint: "export.format.pdfHint" },
+  { id: "docx", label: "export.format.docx", hint: "export.format.docxHint" },
 ];
 
 function initialFormat(): ExportFormat {
   try {
     const saved = localStorage.getItem(FORMAT_STORAGE_KEY);
-    if (saved === "markdown" || saved === "html" || saved === "pdf") return saved;
+    if (saved === "markdown" || saved === "html" || saved === "pdf" || saved === "docx") return saved;
   } catch {
     /* 隐私模式下 localStorage 可能不可用 */
   }

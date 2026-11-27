@@ -51,6 +51,8 @@ export const desktopFs = {
 export const desktopExport = {
   writeText: (path: string, contents: string) =>
     call<void>("export_write_text", { path, contents }),
+  writeBytes: (path: string, data: Uint8Array) =>
+    call<void>("export_write_bytes", { path, data: Array.from(data) }),
   /** 调起系统打印对话框（PDF 由用户在里面选「存储为 PDF」）。 */
   print: () => call<void>("export_print"),
 };

@@ -53,20 +53,20 @@ describe("导出文件名", () => {
 });
 
 describe("导出范围", () => {
-  it("区间夹到源码范围内，反着给也能纠正", () => {
+  it("区间夹到源码范围内，反着给也能纠正", async () => {
     expect(clampRange("abcdef", { from: 4, to: 2 })).toEqual({ from: 2, to: 4 });
     expect(clampRange("abcdef", { from: -5, to: 99 })).toEqual({ from: 0, to: 6 });
   });
 
-  it("空区间视为没选区", () => {
+  it("空区间视为没选区", async () => {
     expect(clampRange("abcdef", { from: 3, to: 3 })).toBeNull();
     expect(clampRange("abcdef", null)).toBeNull();
   });
 
-  it("选区导出带后缀，不会和整篇导出撞名", () => {
+  it("选区导出带后缀，不会和整篇导出撞名", async () => {
     const base = { title: "周报", source: "# 周报\n\n第一段\n" } as const;
-    const all = buildExport({ ...base, format: "markdown" });
-    const part = buildExport({
+    const all = await buildExport({ ...base, format: "markdown" });
+    const part = await buildExport({
       ...base,
       format: "markdown",
       range: { from: 5, to: 8 },
@@ -76,8 +76,8 @@ describe("导出范围", () => {
     expect(part.fileName).toBe("周报 · 摘录.md");
   });
 
-  it("选区落在空白上退回整篇时，也不带后缀（它导的确实是整篇）", () => {
-    const payload = buildExport({
+  it("选区落在空白上退回整篇时，也不带后缀（它导的确实是整篇）", async () => {
+    const payload = await buildExport({
       format: "markdown",
       title: "周报",
       source: "# 周报\n\n\n\n正文\n",
@@ -89,8 +89,8 @@ describe("导出范围", () => {
 });
 
 describe("Markdown 导出", () => {
-  it("整篇原样导出，末尾规范化成单个换行", () => {
-    const payload = buildExport({
+  it("整篇原样导出，末尾规范化成单个换行", async () => {
+    const payload = await buildExport({
       format: "markdown",
       title: "标题",
       source: "# a\n\nb\n\n\n",
@@ -100,8 +100,8 @@ describe("Markdown 导出", () => {
     expect(payload.mime).toContain("text/markdown");
   });
 
-  it("选区只导那一段，不做重新序列化", () => {
-    const payload = buildExport({
+  it("选区只导那一段，不做重新序列化", async () => {
+    const payload = await buildExport({
       format: "markdown",
       title: "标题",
       source: "# a\n\n第一段\n\n第二段\n",
@@ -110,9 +110,9 @@ describe("Markdown 导出", () => {
     expect(payload.contents).toBe("第一段\n");
   });
 
-  it("选区落在空白上时退回整篇，而不是给个空文件", () => {
+  it("选区落在空白上时退回整篇，而不是给个空文件", async () => {
     const source = "# a\n\n\n\nb\n";
-    const payload = buildExport({
+    const payload = await buildExport({
       format: "markdown",
       title: "标题",
       source,
@@ -188,7 +188,7 @@ describe("HTML 导出", () => {
     expect(escapeHtml('a & b "c"')).toBe("a &amp; b &quot;c&quot;");
   });
 
-  it("裸 HTML 块不在 IR 里：导出与编辑器一致地不显示它", () => {
+  it("裸 HTML 块不在 IR 里：导出与编辑器一致地不显示它", async () => {
     // IR 没有 HTML 节点，WYSIWYG 也从不渲染它；导出保持同一语义，
     // 而不是偷偷把一段 markdown 当 HTML 塞进新文件
     const html = htmlOf("<div onclick=\"x()\">hi</div>\n");
@@ -196,8 +196,8 @@ describe("HTML 导出", () => {
     expect(html).not.toContain("onclick");
   });
 
-  it("选区导出走重新解析：段落仍然成段", () => {
-    const payload = buildExport({
+  it("选区导出走重新解析：段落仍然成段", async () => {
+    const payload = await buildExport({
       format: "html",
       title: "标题",
       source: "# a\n\n第一段\n\n第二段\n",
@@ -229,7 +229,7 @@ describe("导出里的链接协议", () => {
     expect(html).toContain('<a href="#" rel="noopener">点我</a>');
   });
 
-  it("图片允许内联 data:image，但不允许 data:text/html", () => {
+  it("图片允许内联 data:image，但不允许 data:text/html", async () => {
     const ok = htmlOf("![图](data:image/png;base64,iVBORw0KGgo=)\n");
     expect(ok).toContain('src="data:image/png;base64,iVBORw0KGgo="');
     const bad = htmlOf("![图](data:text/html,<script>x</script>)\n");
@@ -238,8 +238,8 @@ describe("导出里的链接协议", () => {
 });
 
 describe("PDF 载荷", () => {
-  it("只给正文片段和字体排版，打印面板自己套样式", () => {
-    const payload = buildExport({ format: "pdf", title: "标题", source: SAMPLE });
+  it("只给正文片段和字体排版，打印面板自己套样式", async () => {
+    const payload = await buildExport({ format: "pdf", title: "标题", source: SAMPLE });
     expect(payload.extension).toBe("pdf");
     expect(payload.fileName).toBe("标题.pdf");
     expect(payload.contents).toContain('<h1 id="标题">标题</h1>');
