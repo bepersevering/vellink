@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (356 tests)
+npm test               # run unit tests (360 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -121,6 +121,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.12 | Emoji completion | Source view pops a candidate list on `:smi`; WYSIWYG turns `:smile:` into 😄 as you type. Built-in table of common shortcodes (including Chinese), unknown ones stay as text. ([checklist](./功能差距清单.md), Chinese) |
 | M6.13 | Quick table insert | `⌘⇧T` or the palette opens a rows/columns panel; a header table is inserted after the current line (headings stay intact) as one undo step. ([checklist](./功能差距清单.md), Chinese) |
 | M6.14 | Reading time | Status bar shows "~N min read" next to the character count, mixing 400 CJK chars and 200 words per minute with a one-minute floor. ([checklist](./功能差距清单.md), Chinese) |
+| M6.15 | List indent | Tab / Shift+Tab sink and lift list items in WYSIWYG via PM commands; source view adds/removes two spaces before `- / * / + / 1.` markers, leaving other lines to the default Tab. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

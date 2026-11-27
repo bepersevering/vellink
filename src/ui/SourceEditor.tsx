@@ -22,7 +22,7 @@ import {
   lineNumbers,
   type DecorationSet,
 } from "@codemirror/view";
-import { defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, indentLess, indentMore } from "@codemirror/commands";
 import {
   bracketMatching,
   defaultHighlightStyle,
@@ -31,6 +31,7 @@ import {
 } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { emojiCandidates } from "../core/emoji";
+import { indentListLine } from "../core/list-indent";
 import { autocompletion, closeBrackets, closeBracketsKeymap, type CompletionContext } from "@codemirror/autocomplete";
 
 /** 输入 :smi 时弹 Emoji 候选。 */
@@ -40,6 +41,20 @@ const emojiCompletion = (context: CompletionContext) => {
   const options = emojiCandidates(match.text.slice(1));
   if (!options.length) return null;
   return { from: match.from, options, validFor: /^[a-z0-9_\u4e00-\u9fff]*$/ };
+};
+
+/** 列表项 Tab / Shift+Tab：缩进两个空格；非列表项走 CodeMirror 默认行为。 */
+const listIndent = (outdent: boolean) => (view: EditorView): boolean => {
+  const line = view.state.doc.lineAt(view.state.selection.main.head);
+  const next = indentListLine(line.text, outdent);
+  if (next === null || next === line.text) {
+    return (outdent ? indentLess : indentMore)(view);
+  }
+  view.dispatch({
+    changes: { from: line.from, to: line.to, insert: next },
+    selection: { anchor: view.state.selection.main.head + (next.length - line.text.length) },
+  });
+  return true;
 };
 
 export interface SourceEditorHandle {
@@ -227,7 +242,11 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           markdown(),
           findHighlight,
-          keymap.of([...closeBracketsKeymap, ...defaultKeymap, indentWithTab]),
+          keymap.of([
+            ...closeBracketsKeymap,
+            { key: "Tab", run: listIndent(false), shift: listIndent(true) },
+            ...defaultKeymap.filter((b) => b.key !== "Tab"),
+          ]),
           EditorView.lineWrapping,
           vellinkTheme,
           EditorView.updateListener.of((update) => {

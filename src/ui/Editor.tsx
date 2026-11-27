@@ -10,6 +10,7 @@ import { EditorState, Plugin, PluginKey, TextSelection } from "prosemirror-state
 import { Decoration, DecorationSet, EditorView } from "prosemirror-view";
 import { baseKeymap, toggleMark } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
+import { liftListItem, sinkListItem } from "prosemirror-schema-list";
 import type { DocumentIR } from "../core/ir/types";
 import type { DocumentStore } from "../core/store";
 import { vellinkSchema } from "../core/view/schema";
@@ -721,6 +722,9 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
           "Mod-b": toggleMark(vellinkSchema.marks.strong),
           "Mod-i": toggleMark(vellinkSchema.marks.em),
           "Mod-`": toggleMark(vellinkSchema.marks.code),
+          // 列表缩进 / 反缩进；非列表项交给 baseKeymap 的 Tab 处理
+          Tab: sinkListItem(vellinkSchema.nodes.listItem),
+          "Shift-Tab": liftListItem(vellinkSchema.nodes.listItem),
         }),
         keymap(baseKeymap),
         findPlugin,
