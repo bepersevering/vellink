@@ -97,8 +97,14 @@ function renderInlineNode(node: InlineNode): string {
       // 双链指向的是工作区里的另一篇笔记，导出后未必在身边：
       // 保留可读文本 + 一条下划线，不生成会 404 的链接
       return `<span class="wl">${escapeHtml(node.target)}</span>`;
-    case "image":
-      return `<img src="${escapeHtml(safeImageUrl(node.url))}" alt="${escapeHtml(node.alt)}" loading="lazy">`;
+    case "image": {
+      const title = node.title ? ` title="${escapeHtml(node.title)}"` : "";
+      const size =
+        node.width && node.height
+          ? ` width="${Number(node.width)}" height="${Number(node.height)}"`
+          : "";
+      return `<img src="${escapeHtml(safeImageUrl(node.url))}" alt="${escapeHtml(node.alt)}"${title}${size} loading="lazy">`;
+    }
     case "inlineMath":
       return mathHtml(node.value, false);
     case "footnoteRef":

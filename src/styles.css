@@ -412,6 +412,21 @@ svg {
   transition: opacity 160ms ease;
 }
 
+/* 标题自动编号：CSS counter 只改显示，不进 Markdown 源码 */
+body.number-headings .doc-body { counter-reset: h1 0 h2 0 h3 0 h4 0 h5 0 h6 0; }
+body.number-headings .doc-body h1 { counter-increment: h1; counter-reset: h2 0; }
+body.number-headings .doc-body h2 { counter-increment: h2; counter-reset: h3 0; }
+body.number-headings .doc-body h3 { counter-increment: h3; counter-reset: h4 0; }
+body.number-headings .doc-body h4 { counter-increment: h4; counter-reset: h5 0; }
+body.number-headings .doc-body h5 { counter-increment: h5; counter-reset: h6 0; }
+body.number-headings .doc-body h6 { counter-increment: h6; }
+body.number-headings .doc-body h1::before { content: counter(h1) ". "; }
+body.number-headings .doc-body h2::before { content: counter(h1) "." counter(h2) " "; }
+body.number-headings .doc-body h3::before { content: counter(h1) "." counter(h2) "." counter(h3) " "; }
+body.number-headings .doc-body h4::before,
+body.number-headings .doc-body h5::before,
+body.number-headings .doc-body h6::before { content: ""; }
+
 .doc-body .vellink-mermaid {
   margin: 24px 0;
   padding: 16px;
@@ -456,6 +471,21 @@ svg {
   opacity: 1;
   transition: opacity 160ms ease;
 }
+
+/* 标题自动编号：CSS counter 只改显示，不进 Markdown 源码 */
+body.number-headings .doc-body { counter-reset: h1 0 h2 0 h3 0 h4 0 h5 0 h6 0; }
+body.number-headings .doc-body h1 { counter-increment: h1; counter-reset: h2 0; }
+body.number-headings .doc-body h2 { counter-increment: h2; counter-reset: h3 0; }
+body.number-headings .doc-body h3 { counter-increment: h3; counter-reset: h4 0; }
+body.number-headings .doc-body h4 { counter-increment: h4; counter-reset: h5 0; }
+body.number-headings .doc-body h5 { counter-increment: h5; counter-reset: h6 0; }
+body.number-headings .doc-body h6 { counter-increment: h6; }
+body.number-headings .doc-body h1::before { content: counter(h1) ". "; }
+body.number-headings .doc-body h2::before { content: counter(h1) "." counter(h2) " "; }
+body.number-headings .doc-body h3::before { content: counter(h1) "." counter(h2) "." counter(h3) " "; }
+body.number-headings .doc-body h4::before,
+body.number-headings .doc-body h5::before,
+body.number-headings .doc-body h6::before { content: ""; }
 
 .doc-body .vellink-mermaid {
   margin: 24px 0;

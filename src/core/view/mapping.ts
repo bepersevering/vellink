@@ -79,7 +79,13 @@ function inlineToPM(
         break;
       case "image":
         // atom 节点整体映射到源码的 `![alt](url)` span
-        node = T.image.create({ src: n.url, alt: n.alt });
+        node = T.image.create({
+          src: n.url,
+          alt: n.alt,
+          title: n.title ?? null,
+          width: n.width ?? null,
+          height: n.height ?? null,
+        });
         spans.set(node, n.span);
         out.push(node);
         break;

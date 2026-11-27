@@ -939,6 +939,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     // 布局阶段写 CSS 变量：晚一帧的话，存的字号是 20px 的用户会先看到一眼 16px
     applySettings(settings);
     applyCustomCss(document, settings.customCss);
+    document.body.classList.toggle("number-headings", settings.headingNumbers);
     saveSettings(settings);
     autosaveRef.current?.setDelay(settings.autosaveMs);
   }, [settings]);

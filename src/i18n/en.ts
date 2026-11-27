@@ -269,6 +269,8 @@ export const en: Record<string, string> = {
   "settings.typewriterHint": "Keeps the line you are typing on vertically centred",
   "settings.focusLines": "Focus paragraph (dim the rest)",
   "settings.focusLinesHint": "Keeps the current paragraph clear and dims the others",
+  "settings.headingNumbers": "Number headings",
+  "settings.headingNumbersHint": "Shows 1 / 1.1 numbering in the UI only; Markdown source stays clean",
   "settings.maxImageEdge": "Max image edge",
   "settings.maxImageEdgeOff": "No resize",
   "settings.maxImageEdgeHint": "Shrinks large pasted images proportionally; far left keeps originals",

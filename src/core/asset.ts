@@ -80,6 +80,24 @@ export function imageMarkdown(alt: string, target: string): string {
   return `![${safeAlt}](${target})`;
 }
 
+/**
+ * 从图片目标里拆出 `=WxH` 尺寸后缀：
+ * `![alt](shot.png =300x200)` → { url: "shot.png", width: 300, height: 200 }。
+ * 不合法的后缀原样保留在 url 里，不吞内容。
+ */
+export function parseImageSize(target: string): {
+  url: string;
+  width?: number;
+  height?: number;
+} {
+  const m = /^(.*?)\s+=(\d{1,5})x(\d{1,5})$/.exec(target);
+  if (!m) return { url: target };
+  const width = Number(m[2]);
+  const height = Number(m[3]);
+  if (!width || !height) return { url: target };
+  return { url: m[1], width, height };
+}
+
 /** 字节 → data URI。分块 btoa，避免大图一次展开参数栈溢出。 */
 export function dataUriOf(bytes: Uint8Array, mime: string): string {
   let binary = "";

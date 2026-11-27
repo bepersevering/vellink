@@ -269,6 +269,8 @@ export const zhCN: Record<string, string> = {
   "settings.typewriterHint": "输入时当前行始终停在窗口垂直中央",
   "settings.focusLines": "聚焦段落（其余行淡化）",
   "settings.focusLinesHint": "当前段落保持清晰，其他段落淡化，减少干扰",
+  "settings.headingNumbers": "标题自动编号",
+  "settings.headingNumbersHint": "只在界面上显示 1 / 1.1 编号，不写进 Markdown 源码",
   "settings.maxImageEdge": "图片最长边",
   "settings.maxImageEdgeOff": "不压缩",
   "settings.maxImageEdgeHint": "粘贴时等比缩小大图；拉到最左则保留原图",

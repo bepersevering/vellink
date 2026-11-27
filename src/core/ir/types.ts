@@ -62,6 +62,11 @@ export interface ImageNode extends NodeBase {
   type: "image";
   url: string;
   alt: string;
+  /** 图片说明（Markdown 里 url 后的 "title"），PM 里作为 tooltip。 */
+  title?: string;
+  /** 显示尺寸，来自 `![alt](url =300x200)`，不写进文件本身。 */
+  width?: number;
+  height?: number;
 }
 
 /** 行内公式 `$...$`：value 不含两侧美元符，渲染时由 KaTeX 出 HTML。 */

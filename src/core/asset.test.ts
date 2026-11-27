@@ -6,6 +6,7 @@ import {
   dataUriOf,
   imageExtension,
   imageMarkdown,
+  parseImageSize,
   inlineLocalImages,
   isAssetPath,
   isImageType,
@@ -97,5 +98,17 @@ describe("导出内嵌", () => {
     expect(out).toBe(
       "![a](data:image/png;base64,AA==) ![b](data:image/png;base64,BB==)",
     );
+  });
+});
+
+describe("图片尺寸语法", () => {
+  it("解析 =WxH 后缀", () => {
+    expect(parseImageSize("shot.png =300x200")).toEqual({
+      url: "shot.png",
+      width: 300,
+      height: 200,
+    });
+    expect(parseImageSize("shot.png")).toEqual({ url: "shot.png" });
+    expect(parseImageSize("shot.png =0x1")).toEqual({ url: "shot.png =0x1" });
   });
 });

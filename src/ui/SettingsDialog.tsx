@@ -168,6 +168,18 @@ export function SettingsDialog({ open, settings, onChange, onClose }: Props) {
           <label className="set-toggle">
             <input
               type="checkbox"
+              checked={settings.headingNumbers}
+              onChange={(e) => patch({ headingNumbers: e.target.checked })}
+            />
+            <span className="set-label">{t("settings.headingNumbers")}</span>
+          </label>
+          <p className="set-hint">{t("settings.headingNumbersHint")}</p>
+        </section>
+
+        <section className="set-row set-toggle-row">
+          <label className="set-toggle">
+            <input
+              type="checkbox"
               checked={settings.focusLines}
               onChange={(e) => patch({ focusLines: e.target.checked })}
             />

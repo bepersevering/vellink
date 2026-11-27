@@ -26,7 +26,7 @@ function inlineFP(n: InlineNode): FP {
     case "wikiLink":
       return ["wiki", n.target];
     case "image":
-      return ["image", n.url, n.alt];
+      return ["image", n.url, n.alt, n.title ?? null, n.width ?? null, n.height ?? null];
     case "inlineMath":
       return ["math", n.value];
     case "footnoteRef":
@@ -307,6 +307,16 @@ describe("Mermaid 往返", () => {
     const { markdown, ir1, ir2 } = roundtrip(src);
     expect(markdown).toContain("```mermaid");
     expect(markdown).toContain("A-->B");
+    expect(fp(ir2)).toEqual(fp(ir1));
+  });
+});
+
+describe("图片尺寸往返", () => {
+  it("=WxH 与 title 往返后保留", () => {
+    const src = '![图](shot.png =300x200 "说明")\n';
+    const { markdown, ir1, ir2 } = roundtrip(src);
+    expect(markdown).toContain("=300x200");
+    expect(markdown).toContain('"说明"');
     expect(fp(ir2)).toEqual(fp(ir1));
   });
 });

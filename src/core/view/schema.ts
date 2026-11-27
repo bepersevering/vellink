@@ -87,7 +87,13 @@ export const vellinkSchema = new Schema({
       inline: true,
       group: "inline",
       atom: true,
-      attrs: { src: {}, alt: { default: "" }, title: { default: null } },
+      attrs: {
+        src: {},
+        alt: { default: "" },
+        title: { default: null },
+        width: { default: null },
+        height: { default: null },
+      },
       parseDOM: [
         {
           tag: "img",
@@ -104,6 +110,8 @@ export const vellinkSchema = new Schema({
           src: String(node.attrs.src ?? ""),
           alt: String(node.attrs.alt ?? ""),
           ...(node.attrs.title ? { title: String(node.attrs.title) } : {}),
+          ...(node.attrs.width ? { width: String(node.attrs.width) } : {}),
+          ...(node.attrs.height ? { height: String(node.attrs.height) } : {}),
         },
       ],
     },

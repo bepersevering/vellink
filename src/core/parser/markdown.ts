@@ -19,6 +19,7 @@ import type {
   SourceSpan,
 } from "../ir/types";
 import { splitMath, standaloneMathBlock } from "../math";
+import { parseImageSize } from "../asset";
 import { findFrontmatter } from "../ext-syntax";
 import { findFootnotes, splitFootnoteRefs, type FootnoteRef } from "../footnote";
 
@@ -97,7 +98,7 @@ function collectOldIds(ir: DocumentIR | undefined): Map<string, string[]> {
       case "wikiLink":
         return fingerprint(n.type, n.target);
       case "image":
-        return fingerprint(n.type, n.url + n.alt);
+        return fingerprint(n.type, n.url + n.alt + (n.title ?? "") + (n.width ?? "") + (n.height ?? ""));
       case "link":
         return fingerprint(n.type, n.url + (n.title ?? ""), kids);
       default:
@@ -340,11 +341,22 @@ function mapInline(node: SyntaxNode, source: string, ids: IdAllocator): InlineNo
       };
     }
     if (name === "Image") {
-      const altNode = kids.find((c) => c.name === "LinkMark");
-      void altNode;
       const alt = raw.match(/^!\[([^\]]*)\]/)?.[1] ?? "";
-      const url = urlNode ? textOf(urlNode, source) : "";
-      return { type: "image", id: ids.next(fingerprint("image", url + alt)), span, url, alt };
+      const rawUrl = urlNode ? textOf(urlNode, source) : "";
+      const titleNode = kids.find((c) => c.name === "LinkTitle");
+      const title = titleNode ? textOf(titleNode, source).replace(/^["']|["']$/g, "") : undefined;
+      const sized = parseImageSize(rawUrl);
+      return {
+        type: "image",
+        id: ids.next(
+          fingerprint("image", sized.url + alt + (title ?? "") + (sized.width ?? "") + (sized.height ?? "")),
+        ),
+        span,
+        url: sized.url,
+        alt,
+        ...(title ? { title } : {}),
+        ...(sized.width ? { width: sized.width, height: sized.height } : {}),
+      };
     }
     const url = urlNode ? textOf(urlNode, source) : "";
     let children = parseInline(node, source, ids);

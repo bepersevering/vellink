@@ -192,7 +192,10 @@ function inlineToMarkdown(parent: PMNode, w: Writer): void {
         const title = node.attrs.title
           ? ` "${String(node.attrs.title).replace(/"/g, '\\"')}"`
           : "";
-        w.emit(`![${alt}](${src}${title})`);
+        const size = node.attrs.width
+          ? ` =${String(node.attrs.width)}x${String(node.attrs.height ?? "")}`
+          : "";
+        w.emit(`![${alt}](${src}${size}${title})`);
       } else if (node.isText) {
         w.emitText(node, code ? node.text ?? "" : escapeInline(node.text ?? ""));
       } else {
