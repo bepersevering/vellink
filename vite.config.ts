@@ -9,6 +9,10 @@ const pkg = JSON.parse(
 ) as { version: string };
 
 export default defineConfig({
+  // Tauri loads the frontend through a custom protocol on Windows; absolute
+  // "/assets/..." URLs can fail to resolve there. Relative paths work in both
+  // the browser preview and the packaged desktop app.
+  base: "./",
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),

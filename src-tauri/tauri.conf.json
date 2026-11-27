@@ -18,7 +18,8 @@
         "minWidth": 720,
         "minHeight": 480,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu"
       }
     ],
     "security": {
@@ -51,7 +52,7 @@
         "languages": ["English", "SimpChinese"]
       },
       "webviewInstallMode": {
-        "type": "downloadBootstrapper"
+        "type": "embedBootstrapper"
       }
     }
   },

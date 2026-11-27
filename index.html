@@ -7,6 +7,42 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // If the frontend throws before React mounts, the window would otherwise be a
+      // silent black screen on Windows. Surface the real error instead so it can be
+      // reported. This runs as a classic inline script: it does not depend on module
+      // loading, CSS, or the app bundle.
+      (function () {
+        function showFatal(message) {
+          var box = document.getElementById("vellink-boot-error");
+          if (!box) return;
+          box.style.display = "block";
+          box.textContent = "Vellink failed to start.\n\n" + message;
+        }
+        window.addEventListener("error", function (event) {
+          showFatal((event.message || "Unknown error") + "\n" + (event.filename || "") + ":" + (event.lineno || ""));
+        });
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event.reason;
+          showFatal("Unhandled promise rejection:\n" + (reason && reason.stack ? reason.stack : String(reason)));
+        });
+        // Module script never ran (asset load failure / WebView2 issue): poll, and
+        // hide the panel once React mounts so a slow first launch is not a false alarm.
+        var attempts = 0;
+        var poll = window.setInterval(function () {
+          attempts += 1;
+          var box = document.getElementById("vellink-boot-error");
+          if (document.querySelector("#root .app")) {
+            window.clearInterval(poll);
+            if (box) box.style.display = "none";
+          } else if (attempts >= 15) {
+            window.clearInterval(poll);
+            showFatal("The application did not render.\nLikely causes: frontend assets failed to load, or the WebView2 runtime is unavailable.");
+          }
+        }, 1000);
+      })();
+    </script>
+    <div id="vellink-boot-error" style="display:none;position:fixed;inset:0;z-index:99999;background:#1e1e20;color:#e6e6e2;font:14px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:32px;white-space:pre-wrap;overflow:auto"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
