@@ -111,6 +111,8 @@ export const en: Record<string, string> = {
   "toast.saveFailed": "Save failed — storage may be full",
   "toast.imageInserted": "Image inserted",
   "toast.imageTooLarge": "A single image must be under 20MB",
+  "toast.storageFull": "Browser storage is full: remove notes with large images, or use the desktop app",
+  "toast.browserImageTooLarge": "In the browser, keep pasted images under 1.5MB; use the desktop app for larger ones",
   "toast.imageFailed": "Could not insert image: {message}",
   "toast.externalUpdated": "Reloaded from disk",
   "toast.desktopOnly": "Opening folders is available in the desktop app",

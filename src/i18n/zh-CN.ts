@@ -111,6 +111,8 @@ export const zhCN: Record<string, string> = {
   "toast.saveFailed": "保存失败，存储空间可能已满",
   "toast.imageInserted": "图片已插入",
   "toast.imageTooLarge": "单张图片不能超过 20MB",
+  "toast.storageFull": "浏览器存储空间已满：请删掉一些含大图的笔记，或改用桌面版",
+  "toast.browserImageTooLarge": "浏览器版单张图片建议小于 1.5MB；大图请用桌面版",
   "toast.imageFailed": "图片插入失败：{message}",
   "toast.externalUpdated": "文件已在磁盘上更新，已重新载入",
   "toast.desktopOnly": "打开文件夹仅在桌面端可用",

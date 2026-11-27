@@ -201,7 +201,12 @@ export default function App() {
             // 自己写盘也会触发监听事件：标记一下，别把它当成外部改动再读一遍
             detectorRef.current?.markOwn(id);
           },
-          onError: () => showToast(t("toast.saveFailed")),
+          onError: (error: unknown) =>
+            showToast(
+              error instanceof Error && /quota|storage/i.test(error.name + error.message)
+                ? t("toast.storageFull")
+                : t("toast.saveFailed"),
+            ),
         },
         // 用 ref 读：这个 effect 只跑一次，直接闭包 settings 会拿到首帧旧值
         settingsRef.current.autosaveMs,
