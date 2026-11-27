@@ -25,6 +25,8 @@ export interface Settings {
   typewriter: boolean;
   /** 聚焦段落：当前段落清晰，其余淡化。 */
   focusLines: boolean;
+  /** 用户自定义 CSS（已去掉外链），注入编辑器。 */
+  customCss: string;
 }
 
 export const LIMITS = {
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autosaveMs: LIMITS.autosaveMs.default,
   typewriter: false,
   focusLines: false,
+  customCss: "",
 };
 
 const STORAGE_KEY = "vellink-settings:v1";
@@ -92,6 +95,7 @@ export function normalizeSettings(raw: unknown): Settings {
     ),
     typewriter: input.typewriter === true,
     focusLines: input.focusLines === true,
+    customCss: typeof input.customCss === "string" ? input.customCss.slice(0, 20000) : "",
   };
 }
 

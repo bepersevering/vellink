@@ -26,6 +26,7 @@ import {
 import { buildExport, clampRange, type ExportFormat } from "./core/export";
 import { planImports, titleFromFileName } from "./core/import-docs";
 import { buildTable } from "./core/table-insert";
+import { applyCustomCss } from "./core/custom-css";
 import { findRelativeImages, rewriteImagePaths } from "./core/import-images";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
@@ -736,6 +737,7 @@ export default function App() {
           partial: Boolean(selected),
           selectionSuffix: t("export.fileSuffix.selection"),
           lang: locale,
+          customCss: settings.customCss,
         });
 
         if (format === "pdf") {
@@ -881,6 +883,7 @@ export default function App() {
     settingsRef.current = settings;
     // 布局阶段写 CSS 变量：晚一帧的话，存的字号是 20px 的用户会先看到一眼 16px
     applySettings(settings);
+    applyCustomCss(document, settings.customCss);
     saveSettings(settings);
     autosaveRef.current?.setDelay(settings.autosaveMs);
   }, [settings]);

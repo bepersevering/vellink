@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (408 tests)
+npm test               # run unit tests (411 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -131,6 +131,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.22 | DOCX export | `⌘E` now offers Word documents: headings, emphasis, lists, tables, code and images map to WordprocessingML. A dependency-free ZIP writer (store + CRC32) produces the package; desktop writes atomically, the browser downloads. ([checklist](./功能差距清单.md), Chinese) |
 | M6.23 | EPUB / ODT export | `⌘E` adds EPUB 3 and OpenDocument text, reusing the dependency-free ZIP writer: EPUB carries mimetype/OPF/nav/content, ODT maps IR blocks to ODF elements. ([checklist](./功能差距清单.md), Chinese) |
 | M6.24 | Export formats and image migration | `⌘E` now has 8 formats grouped by exchange / publish / archive; adds LaTeX (ctex) and MediaWiki source. Importing Markdown also copies relative-path images into `.vellink-assets/` and rewrites references. PDF bookmarks deliberately skipped (print-panel route cannot emit them; a custom engine costs far more than it returns). ([checklist](./功能差距清单.md), Chinese) |
+| M6.25 | Custom CSS | Paste CSS in Settings to style both the editor and exported HTML; `@import` and remote image URLs are stripped to prevent external requests. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

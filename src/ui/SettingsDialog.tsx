@@ -176,6 +176,21 @@ export function SettingsDialog({ open, settings, onChange, onClose }: Props) {
           <p className="set-hint">{t("settings.focusLinesHint")}</p>
         </section>
 
+        <section className="set-row">
+          <div className="set-head">
+            <span className="set-label">{t("settings.customCss")}</span>
+          </div>
+          <textarea
+            className="set-css"
+            value={settings.customCss}
+            onChange={(e) => patch({ customCss: e.target.value })}
+            placeholder={t("settings.customCssPlaceholder")}
+            aria-label={t("settings.customCss")}
+            spellCheck={false}
+          />
+          <p className="set-hint">{t("settings.customCssHint")}</p>
+        </section>
+
         <footer className="export-actions">
           <button
             className="service-btn"

@@ -57,6 +57,8 @@ export interface ExportRequest {
    */
   partial?: boolean;
   lang?: string;
+  /** 用户自定义 CSS，导出 HTML 时内联。 */
+  customCss?: string;
 }
 
 export interface ExportPayload {

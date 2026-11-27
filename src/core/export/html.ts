@@ -13,6 +13,7 @@ import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
 import katex from "katex";
 import { highlightHtml } from "../view/code-highlight";
 import { headingAnchor } from "../ext-syntax";
+import { sanitizeCss } from "../custom-css";
 
 /** 公式渲染：MathML 输出是纯标记、零字体依赖，导出的单文件才能真正自包含。 */
 function mathHtml(value: string, displayMode: boolean): string {
@@ -447,6 +448,8 @@ export interface HtmlDocumentOptions {
   lang?: string;
   /** 是否带上跟随系统深浅色的样式（独立文件要，打印面板不要）。 */
   dark?: boolean;
+  /** 用户自定义 CSS，经过清洗后内联在文档末尾。 */
+  extraCss?: string;
 }
 
 /**
@@ -467,6 +470,9 @@ export function renderHtmlDocument(
 <title>${title}</title>
 <style>
 ${docCss("body", { dark: options.dark !== false })}
+${options.extraCss ? `
+/* 用户自定义样式 */
+${sanitizeCss(options.extraCss)}` : ""}
 </style>
 </head>
 <body>
