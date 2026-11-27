@@ -25,6 +25,7 @@ import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { createAutoPairPlugin } from "../core/view/auto-pair";
 import { createEmojiPlugin } from "../core/view/emoji-plugin";
 import { convertListCommand, exitEmptyListItem } from "../core/view/list-type";
+import { moveTableCell } from "../core/view/table-move";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -745,6 +746,11 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
           "Mod-Shift-8": convertListCommand("ordered"),
           "Mod-Shift-9": convertListCommand("task"),
           Enter: exitEmptyListItem(),
+          // 表格内 Alt + 方向键移动当前行 / 列（Markdown 无列宽概念，改成列顺序）
+          "Alt-ArrowUp": moveTableCell("row", -1),
+          "Alt-ArrowDown": moveTableCell("row", 1),
+          "Alt-ArrowLeft": moveTableCell("column", -1),
+          "Alt-ArrowRight": moveTableCell("column", 1),
         }),
         keymap(baseKeymap),
         findPlugin,
