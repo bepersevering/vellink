@@ -18,6 +18,7 @@ import { expandReplacement, findMatches } from "../core/find";
 import { buildPMTextMap, locateInPM } from "../core/find-pm";
 import { isImageType } from "../core/asset";
 import { renderMath } from "../core/view/math-view";
+import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -694,6 +695,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         }),
         keymap(baseKeymap),
         findPlugin,
+        createHighlightPlugin(),
       ],
     });
     const view = new EditorView(host, {
@@ -702,7 +704,9 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         const next = view.state.apply(tr);
         view.updateState(next);
         // PM 重绘 DOM 后把公式占位节点换成 KaTeX 输出；幂等，不会重复渲染
-        if (tr.docChanged) renderMath(host);
+        // 公式和代码高亮只改 DOM、不改 PM 文档；无条件调用保证外部回灌
+        // （fromSourceRef 分支之前）和首次挂载也能着色。两个函数都幂等。
+        renderMath(host);
         // 源码输入 / 撤销回灌引发的事务不再反向提交，避免循环
         if (fromSourceRef.current) return;
         // 输入法组合中的中间态：不序列化、不进撤销栈

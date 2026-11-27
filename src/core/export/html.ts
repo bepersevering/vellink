@@ -11,6 +11,7 @@
 
 import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
 import katex from "katex";
+import { highlightHtml } from "../view/code-highlight";
 
 /** 公式渲染：MathML 输出是纯标记、零字体依赖，导出的单文件才能真正自包含。 */
 function mathHtml(value: string, displayMode: boolean): string {
@@ -125,7 +126,10 @@ function renderBlock(node: BlockNode): string {
     }
     case "code": {
       const lang = node.lang ? ` class="language-${escapeHtml(node.lang)}"` : "";
-      return `<pre><code${lang}>${escapeHtml(node.value)}</code></pre>`;
+      // 着色只套 span，不改语义；highlightHtml 已做所有文本转义
+      // 无语言标记也用通用关键字表着色，代码块不必是单色
+      const body = highlightHtml(node.value, node.lang ?? "");
+      return `<pre><code${lang}>${body}</code></pre>`;
     }
     case "mathBlock":
       return `<div class="math-block">${mathHtml(node.value, true)}</div>`;
@@ -253,6 +257,10 @@ __R__ pre {
   color: #4a4a55;
 }
 __R__ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+__R__ pre .cm { color: #9a9a95; }
+__R__ pre .kw { color: #8250df; }
+__R__ pre .st { color: #22863a; }
+__R__ pre .nu { color: #b8860b; }
 __R__ blockquote {
   border-left: 3px solid #5b6ec9;
   padding: 2px 0 2px 20px;

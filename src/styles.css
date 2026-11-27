@@ -395,6 +395,9 @@ svg {
 .doc-body pre .st {
   color: var(--green);
 }
+.doc-body pre .nu {
+  color: #b8860b;
+}
 .doc-body hr {
   border: 0;
   border-top: 1px solid var(--border);

@@ -143,9 +143,12 @@ describe("HTML 导出", () => {
     expect(html).toContain('<a href="https://example.com" title="说明" rel="noopener">链接</a>');
   });
 
-  it("代码块被转义，不会把 < 当成标签", () => {
+  it("代码块被转义且着色，不会把 < 当成标签", () => {
     const html = htmlOf(SAMPLE);
-    expect(html).toContain('<pre><code class="language-js">const a = 1 &lt; 2;</code></pre>');
+    // 着色只套 span，所有文本仍走 HTML 转义
+    expect(html).toContain('class="language-js"');
+    expect(html).toContain('<span class="kw">const</span> a = <span class="nu">1</span> &lt; <span class="nu">2</span>;');
+    expect(html).not.toContain("< 2;");
   });
 
   it("任务列表带禁用复选框，普通列表项不塞 <p>", () => {
