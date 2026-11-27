@@ -536,6 +536,12 @@ export default function App() {
     }
   }, [showToast]);
 
+  /** 浏览器端拖拽重排文档；桌面端顺序由磁盘决定，不提供此能力。 */
+  const reorderDocs = useCallback((ids: string[]) => {
+    workspaceRef.current?.reorder(ids);
+    void backendRef.current?.reorder?.(ids);
+  }, []);
+
   /** 切换工作区目录：写盘后整页重载，工作区按新目录重建。 */
   const switchFolder = useCallback(async () => {
     if (!isDesktop()) {
@@ -1078,6 +1084,7 @@ export default function App() {
           onNew={() => void createDoc()}
           onImport={() => void importDocs()}
           onDelete={deleteDoc}
+          onReorder={storage.kind === "browser" ? reorderDocs : undefined}
           workspaceDir={storage.root}
           onOpenFolder={() => void switchFolder()}
           onRevealFolder={() => void revealFolder()}

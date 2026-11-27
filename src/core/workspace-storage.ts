@@ -15,6 +15,8 @@ export interface WorkspaceBackend {
   load(): Promise<WorkspaceDoc[] | null>;
   save(doc: WorkspaceDoc): Promise<void>;
   remove(id: string): Promise<void>;
+  /** 重排顺序；不支持的后端（文件目录）可以省略。 */
+  reorder?(ids: string[]): Promise<void>;
 }
 
 const INDEX_KEY = "vellink:workspace:v1";
@@ -53,8 +55,8 @@ function parseIndex(raw: string | null): IndexEntry[] | null {
 }
 
 /** localStorage 后端；不可用时退化为内存，功能不崩但重启即失。 */
-export function createLocalWorkspaceBackend(): WorkspaceBackend {
-  const storage = safeStorage();
+export function createLocalWorkspaceBackend(storageArg?: Storage | null): WorkspaceBackend {
+  const storage = storageArg === undefined ? safeStorage() : storageArg;
   if (!storage) return createMemoryWorkspaceBackend();
 
   const readIndex = (): IndexEntry[] => parseIndex(storage.getItem(INDEX_KEY)) ?? [];
@@ -100,19 +102,33 @@ export function createLocalWorkspaceBackend(): WorkspaceBackend {
           updatedAt: doc.updatedAt,
         }),
       );
-      const index = readIndex().filter((entry) => entry.id !== doc.id);
-      index.unshift({
+      // 已有文档原地更新条目：自动保存不该悄悄把正在写的那篇顶到最前面，
+      // 否则用户手动排好的顺序会被每次敲键打乱。新文档才插到开头。
+      const index = readIndex();
+      const entry = {
         id: doc.id,
         title: doc.title,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
-      });
+      };
+      const at = index.findIndex((e) => e.id === doc.id);
+      if (at === -1) index.unshift(entry);
+      else index[at] = { ...index[at], ...entry };
       writeIndex(index);
     },
 
     async remove(id) {
       storage.removeItem(DOC_PREFIX + id);
       writeIndex(readIndex().filter((entry) => entry.id !== id));
+    },
+
+    async reorder(ids) {
+      const index = readIndex();
+      const byId = new Map(index.map((entry) => [entry.id, entry]));
+      const ordered = ids.map((id) => byId.get(id)).filter((e): e is IndexEntry => Boolean(e));
+      // 没被 drag 到的文档按原顺序补在后面，不丢数据
+      const seen = new Set(ordered.map((e) => e.id));
+      writeIndex([...ordered, ...index.filter((e) => !seen.has(e.id))]);
     },
   };
 }
@@ -137,6 +153,16 @@ export function createMemoryWorkspaceBackend(
     },
     async remove(id) {
       docs.delete(id);
+    },
+    async reorder(ids) {
+      const next = new Map<string, WorkspaceDoc>();
+      for (const id of ids) {
+        const doc = docs.get(id);
+        if (doc) next.set(id, doc);
+      }
+      for (const [id, doc] of docs) if (!next.has(id)) next.set(id, doc);
+      docs.clear();
+      for (const [id, doc] of next) docs.set(id, doc);
     },
   };
 }

@@ -20,6 +20,8 @@ interface Props {
   onNew: () => void;
   onImport: () => void;
   onDelete: (id: string) => void | Promise<void>;
+  /** 拖拽重排；不传时行不可拖（桌面端文件树顺序由磁盘决定）。 */
+  onReorder?: (ids: string[]) => void;
   /** 桌面端的工作区目录；浏览器版为 null（不显示目录条）。 */
   workspaceDir?: string | null;
   onOpenFolder?: () => void;
@@ -47,12 +49,32 @@ export function FileDrawer({
   onNew,
   onImport,
   onDelete,
+  onReorder,
   workspaceDir = null,
   onOpenFolder,
   onRevealFolder,
 }: Props) {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const dragIdRef = useRef<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
+
+  const dropOn = (targetId: string) => {
+    // 用 ref 而不是 state：dragstart 的 setDragId 是异步的，同一轮 drop
+    // 读 state 会拿到旧值，导致拖拽静默失效。
+    const source = dragIdRef.current;
+    if (!source || source === targetId || !onReorder) return;
+    const ids = docs.map((doc) => doc.id);
+    const from = ids.indexOf(source);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    ids.splice(to, 0, ...ids.splice(from, 1));
+    onReorder(ids);
+    dragIdRef.current = null;
+    setDragId(null);
+    setOverId(null);
+  };
 
   useEffect(() => {
     if (!pendingDelete) return;
@@ -124,7 +146,24 @@ export function FileDrawer({
           return (
             <div
               key={doc.uid || doc.id}
-              className={`tree-row ${active ? "active" : ""} ${pending ? "pending" : ""}`}
+              className={`tree-row ${active ? "active" : ""} ${pending ? "pending" : ""} ${dragId === doc.id ? "dragging" : ""} ${overId === doc.id ? "drag-over" : ""}`}
+              draggable={Boolean(onReorder)}
+              onDragStart={(e) => {
+                dragIdRef.current = doc.id;
+                setDragId(doc.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragEnd={() => { dragIdRef.current = null; setDragId(null); setOverId(null); }}
+              onDragOver={(e) => {
+                if (!dragIdRef.current) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setOverId(doc.id);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                dropOn(doc.id);
+              }}
               onClick={() => onSelect(doc.id)}
               role="button"
               tabIndex={0}

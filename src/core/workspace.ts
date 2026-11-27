@@ -330,6 +330,27 @@ export class Workspace {
     return true;
   }
 
+  /**
+   * 重排文档顺序：只调整列表，不动 store / uid / 激活项。
+   * ids 必须覆盖当前所有文档，否则缺失的文档按原顺序补在末尾。
+   */
+  reorder(ids: string[]): void {
+    const order = new Map(this.docs.map((doc) => [doc.id, doc]));
+    const next: WorkspaceDoc[] = [];
+    const seen = new Set<string>();
+    for (const id of ids) {
+      const doc = order.get(id);
+      if (doc && !seen.has(id)) {
+        next.push(doc);
+        seen.add(id);
+      }
+    }
+    for (const doc of this.docs) if (!seen.has(doc.id)) next.push(doc);
+    if (next.length === this.docs.length && next.every((d, i) => d === this.docs[i])) return;
+    this.docs.splice(0, this.docs.length, ...next);
+    this.notify();
+  }
+
   /** 落盘成功后调用：把当前源码标记为已保存。 */
   markSaved(id: string, source?: string): void {
     const doc = this.get(id);
