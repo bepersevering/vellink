@@ -33,6 +33,11 @@ pub struct FsEntry {
 }
 
 const MARKDOWN_EXTS: [&str; 2] = ["md", "markdown"];
+/// 图片资产的目录名（点开头：列举笔记时会跳过，不会被当成文档）。
+const ASSET_DIR: &str = ".vellink-assets";
+const ASSET_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
+/// 单张图片上限 20MB，和前端的 MAX_IMAGE_BYTES 保持一致。
+const MAX_ASSET_BYTES: usize = 20 * 1024 * 1024;
 /// 递归列举的最大深度：笔记目录再深也不该超过这个层数。
 const MAX_DEPTH: usize = 6;
 /// 这些目录一定不是写作内容，跳过以免列举 node_modules 卡死。
@@ -174,7 +179,7 @@ pub fn fs_read_markdown(path: String) -> Result<String, String> {
 ///
 /// 半截文件和「写完但还在页缓存里」的结果都不该被用户看到：断电或崩溃时
 /// 目标文件要么是旧内容，要么是新内容。
-fn write_atomic(target: &Path, contents: &str) -> Result<(), String> {
+fn write_atomic_bytes(target: &Path, bytes: &[u8]) -> Result<(), String> {
     let path = to_string_path(target);
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("创建目录失败: {err}"))?;
@@ -188,7 +193,7 @@ fn write_atomic(target: &Path, contents: &str) -> Result<(), String> {
 
     {
         let mut file = File::create(&temp).map_err(|err| format!("写入失败 {path}: {err}"))?;
-        file.write_all(contents.as_bytes())
+        file.write_all(bytes)
             .map_err(|err| format!("写入失败 {path}: {err}"))?;
         file.sync_all()
             .map_err(|err| format!("落盘失败 {path}: {err}"))?;
@@ -198,6 +203,10 @@ fn write_atomic(target: &Path, contents: &str) -> Result<(), String> {
         let _ = fs::remove_file(&temp);
         format!("替换文件失败 {path}: {err}")
     })
+}
+
+fn write_atomic(target: &Path, contents: &str) -> Result<(), String> {
+    write_atomic_bytes(target, contents.as_bytes())
 }
 
 /// 写入 Markdown：必要时补建目录，先写临时文件再 rename 覆盖。
@@ -289,6 +298,56 @@ pub fn export_print(app: tauri::AppHandle) -> Result<(), String> {
         .get_webview_window("main")
         .ok_or_else(|| "找不到主窗口".to_string())?;
     window.print().map_err(|err| format!("调起打印失败: {err}"))
+}
+
+/* ------------------------------ 图片资产 ------------------------------ */
+
+/// 资产文件名只接受「一个普通文件名 + 图片扩展名」。
+///
+/// 名字来自前端的 slug + 内容哈希，但 IPC 传来的东西一律不可信：
+/// 带分隔符或 `..` 就会跳出资源目录，点开头会变成隐藏文件，
+/// SVG 能带脚本，所以也不收。
+fn asset_target(root: &str, name: &str) -> Result<PathBuf, String> {
+    let dir = PathBuf::from(root);
+    if !dir.is_absolute() {
+        return Err(format!("工作区路径必须是绝对路径: {root}"));
+    }
+    if name.is_empty()
+        || name.len() > 128
+        || name.starts_with('.')
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+    {
+        return Err(format!("非法的资产文件名: {name}"));
+    }
+    let ext = Path::new(name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !ASSET_EXTS.contains(&ext.as_str()) {
+        return Err(format!("不支持的图片格式: {name}"));
+    }
+    Ok(dir.join(ASSET_DIR).join(name))
+}
+
+/// 写入一张图片，返回 Markdown 里用的相对路径。
+#[tauri::command]
+pub fn fs_write_asset(root: String, name: String, data: Vec<u8>) -> Result<String, String> {
+    if data.len() > MAX_ASSET_BYTES {
+        return Err(format!("图片超过 20MB（{} 字节）", data.len()));
+    }
+    let target = asset_target(&root, &name)?;
+    write_atomic_bytes(&target, &data)?;
+    Ok(format!("{ASSET_DIR}/{name}"))
+}
+
+/// 导出 HTML / PDF 时读回图片，交给前端转 data URI。
+#[tauri::command]
+pub fn fs_read_asset(root: String, name: String) -> Result<Vec<u8>, String> {
+    let target = asset_target(&root, &name)?;
+    fs::read(&target).map_err(|err| format!("读取图片失败 {}: {err}", to_string_path(&target)))
 }
 
 /// 当前工作区的目录监听器；换目录时整体替换，旧的自然被 drop 停止。
@@ -568,5 +627,49 @@ mod tests {
 
         drop(watcher);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn asset_names_are_single_safe_files() {
+        let dir = temp_dir("asset-name");
+        let root = dir.to_str().unwrap();
+        assert!(asset_target(root, "shot-a1b2c3d4.png").is_ok());
+        assert!(asset_target(root, "photo.JPG").is_ok());
+        // 不能跳出资源目录，也不能伪装成隐藏文件
+        assert!(asset_target(root, "../outside.png").is_err());
+        assert!(asset_target(root, "sub/shot.png").is_err());
+        assert!(asset_target(root, "..\\windows.png").is_err());
+        assert!(asset_target(root, ".hidden.png").is_err());
+        // SVG 能带脚本，不当图片收
+        assert!(asset_target(root, "x.svg").is_err());
+        assert!(asset_target(root, "x.exe").is_err());
+        assert!(asset_target("relative/root", "x.png").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn writes_and_reads_an_asset_atomically() {
+        let dir = temp_dir("asset-write");
+        let root = dir.to_str().unwrap();
+        let rel = fs_write_asset(root.to_string(), "shot-1234abcd.png".into(), vec![1, 2, 3])
+            .unwrap();
+        assert_eq!(rel, ".vellink-assets/shot-1234abcd.png");
+        assert_eq!(
+            fs_read_asset(root.to_string(), "shot-1234abcd.png".into()).unwrap(),
+            vec![1, 2, 3]
+        );
+        // 覆盖写，且不留临时文件
+        fs_write_asset(root.to_string(), "shot-1234abcd.png".into(), vec![9, 8]).unwrap();
+        assert_eq!(
+            fs_read_asset(root.to_string(), "shot-1234abcd.png".into()).unwrap(),
+            vec![9, 8]
+        );
+        let leftovers: Vec<_> = fs::read_dir(dir.join(ASSET_DIR))
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".vellink.tmp"))
+            .collect();
+        assert!(leftovers.is_empty());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

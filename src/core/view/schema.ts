@@ -59,6 +59,32 @@ export const vellinkSchema = new Schema({
     tableCell: { content: "inline*", group: "tableCell", parseDOM: [{ tag: "td" }], toDOM: () => ["td", 0] },
     text: { group: "inline" },
     hardBreak: { group: "inline", inline: true, parseDOM: [{ tag: "br" }], toDOM: () => ["br"] },
+    // 图片是 atom：光标不进内部，反向序列化时从 attrs 还原 markdown，
+    // 不用拿 alt 文本占位——那样 WYSIWYG 里永远看不到图。
+    image: {
+      inline: true,
+      group: "inline",
+      atom: true,
+      attrs: { src: {}, alt: { default: "" }, title: { default: null } },
+      parseDOM: [
+        {
+          tag: "img",
+          getAttrs: (dom) => ({
+            src: (dom as HTMLElement).getAttribute("src") ?? "",
+            alt: (dom as HTMLElement).getAttribute("alt") ?? "",
+            title: (dom as HTMLElement).getAttribute("title") || null,
+          }),
+        },
+      ],
+      toDOM: (node) => [
+        "img",
+        {
+          src: String(node.attrs.src ?? ""),
+          alt: String(node.attrs.alt ?? ""),
+          ...(node.attrs.title ? { title: String(node.attrs.title) } : {}),
+        },
+      ],
+    },
   },
   marks: {
     strong: { parseDOM: [{ tag: "strong" }, { tag: "b" }], toDOM: () => ["strong", 0] },

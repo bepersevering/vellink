@@ -55,6 +55,17 @@ export const desktopExport = {
   print: () => call<void>("export_print"),
 };
 
+/**
+ * 图片资产：写入工作区的 `.vellink-assets/`，导出时再读回来内嵌。
+ * `Uint8Array` 要走 IPC 必须展开成普通数组，JSON 不会序列化 typed array 的字节。
+ */
+export const desktopAssets = {
+  write: (root: string, name: string, bytes: Uint8Array) =>
+    call<string>("fs_write_asset", { root, name, data: Array.from(bytes) }),
+  read: (root: string, name: string) =>
+    call<number[]>("fs_read_asset", { root, name }),
+};
+
 /** 监听器事件名，与 `src-tauri/src/fs.rs` 的 WATCH_EVENT 保持一致。 */
 const FS_CHANGED = "vellink://fs-changed";
 

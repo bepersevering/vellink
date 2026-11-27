@@ -16,6 +16,7 @@ import { vellinkSchema } from "../core/view/schema";
 import { ViewBridge } from "../core/view/sync";
 import { expandReplacement, findMatches } from "../core/find";
 import { buildPMTextMap, locateInPM } from "../core/find-pm";
+import { isImageType } from "../core/asset";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -46,6 +47,8 @@ export interface EditorHandle {
    * 两个视图各算各的，`pmToSource` 换到同一套偏移；没有选区返回 null。
    */
   selectionRange(): { from: number; to: number } | null;
+  /** 在当前光标/选区插入一段 Markdown（图片粘贴用），和打字共用一次撤销。 */
+  insertMarkdown(text: string, options?: { block?: boolean }): boolean;
   /** 打开查找替换浮层（⌘F）；已有选区时以选区为初始查询。 */
   openFind(): void;
   closeFind(): void;
@@ -65,6 +68,8 @@ interface Props {
   onStats?: (stats: DocStats) => void;
   /** 替换结果之类的轻提示，交给 App 的 toast。 */
   onNotify?: (message: string) => void;
+  /** 粘进来 / 拖进来的图片，由 App 决定落盘方式，再回调本组件插入。 */
+  onImages?: (files: File[]) => void;
 }
 
 /* ------------------------------ 查找高亮（PM 侧） ------------------------------ */
@@ -131,10 +136,11 @@ interface Hit {
  * 由 store.subscribe 通知后回灌，两者用 internalRef 区分，避免自触发。
  */
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
-  { store, docId, docUid, docName, mode, onStats, onNotify },
+  { store, docId, docUid, docName, mode, onStats, onNotify, onImages },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorHandle>(null);
   const viewRef = useRef<EditorView | null>(null);
   const bridgeRef = useRef<ViewBridge | null>(null);
@@ -514,6 +520,22 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     sourceEditorRef.current?.setDocument(snap.source, snap.cursor.source);
   };
 
+  /** 当前选区的源码偏移；两种视图各算各的，再统一换到源码坐标系。 */
+  const sourceSelectionRange = useCallback((): { from: number; to: number } | null => {
+    if (modeRef.current === "source") {
+      const range = sourceEditorRef.current?.getRange();
+      return range && range.to > range.from ? range : null;
+    }
+    const view = viewRef.current;
+    const bridge = bridgeRef.current;
+    if (!view || !bridge) return null;
+    const { from, to } = view.state.selection;
+    if (to <= from) return null;
+    const start = bridge.pmToSource(from);
+    const end = bridge.pmToSource(to);
+    return { from: Math.min(start, end), to: Math.max(start, end) };
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -574,25 +596,80 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         setCursor(cursorRef.current);
         return true;
       },
-      selectionRange: () => {
-        if (modeRef.current === "source") {
-          const range = sourceEditorRef.current?.getRange();
-          return range && range.to > range.from ? range : null;
-        }
-        const view = viewRef.current;
+      selectionRange: sourceSelectionRange,
+      insertMarkdown: (text: string, options?: { block?: boolean }) => {
         const bridge = bridgeRef.current;
-        if (!view || !bridge) return null;
-        const { from, to } = view.state.selection;
-        if (to <= from) return null;
-        const start = bridge.pmToSource(from);
-        const end = bridge.pmToSource(to);
-        return { from: Math.min(start, end), to: Math.max(start, end) };
+        if (!bridge || !text) return false;
+        const range = sourceSelectionRange();
+        const from = range?.from ?? cursorRef.current.source;
+        const to = range?.to ?? from;
+        let insertion = text;
+        let at = from;
+        // 图片必须独立成段：光标在标题的 `# ` 后面时直接插会把标题拆坏，
+        // 所以块级插入一律放到「当前行之后」，用空行和上下隔开。
+        if (options?.block) {
+          const lineEnd = bridge.source.indexOf("\n", to);
+          at = lineEnd === -1 ? bridge.source.length : lineEnd;
+          const before = at > 0 && bridge.source[at - 1] !== "\n" ? "\n" : "";
+          insertion = `${before}\n${text}\n`;
+        }
+        const next = bridge.source.slice(0, at) + insertion + bridge.source.slice(options?.block ? at : to);
+        commitSource(next, at + insertion.length);
+        return true;
       },
       openFind,
       closeFind,
     }),
-    [openFind, closeFind],
+    [openFind, closeFind, sourceSelectionRange],
   );
+
+  /**
+   * 图片粘贴 / 拖入。
+   *
+   * 必须在 capture 阶段拦：PM 和 CodeMirror 都有自己的 paste 处理器，
+   * 等冒泡到父节点再 preventDefault 已经晚了，普通文本会被插进正文。
+   * 只有剪贴板里真的有图片文件才拦，平时复制粘贴完全不受影响。
+   */
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+
+    const onPaste = (event: ClipboardEvent) => {
+      const items = event.clipboardData?.items;
+      if (!items || !onImages) return;
+      const files = Array.from(items)
+        .filter((item) => item.kind === "file")
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => Boolean(file && isImageType(file.type)));
+      if (files.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onImages(files);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!onImages) return;
+      const files = Array.from(event.dataTransfer?.files ?? []).filter((file) =>
+        isImageType(file.type),
+      );
+      if (files.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onImages(files);
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (Array.from(event.dataTransfer?.types ?? []).includes("Files")) {
+        event.preventDefault();
+      }
+    };
+    el.addEventListener("paste", onPaste, true);
+    el.addEventListener("drop", onDrop, true);
+    el.addEventListener("dragover", onDragOver, true);
+    return () => {
+      el.removeEventListener("paste", onPaste, true);
+      el.removeEventListener("drop", onDrop, true);
+      el.removeEventListener("dragover", onDragOver, true);
+    };
+  }, [onImages]);
 
   // 挂载 ProseMirror；store 变化（切换文档）时整体重建视图
   useEffect(() => {
@@ -729,7 +806,12 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   return (
     <main className="editor-shell">
       <div className="editor" id="editor">
-        <div className="doc-wrap" data-editor-id={docId} data-editor-host={docName}>
+        <div
+          ref={wrapRef}
+          className="doc-wrap"
+          data-editor-id={docId}
+          data-editor-host={docName}
+        >
           {!store && <div className="doc-empty">{t("editor.loading")}</div>}
           <div
             ref={hostRef}

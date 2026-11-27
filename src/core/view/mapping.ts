@@ -78,8 +78,8 @@ function inlineToPM(
         out.push(node);
         break;
       case "image":
-        // 图片是 atom，PM 里用文本 alt 占位，映射回源码 span
-        node = vellinkSchema.text(n.alt || n.url);
+        // atom 节点整体映射到源码的 `![alt](url)` span
+        node = T.image.create({ src: n.url, alt: n.alt });
         spans.set(node, n.span);
         out.push(node);
         break;

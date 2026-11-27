@@ -7,7 +7,13 @@ import { buildOutline, type OutlineEntry } from "./core/outline";
 import { fallbackDocument, seedDocuments } from "./core/seed";
 import { Workspace, type DocSummary, type ExternalFile } from "./core/workspace";
 import { persistRoot, resolveWorkspaceEnv } from "./core/workspace-env";
-import { desktopFs, isDesktop, onFsChanged, pickFolder } from "./core/desktop/bridge";
+import {
+  desktopAssets,
+  desktopFs,
+  isDesktop,
+  onFsChanged,
+  pickFolder,
+} from "./core/desktop/bridge";
 import type { FileWorkspaceBackend } from "./core/workspace-fs";
 import { FileChangeDetector } from "./core/file-changes";
 import { TitleRenamer } from "./core/title-rename";
@@ -16,9 +22,20 @@ import {
   type SaveState,
   type WorkspaceBackend,
 } from "./core/workspace-storage";
-import { buildExport, type ExportFormat } from "./core/export";
+import { buildExport, clampRange, type ExportFormat } from "./core/export";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
+import {
+  ASSET_DIR,
+  MAX_IMAGE_BYTES,
+  assetName,
+  dataUriOf,
+  imageMarkdown,
+  inlineLocalImages,
+  isAssetPath,
+  isImageType,
+  mimeFromAssetPath,
+} from "./core/asset";
 import {
   applySettings,
   loadSettings,
@@ -515,6 +532,60 @@ export default function App() {
     showToast(t("toast.savedNow"));
   }, [showToast]);
 
+  /* ------------------------------ 图片资产 ------------------------------ */
+
+  /** 粘贴 / 拖入的图片：桌面端落到工作区目录，浏览器里退回 data URI。 */
+  const handleImages = useCallback(
+    async (files: File[]) => {
+      for (const file of files) {
+        if (!isImageType(file.type)) continue;
+        if (file.size > MAX_IMAGE_BYTES) {
+          showToast(t("toast.imageTooLarge"));
+          continue;
+        }
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const name = assetName(file.name, file.type, bytes);
+          if (!name) {
+            showToast(t("toast.imageFailed"));
+            continue;
+          }
+          const root = filesRef.current?.root;
+          const target =
+            isDesktop() && root
+              ? await desktopAssets.write(root, name, bytes)
+              : dataUriOf(bytes, file.type);
+          editorRef.current?.insertMarkdown(imageMarkdown(file.name, target), { block: true });
+          showToast(t("toast.imageInserted"));
+        } catch (error) {
+          showToast(t("toast.imageFailed", { message: errorMessage(error) }));
+        }
+      }
+    },
+    [showToast],
+  );
+
+  /** 导出 HTML / PDF 前把本地图片读回来内嵌；Markdown 保留相对路径。 */
+  const inlineImagesForExport = useCallback(async (source: string) => {
+    const root = filesRef.current?.root;
+    // 浏览器里粘进来的本来就是 data URI，没有本地路径要解析
+    if (!isDesktop() || !root) return source;
+    return inlineLocalImages(source, async (path) => {
+      if (!isAssetPath(path)) return null;
+      const name = path.slice(ASSET_DIR.length + 1);
+      if (!name || name.includes("/")) return null;
+      const mime = mimeFromAssetPath(path);
+      if (!mime) return null;
+      try {
+        const bytes = await desktopAssets.read(root, name);
+        return dataUriOf(Uint8Array.from(bytes), mime);
+      } catch {
+        // 图片被外部删了：保留原路径，至少别把正文弄丢
+        return null;
+      }
+    });
+  }, []);
+
   /* ------------------------------ 导出 ------------------------------ */
 
   const openExport = useCallback(() => {
@@ -535,11 +606,21 @@ export default function App() {
       setExporting(true);
       try {
         // 导出的是「眼前的正文」：还没落盘的改动也照导，不等自动保存
+        //
+        // 选区在这一层先切好再内嵌图片：内嵌会把相对路径换成很长的 data URI，
+        // 此后源码偏移全变了，不能再让 buildExport 按原区间切一刀。
+        const requested = scope === "selection" ? clampRange(doc.source, exportSelection) : null;
+        const picked = requested ? doc.source.slice(requested.from, requested.to) : null;
+        const selected = picked && picked.trim() ? picked : null;
+        const exportSource =
+          format === "markdown"
+            ? (selected ?? doc.source)
+            : await inlineImagesForExport(selected ?? doc.source);
         const payload = buildExport({
           format,
           title: doc.title,
-          source: doc.source,
-          range: scope === "selection" ? exportSelection : null,
+          source: exportSource,
+          partial: Boolean(selected),
           selectionSuffix: t("export.fileSuffix.selection"),
           lang: locale,
         });
@@ -567,7 +648,7 @@ export default function App() {
         setExporting(false);
       }
     },
-    [exportSelection, locale, showToast],
+    [exportSelection, locale, showToast, inlineImagesForExport],
   );
 
   /**
@@ -932,6 +1013,7 @@ export default function App() {
           mode={editorMode}
           onStats={handleStats}
           onNotify={showToast}
+          onImages={(files) => void handleImages(files)}
         />
 
         <SideDrawer

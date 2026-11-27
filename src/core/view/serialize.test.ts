@@ -179,6 +179,27 @@ describe("WYSIWYG 编辑后序列化（核心场景）", () => {
     expect(markdown).toContain("新增内容");
     expect(ir2.children.map((b) => b.type)).toEqual(ir1.children.map((b) => b.type));
   });
+
+  it("改别处的正文不会把图片吞掉", () => {
+    // 图片在 PM 里是 atom（没有 textContent）。如果序列化走「文本内容」兜底，
+    // 用户随便改一个字，整张图就会从源码里消失——这里专门守这条。
+    const src = "# 标题\n\n![截图](.vellink-assets/shot-a1b2c3d4.png)\n\n正文。\n";
+    const ir1 = parseMarkdown({ source: src }).ir;
+    const view = buildPMView(ir1);
+    const { doc } = view;
+
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (node.isText && node.text === "正文。") at = pos + node.nodeSize;
+    });
+    expect(at).toBeGreaterThan(0);
+
+    const transform = new Transform(doc);
+    transform.insert(at, view.doc.type.schema.text("补充"));
+    const { markdown } = serializePM(transform.doc);
+    expect(markdown).toContain("![截图](.vellink-assets/shot-a1b2c3d4.png)");
+    expect(parseMarkdown({ source: markdown }).ir).toBeDefined();
+  });
 });
 
 describe("序列化锚点质量", () => {

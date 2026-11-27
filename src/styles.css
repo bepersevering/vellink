@@ -400,6 +400,14 @@ svg {
   border-top: 1px solid var(--border);
   margin: 36px 0;
 }
+.doc-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  /* 图片在正文里是行内 atom：上下留一点，别贴着文字基线 */
+  vertical-align: middle;
+  margin: 4px 0;
+}
 .doc-body table {
   border-collapse: collapse;
   width: 100%;

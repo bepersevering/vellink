@@ -37,6 +37,13 @@ export interface ExportRequest {
    * 一路回车就把整篇的导出覆盖掉了。
    */
   selectionSuffix?: string;
+  /**
+   * 调用方已经切好选区时显式标明是「摘录」。
+   *
+   * 图片内嵌会改变源码偏移，所以那种情况下先切后导，range 不再传进来，
+   * 但仍然要让用户拿到带后缀的文件名。
+   */
+  partial?: boolean;
   lang?: string;
 }
 
@@ -136,7 +143,8 @@ export function buildExport(request: ExportRequest): ExportPayload {
   const meta = FORMAT_META[request.format];
   const { source, ir, partial } = sourceOf(request.source, request.range);
   const title = request.title || "Untitled";
-  const name = partial ? `${title}${request.selectionSuffix ?? ""}` : title;
+  const isPartial = request.partial ?? partial;
+  const name = isPartial ? `${title}${request.selectionSuffix ?? ""}` : title;
 
   let contents: string;
   if (request.format === "markdown") {

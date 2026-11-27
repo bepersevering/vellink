@@ -180,6 +180,14 @@ function inlineToMarkdown(parent: PMNode, w: Writer): void {
     for (const node of span.nodes) {
       if (node.type.name === "hardBreak") {
         w.emit("  \n");
+      } else if (node.type.name === "image") {
+        // atom 没有 textContent，必须从 attrs 还原，否则任何一次编辑都会把图吞掉
+        const src = String(node.attrs.src ?? "");
+        const alt = String(node.attrs.alt ?? "").replace(/[\[\]\\]/g, "\\$&");
+        const title = node.attrs.title
+          ? ` "${String(node.attrs.title).replace(/"/g, '\\"')}"`
+          : "";
+        w.emit(`![${alt}](${src}${title})`);
       } else if (node.isText) {
         w.emitText(node, code ? node.text ?? "" : escapeInline(node.text ?? ""));
       } else {

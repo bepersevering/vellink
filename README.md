@@ -28,12 +28,13 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **Search everything**: the command palette (`⌘P`) searches every document's title and body as you type, shows a snippet per hit, and jumps straight to the word — title hits rank first
 - **Export**: `⌘E` exports the whole document or just the selection — Markdown stays byte-for-byte as written, HTML is one self-contained styled file, PDF goes through the system print panel so pagination and CJK fonts are the OS's job. Native save dialog + atomic write on desktop; selection exports get an "excerpt" suffix so they never overwrite the full document
 - **Settings**: `⌘,` opens a panel for body text size, column width, theme (light / dark / follow system) and autosave interval — applied and saved as you drag, with headings and code blocks scaling along
+- **Images**: paste or drop a screenshot into the workspace's `.vellink-assets/`; both views render it, HTML / PDF exports embed the bytes, Markdown exports keep the relative path
 - **i18n**: English and Simplified Chinese UI, extensible locale packs
 - **Three platforms**: macOS / Windows / Linux
 
 ## Getting Started
 
-> The project is in early development (M6.3 settings). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, and adjustable typesetting plus theme.
+> The project is in early development (M6.4 images). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, adjustable typesetting and theme, and paste-or-drop images that are stored in the workspace and embedded on export.
 
 Prebuilt installers live on the [Releases](https://github.com/bepersevering/vellink/releases) page. Once installed, new versions arrive in-app: the app checks quietly on launch, and you can force a check with `⌘U` or the version badge in the status bar.
 
@@ -44,7 +45,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (261 tests)
+npm test               # run unit tests (271 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -104,6 +105,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.1 | Find & replace across both views | `⌘F` opens a compact bar instead of a browser dialog: WYSIWYG searches visible text (block-aware, never stitches two paragraphs together), the source view searches raw Markdown, cross-view coordinates are never mixed. All hits highlighted, current one selected and scrolled into view, `Enter` / `Shift+Enter` to step, case + regex toggles, replace-one and replace-all commit as a single undo step. The command palette (`⌘P`) now also searches titles and bodies across the whole workspace, with snippets and jump-to-word. ([notes](./M6.1-查找替换说明.md), Chinese) |
 | M6.2 | Export Markdown / HTML / PDF | `⌘E` opens a panel for format + scope (whole document or selection). Markdown is the source moved as-is; HTML is one self-contained file sharing the editor's typesetting rules; PDF mounts a print-only DOM and calls the system print panel, where the user picks "Save as PDF". Native save dialog + atomic Rust write (`.md` / `.html` only) on desktop, a plain download in the browser. Selection exports re-parse the source slice instead of cutting DOM, and carry an "excerpt" suffix so they never overwrite a full export; link and image URLs pass a scheme allowlist, so `javascript:` and `data:text/html` are downgraded. ([notes](./M6.2-导出说明.md), Chinese) |
 | M6.3 | Settings panel | `⌘,`, the title-bar gear or the command palette. Body text 13–22px, column 560–960px, theme light / dark / follow-system (reacts to OS appearance changes at once; an existing `vellink-theme` choice migrates to an explicit one), autosave 0.3–3.0s (in-flight timers reschedule immediately). Everything applies and persists as you change it, and out-of-range values from storage are clamped back. ([notes](./M6.3-设置面板说明.md), Chinese) |
+| M6.4 | Image paste and self-contained export | Screenshots paste or drop straight into `.vellink-assets/` (ASCII slug + content hash, atomic Rust write, extension allowlist) render as a thumbnail in WYSIWYG while the source view keeps the Markdown. Block insertion lands after the current line so a heading is never split, and one undo removes the whole image. HTML / PDF export reads local assets back as data URIs; Markdown keeps relative paths. ([notes](./M6.4-图片粘贴与导出内嵌说明.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles
