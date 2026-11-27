@@ -1092,6 +1092,8 @@ export default function App() {
           docName={docTitle}
           mode={editorMode}
           onStats={handleStats}
+          typewriter={settings.typewriter}
+          focusLines={settings.focusLines}
           onNotify={showToast}
           onImages={(files) => void handleImages(files)}
         />

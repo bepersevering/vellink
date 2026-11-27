@@ -152,6 +152,30 @@ export function SettingsDialog({ open, settings, onChange, onClose }: Props) {
           <p className="set-hint">{t("settings.autosaveHint")}</p>
         </section>
 
+        <section className="set-row set-toggle-row">
+          <label className="set-toggle">
+            <input
+              type="checkbox"
+              checked={settings.typewriter}
+              onChange={(e) => patch({ typewriter: e.target.checked })}
+            />
+            <span className="set-label">{t("settings.typewriter")}</span>
+          </label>
+          <p className="set-hint">{t("settings.typewriterHint")}</p>
+        </section>
+
+        <section className="set-row set-toggle-row">
+          <label className="set-toggle">
+            <input
+              type="checkbox"
+              checked={settings.focusLines}
+              onChange={(e) => patch({ focusLines: e.target.checked })}
+            />
+            <span className="set-label">{t("settings.focusLines")}</span>
+          </label>
+          <p className="set-hint">{t("settings.focusLinesHint")}</p>
+        </section>
+
         <footer className="export-actions">
           <button
             className="service-btn"

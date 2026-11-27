@@ -80,6 +80,10 @@ interface Props {
   onNotify?: (message: string) => void;
   /** 粘进来 / 拖进来的图片，由 App 决定落盘方式，再回调本组件插入。 */
   onImages?: (files: File[]) => void;
+  /** 打字机模式：当前行保持在窗口垂直中央。 */
+  typewriter?: boolean;
+  /** 聚焦段落：当前段落清晰，其余淡化。 */
+  focusLines?: boolean;
 }
 
 /* ------------------------------ 查找高亮（PM 侧） ------------------------------ */
@@ -146,7 +150,18 @@ interface Hit {
  * 由 store.subscribe 通知后回灌，两者用 internalRef 区分，避免自触发。
  */
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
-  { store, docId, docUid, docName, mode, onStats, onNotify, onImages },
+  {
+    store,
+    docId,
+    docUid,
+    docName,
+    mode,
+    onStats,
+    onNotify,
+    onImages,
+    typewriter,
+    focusLines,
+  },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -838,6 +853,28 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       sourceText: source,
     });
   }, [source, cursor, onStats]);
+
+  // 打字机模式：光标所在行滚到编辑区垂直中央。两种视图都生效。
+  useEffect(() => {
+    if (!typewriter || mode !== "wysiwyg") return;
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch(view.state.tr.scrollIntoView());
+    const nativeSel = window.getSelection();
+    const anchor = nativeSel?.anchorNode;
+    const el = anchor instanceof Element ? anchor : anchor?.parentElement;
+    const line = el?.closest("p, h1, h2, h3, h4, h5, h6, li, pre");
+    if (line && "scrollIntoView" in line) {
+      (line as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [cursor, typewriter, mode]);
+
+  // 聚焦段落：给 PM 文档加 class，CSS 淡化非当前段落
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    host.classList.toggle("focus-lines", Boolean(focusLines));
+  }, [focusLines]);
 
   const handleSourceChange = (next: string, caret: number, composing: boolean) => {
     // 组合中间态只更新显示与光标，不解析、不进撤销栈

@@ -27,7 +27,7 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **Find & replace**: both views search the text you actually see (WYSIWYG text vs raw Markdown), highlight every hit, and replace one or all in a single undo step
 - **Search everything**: the command palette (`⌘P`) searches every document's title and body as you type, shows a snippet per hit, and jumps straight to the word — title hits rank first
 - **Export**: `⌘E` exports the whole document or just the selection — Markdown stays byte-for-byte as written, HTML is one self-contained styled file, PDF goes through the system print panel so pagination and CJK fonts are the OS's job. Native save dialog + atomic write on desktop; selection exports get an "excerpt" suffix so they never overwrite the full document
-- **Settings**: `⌘,` opens a panel for body text size, column width, theme (light / dark / follow system) and autosave interval — applied and saved as you drag, with headings and code blocks scaling along
+- **Settings**: `⌘,` opens a panel for text size, column width, theme, autosave interval, typewriter mode and focus paragraph — applied and saved as you change them
 - **Images**: paste or drop a screenshot into the workspace's `.vellink-assets/`; both views render it, HTML / PDF exports embed the bytes, Markdown exports keep the relative path
 - **Import**: `⌘⇧O` imports several `.md` files at once — copied into the workspace on the desktop, into localStorage in the browser; titles come from the first heading, duplicates get a suffix
 - **Math**: `$E=mc^2$` and `$$...$$` render as KaTeX in WYSIWYG while the source view keeps the original syntax; exports use self-contained MathML
@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (367 tests)
+npm test               # run unit tests (369 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -124,6 +124,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.15 | List indent | Tab / Shift+Tab sink and lift list items in WYSIWYG via PM commands; source view adds/removes two spaces before `- / * / + / 1.` markers, leaving other lines to the default Tab. ([checklist](./功能差距清单.md), Chinese) |
 | M6.16 | List type switching | `⌘⇧7/8/9` switches the list under the caret between bullet, ordered and task, preserving item content, order and checked state. ([checklist](./功能差距清单.md), Chinese) |
 | M6.17 | Line-number jump | Clicking a line number in source view moves the caret there and scrolls it into view; the active number is highlighted. Uses a native capture-phase listener because gutters sit outside CM's contentDOM. ([checklist](./功能差距清单.md), Chinese) |
+| M6.18 | Writing modes | Settings gain a typewriter mode (centre the current line) and focus paragraph (dim the rest), independent of the existing focus mode that only collapses sidebars. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

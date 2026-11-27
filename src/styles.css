@@ -398,6 +398,16 @@ svg {
 .doc-body pre .nu {
   color: #b8860b;
 }
+/* 聚焦段落：有 :focus-within 的段落保持清晰，其余淡化 */
+.doc-body.focus-lines > :not(:focus-within) {
+  opacity: 0.42;
+  transition: opacity 160ms ease;
+}
+.doc-body.focus-lines > :focus-within {
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
 .doc-body .vellink-footnote-ref {
   color: var(--violet);
   font-size: 0.75em;
@@ -412,6 +422,16 @@ svg {
   border-left: 2px solid var(--border);
   margin: 6px 0;
 }
+/* 聚焦段落：有 :focus-within 的段落保持清晰，其余淡化 */
+.doc-body.focus-lines > :not(:focus-within) {
+  opacity: 0.42;
+  transition: opacity 160ms ease;
+}
+.doc-body.focus-lines > :focus-within {
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
 .doc-body .vellink-footnote-ref {
   color: var(--violet);
   font-size: 0.75em;
@@ -1771,6 +1791,10 @@ body[data-t="dark"] .find-hit-on {
   display: flex;
   gap: 6px;
 }
+.set-toggle-row { display: block; }
+.set-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.set-toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
+
 .set-seg-btn {
   flex: 1;
   height: 28px;

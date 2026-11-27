@@ -21,6 +21,10 @@ export interface Settings {
   theme: ThemeMode;
   /** 自动保存防抖间隔，ms。 */
   autosaveMs: number;
+  /** 打字机模式：当前行始终保持在窗口垂直中央。 */
+  typewriter: boolean;
+  /** 聚焦段落：当前段落清晰，其余淡化。 */
+  focusLines: boolean;
 }
 
 export const LIMITS = {
@@ -35,6 +39,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // 默认跟随系统：写作软件不该在深色桌面上开出一块刺眼的白板
   theme: "system",
   autosaveMs: LIMITS.autosaveMs.default,
+  typewriter: false,
+  focusLines: false,
 };
 
 const STORAGE_KEY = "vellink-settings:v1";
@@ -84,6 +90,8 @@ export function normalizeSettings(raw: unknown): Settings {
       LIMITS.autosaveMs.max,
       DEFAULT_SETTINGS.autosaveMs,
     ),
+    typewriter: input.typewriter === true,
+    focusLines: input.focusLines === true,
   };
 }
 

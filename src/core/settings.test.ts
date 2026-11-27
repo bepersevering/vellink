@@ -126,3 +126,19 @@ describe("落地到样式", () => {
     expect(isDefaultSettings({ ...DEFAULT_SETTINGS, theme: "dark" })).toBe(false);
   });
 });
+
+
+describe("写作模式偏好", () => {
+  it("布尔字段只认 true，坏值回落 false", () => {
+    expect(normalizeSettings({ typewriter: true, focusLines: true }).typewriter).toBe(true);
+    expect(normalizeSettings({ typewriter: true, focusLines: true }).focusLines).toBe(true);
+    expect(normalizeSettings({ typewriter: "true", focusLines: 1 }).typewriter).toBe(false);
+    expect(normalizeSettings({ typewriter: "true", focusLines: 1 }).focusLines).toBe(false);
+  });
+
+  it("缺省值不开启这两种模式", () => {
+    const s = normalizeSettings({});
+    expect(s.typewriter).toBe(false);
+    expect(s.focusLines).toBe(false);
+  });
+});
