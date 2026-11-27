@@ -133,6 +133,11 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
       return `<h${level} id="${escapeHtml(anchor)}">${renderInline(node.children)}</h${level}>`;
     }
     case "code": {
+      // Mermaid 是图表源码，导出里保留可读源码（浏览器里 WYSIWYG 已渲染成图）；
+      // 内联 SVG 需要异步渲染，与当前同步导出链冲突，见功能差距清单 A2.9。
+      if ((node.lang ?? "").toLowerCase() === "mermaid") {
+        return `<pre class="mermaid-source"><code>${escapeHtml(node.value)}</code></pre>`;
+      }
       const lang = node.lang ? ` class="language-${escapeHtml(node.lang)}"` : "";
       // 着色只套 span，不改语义；highlightHtml 已做所有文本转义
       // 无语言标记也用通用关键字表着色，代码块不必是单色

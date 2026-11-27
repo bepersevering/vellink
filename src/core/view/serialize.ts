@@ -248,6 +248,13 @@ function blockToMarkdown(node: PMNode, w: Writer, prefix: string): void {
       w.emit("\n");
       break;
 
+    case "mermaidBlock": {
+      w.prefix(prefix);
+      w.emit("```mermaid\n");
+      w.emit(String(node.attrs.code ?? ""));
+      w.emit("\n```\n");
+      break;
+    }
     case "codeBlock": {
       w.prefix(prefix);
       const value = node.textContent;

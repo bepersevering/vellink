@@ -290,3 +290,23 @@ describe("脚注往返", () => {
     expect(fp(ir2)).toEqual(fp(ir1));
   });
 });
+
+describe("Mermaid 往返", () => {
+  it("mermaid 代码块往返后仍是 mermaid 围栏", () => {
+    const src = "```mermaid\ngraph TD; A-->B;\n```\n";
+    const { markdown, ir1, ir2 } = roundtrip(src);
+    expect(markdown).toContain("```mermaid");
+    expect(markdown).toContain("A-->B");
+    expect(fp(ir2)).toEqual(fp(ir1));
+  });
+});
+
+describe("Mermaid 往返", () => {
+  it("mermaid 代码块往返后仍是 mermaid 围栏", () => {
+    const src = "```mermaid\ngraph TD; A-->B;\n```\n";
+    const { markdown, ir1, ir2 } = roundtrip(src);
+    expect(markdown).toContain("```mermaid");
+    expect(markdown).toContain("A-->B");
+    expect(fp(ir2)).toEqual(fp(ir1));
+  });
+});

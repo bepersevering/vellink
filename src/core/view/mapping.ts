@@ -111,6 +111,12 @@ function blockToPM(
       // 空段落必须有一个空 text 节点占位，否则 PM pos 会塌陷
       return T.paragraph.create(null, inlineToPM(node.children, spans));
     case "code": {
+      // Mermaid 围栏单独成 atom，源码仍是普通代码块
+      if ((node.lang ?? "").toLowerCase() === "mermaid") {
+        const m = vellinkSchema.nodes.mermaidBlock.create({ code: node.value });
+        spans.set(m, node.span);
+        return m;
+      }
       const t = vellinkSchema.text(node.value);
       // value 去掉了围栏，用 source 反查内容区精确起点（对格式变体鲁棒）
       const contentStart = node.value

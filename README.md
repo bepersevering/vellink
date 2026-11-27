@@ -31,6 +31,7 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **Images**: paste or drop a screenshot into the workspace's `.vellink-assets/`; both views render it, HTML / PDF exports embed the bytes, Markdown exports keep the relative path
 - **Import**: `⌘⇧O` imports several `.md` files at once — copied into the workspace on the desktop, into localStorage in the browser; titles come from the first heading, duplicates get a suffix
 - **Math**: `$E=mc^2$` and `$$...$$` render as KaTeX in WYSIWYG while the source view keeps the original syntax; exports use self-contained MathML
+- **Mermaid**: ` ```mermaid ` blocks render as SVG in WYSIWYG (flowcharts, sequences, Gantt); syntax errors show the reason
 - **Code highlight**: WYSIWYG code blocks colour keywords, strings, numbers and comments; the source view and HTML exports use the same palette
 - **Extended syntax**: YAML frontmatter as a property card, `[TOC]` expanded into a jumpable outline, heading anchors, footnotes
 - **Web paste**: content copied from a browser is converted to Markdown on paste (headings, lists, emphasis, links, code, tables, images)
@@ -50,7 +51,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (420 tests)
+npm test               # run unit tests (422 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -135,6 +136,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.26 | Orphan asset cleanup | On the desktop, deleting a document scans all remaining sources and moves unreferenced `.vellink-assets/` images into the trash (not a hard delete), so they can be recovered. ([checklist](./功能差距清单.md), Chinese) |
 | M6.27 | Image resize | Settings offer a max image edge (0–4096, default 2048, 0 disables); pasted images are shrunk via canvas before storage. GIFs are skipped to preserve animation; failures fall back to the original bytes. ([checklist](./功能差距清单.md), Chinese) |
 | M6.28 | Storage quota guard | The browser blocks pasted images over 1.5MB up front (data URI inflates by a third) and reports quota exhaustion on autosave instead of failing silently. ([checklist](./功能差距清单.md), Chinese) |
+| M6.29 | Mermaid diagrams | ` ```mermaid ` blocks render as SVG, covering flowcharts, sequences and Gantt; mermaid is dynamically imported on demand and syntax errors show the reason. HTML / PDF exports keep a readable source block. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

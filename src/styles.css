@@ -412,6 +412,27 @@ svg {
   transition: opacity 160ms ease;
 }
 
+.doc-body .vellink-mermaid {
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-sub);
+  overflow-x: auto;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-sub);
+}
+.doc-body .vellink-mermaid[data-mermaid-state="ready"] {
+  background: #fff;
+  color: #222;
+  border-color: #e8e8e4;
+}
+.doc-body .vellink-mermaid.mermaid-error {
+  color: #b00020;
+  white-space: pre-wrap;
+}
+
 .doc-body .vellink-footnote-ref {
   color: var(--violet);
   font-size: 0.75em;
@@ -434,6 +455,27 @@ svg {
 .doc-body.focus-lines > :focus-within {
   opacity: 1;
   transition: opacity 160ms ease;
+}
+
+.doc-body .vellink-mermaid {
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-sub);
+  overflow-x: auto;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-sub);
+}
+.doc-body .vellink-mermaid[data-mermaid-state="ready"] {
+  background: #fff;
+  color: #222;
+  border-color: #e8e8e4;
+}
+.doc-body .vellink-mermaid.mermaid-error {
+  color: #b00020;
+  white-space: pre-wrap;
 }
 
 .doc-body .vellink-footnote-ref {

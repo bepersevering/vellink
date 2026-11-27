@@ -47,6 +47,27 @@ export const vellinkSchema = new Schema({
       parseDOM: [{ tag: "pre" }],
       toDOM: (node) => ["pre", node.attrs.lang ? { "data-lang": node.attrs.lang } : {}, ["code", 0]],
     },
+    // Mermaid 图表是 atom：PM 不管理内部 DOM，渲染由视图层异步填充
+    mermaidBlock: {
+      group: "block",
+      atom: true,
+      attrs: { code: {} },
+      parseDOM: [
+        {
+          tag: "div[data-mermaid]",
+          getAttrs: (dom) => ({ code: (dom as HTMLElement).getAttribute("data-mermaid") ?? "" }),
+        },
+      ],
+      toDOM: (node) => [
+        "div",
+        {
+          class: "vellink-mermaid",
+          "data-mermaid": String(node.attrs.code ?? ""),
+          "data-mermaid-state": "pending",
+        },
+        `Mermaid: ${String(node.attrs.code ?? "").slice(0, 60)}`,
+      ],
+    },
     horizontalRule: { group: "block", parseDOM: [{ tag: "hr" }], toDOM: () => ["hr"] },
     table: {
       content: "tableRow+",

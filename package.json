@@ -28,6 +28,7 @@
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.14.1",
     "katex": "^0.19.1",
+    "mermaid": "^12.3.0",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.13",

@@ -20,6 +20,7 @@ import { buildPMTextMap, locateInPM } from "../core/find-pm";
 import { isImageType } from "../core/asset";
 import { renderMath } from "../core/view/math-view";
 import { renderExtSyntax } from "../core/view/ext-view";
+import { renderMermaid } from "../core/view/mermaid-view";
 import { clipboardHtml, htmlToMarkdown } from "../core/paste-html";
 import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { createAutoPairPlugin } from "../core/view/auto-pair";
@@ -768,6 +769,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         // 公式和代码高亮只改 DOM、不改 PM 文档；无条件调用保证外部回灌
         // （fromSourceRef 分支之前）和首次挂载也能着色。两个函数都幂等。
         renderMath(host);
+        void renderMermaid(host);
         if (bridgeRef.current)
           renderExtSyntax(host, bridgeRef.current.source);
         // 源码输入 / 撤销回灌引发的事务不再反向提交，避免循环
@@ -779,6 +781,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     });
     viewRef.current = view;
     renderMath(host);
+    void renderMermaid(host);
     renderExtSyntax(host, bridge.source);
 
     // 外部写入（插件命令、工作区恢复）→ 回灌两个视图
