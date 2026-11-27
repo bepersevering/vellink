@@ -103,7 +103,8 @@ const vellinkTheme = EditorView.theme({
   ".cm-activeLine": { backgroundColor: "rgba(127,127,127,0.06)" },
   ".cm-activeLineGutter": {
     backgroundColor: "transparent",
-    color: "var(--text-sub)",
+    color: "var(--accent)",
+    fontWeight: "600",
   },
   ".cm-cursor": { borderLeftColor: "var(--accent)" },
   ".cm-selectionBackground": { backgroundColor: "var(--accent-soft) !important" },
@@ -267,6 +268,21 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
       const view = new EditorView({ state, parent: host });
       viewRef.current = view;
 
+      // 行号在 contentDOM 外面，CM 的 domEventHandlers 收不到，用原生监听
+      const onGutterClick = (event: MouseEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (!target || !target.classList.contains("cm-gutterElement")) return;
+        const lineNumber = Number(target.textContent);
+        if (!Number.isInteger(lineNumber) || lineNumber < 1) return;
+        const line = view.state.doc.line(Math.min(lineNumber, view.state.doc.lines));
+        view.dispatch({
+          selection: { anchor: line.from },
+          effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+        });
+        view.focus();
+      };
+      view.dom.addEventListener("mousedown", onGutterClick, true);
+
       // CM 内部也监听 compositionend；注册在其后，读取的是最终文档
       const onCompositionEnd = () => {
         window.setTimeout(() => {
@@ -282,7 +298,8 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
 
       return () => {
         view.dom.removeEventListener("compositionend", onCompositionEnd);
-        view.destroy();
+        view.dom.removeEventListener("mousedown", onGutterClick, true);
+      view.destroy();
         viewRef.current = null;
       };
     }, []);
