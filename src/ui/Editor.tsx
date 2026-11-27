@@ -24,6 +24,7 @@ import { clipboardHtml, htmlToMarkdown } from "../core/paste-html";
 import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { createAutoPairPlugin } from "../core/view/auto-pair";
 import { createEmojiPlugin } from "../core/view/emoji-plugin";
+import { convertListCommand } from "../core/view/list-type";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -725,6 +726,9 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
           // 列表缩进 / 反缩进；非列表项交给 baseKeymap 的 Tab 处理
           Tab: sinkListItem(vellinkSchema.nodes.listItem),
           "Shift-Tab": liftListItem(vellinkSchema.nodes.listItem),
+          "Mod-Shift-7": convertListCommand("bullet"),
+          "Mod-Shift-8": convertListCommand("ordered"),
+          "Mod-Shift-9": convertListCommand("task"),
         }),
         keymap(baseKeymap),
         findPlugin,
