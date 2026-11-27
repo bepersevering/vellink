@@ -27,6 +27,7 @@ import { buildExport, clampRange, type ExportFormat } from "./core/export";
 import { planImports, titleFromFileName } from "./core/import-docs";
 import { buildTable } from "./core/table-insert";
 import { applyCustomCss } from "./core/custom-css";
+import { findOrphanAssets } from "./core/orphan-assets";
 import { findRelativeImages, rewriteImagePaths } from "./core/import-images";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
@@ -627,6 +628,26 @@ export default function App() {
       await autosave?.settled(id);
       mutationRef.current += 1;
       void backendRef.current?.remove(id);
+
+      // 桌面端：删完后回收没有任何文档引用的图片（进回收站，不是直接删）
+      const files = filesRef.current;
+      if (files?.root) {
+        void (async () => {
+          try {
+            const names = await desktopAssets.list(files.root);
+            if (!names.length) return;
+            const sources = workspace
+              .summaries()
+              .map((summary) => workspace.get(summary.id)?.source ?? "");
+            const orphans = findOrphanAssets(sources, names);
+            for (const name of orphans) {
+              await desktopAssets.trash(files.root, name, `${files.root}/.vellink-trash/assets`);
+            }
+          } catch {
+            // 清理失败不该影响「文档已删除」这个主结果
+          }
+        })();
+      }
       showToast(t("toast.docDeleted"));
     },
     [showToast],

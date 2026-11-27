@@ -375,6 +375,39 @@ pub fn fs_read_asset(root: String, name: String) -> Result<Vec<u8>, String> {
     fs::read(&target).map_err(|err| format!("读取图片失败 {}: {err}", to_string_path(&target)))
 }
 
+/// 列出工作区资产目录里的文件名（只给名字，不读内容）。
+#[tauri::command]
+pub fn fs_list_assets(root: String) -> Result<Vec<String>, String> {
+    let dir = PathBuf::from(&root).join(".vellink-assets");
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut out = vec![];
+    for entry in fs::read_dir(&dir).map_err(|err| format!("列举资产失败: {err}"))? {
+        let entry = entry.map_err(|err| format!("列举资产失败: {err}"))?;
+        if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            if let Some(name) = entry.file_name().to_str() {
+                out.push(name.to_string());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// 把孤立资产移到回收站（不直接删除，保留恢复可能）。
+#[tauri::command(rename_all = "snake_case")]
+pub fn fs_trash_asset(root: String, name: String, trash_dir: String) -> Result<String, String> {
+    let asset = asset_target(&root, &name)?;
+    fs::create_dir_all(&trash_dir).map_err(|err| format!("创建回收目录失败: {err}"))?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let target = PathBuf::from(&trash_dir).join(format!("{}-{}", stamp, name));
+    fs::rename(&asset, &target).map_err(|err| format!("回收资产失败: {err}"))?;
+    Ok(to_string_path(&target))
+}
+
 /// 当前工作区的目录监听器；换目录时整体替换，旧的自然被 drop 停止。
 #[derive(Default)]
 pub struct WatchState(pub Mutex<Option<RecommendedWatcher>>);

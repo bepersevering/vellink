@@ -68,6 +68,9 @@ export const desktopAssets = {
     call<number[]>("fs_read_asset", { root, name }),
   /** 导入 md 时读源文件旁边的图片（绝对路径 + 图片扩展名白名单）。 */
   readImage: (path: string) => call<number[]>("fs_read_image", { path }),
+  list: (root: string) => call<string[]>("fs_list_assets", { root }),
+  trash: (root: string, name: string, trashDir: string) =>
+    call<string>("fs_trash_asset", { root, name, trash_dir: trashDir }),
 };
 
 /** 监听器事件名，与 `src-tauri/src/fs.rs` 的 WATCH_EVENT 保持一致。 */

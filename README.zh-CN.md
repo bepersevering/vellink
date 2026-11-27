@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测（411 项）
+npm test               # 运行核心单测（415 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -132,6 +132,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 | M6.23 | EPUB / ODT 导出 | `⌘E` 再添 EPUB 3 与 OpenDocument 文本：复用 DOCX 的零依赖 ZIP 写出器，EPUB 含 mimetype / OPF / nav / 正文，ODT 按 ODF 元素映射标题 / 列表 / 表格 / 样式。[清单](./功能差距清单.md) |
 | M6.24 | 导出格式补全与图片搬运 | `⌘E` 共 8 种格式，按「文档交换 / 发布 / 归档」分组；新增 LaTeX（ctex）与 MediaWiki 源码导出；导入 Markdown 时把相对路径图片从源目录搬进 `.vellink-assets/` 并改写引用。PDF 书签经评估不做（打印面板路线无法生成，自建引擎成本过高）。[清单](./功能差距清单.md) |
 | M6.25 | 自定义 CSS | 设置面板粘贴 CSS，实时作用于编辑器与导出的 HTML；`@import` 与远程图片 URL 自动剥离，防止外链追踪。[清单](./功能差距清单.md) |
+| M6.26 | 孤立图片回收 | 桌面端删除文档后扫描所有正文的资产引用，把无人使用的 `.vellink-assets/` 图片移进回收站（不是直接删），保留恢复可能。[清单](./功能差距清单.md) |
 | M6 | 10 人试用打磨 → 公开发布 | 进行中 |
 
 ## 设计原则
