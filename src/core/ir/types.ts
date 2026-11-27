@@ -87,6 +87,19 @@ export interface TocNode extends NodeBase {
   type: "toc";
 }
 
+/** 行内脚注引用 `[^1]`。 */
+export interface FootnoteRefNode extends NodeBase {
+  type: "footnoteRef";
+  label: string;
+}
+
+/** 脚注定义 `[^1]: 内容`（通常位于文末）。 */
+export interface FootnoteDefNode extends NodeBase {
+  type: "footnoteDef";
+  label: string;
+  text: string;
+}
+
 export type InlineNode =
   | TextNode
   | EmphasisNode
@@ -95,7 +108,8 @@ export type InlineNode =
   | LinkNode
   | WikiLinkNode
   | ImageNode
-  | InlineMathNode;
+  | InlineMathNode
+  | FootnoteRefNode;
 
 /* ------------------------------ 块级节点 ------------------------------ */
 
@@ -164,7 +178,8 @@ export type BlockNode =
   | ThematicBreakNode
   | MathBlockNode
   | FrontmatterNode
-  | TocNode;
+  | TocNode
+  | FootnoteDefNode;
 
 /** 完整文档 IR：块节点树 + 源文本快照 + 版本。 */
 export interface DocumentIR {

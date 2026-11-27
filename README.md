@@ -32,14 +32,14 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **Import**: `⌘⇧O` imports several `.md` files at once — copied into the workspace on the desktop, into localStorage in the browser; titles come from the first heading, duplicates get a suffix
 - **Math**: `$E=mc^2$` and `$$...$$` render as KaTeX in WYSIWYG while the source view keeps the original syntax; exports use self-contained MathML
 - **Code highlight**: WYSIWYG code blocks colour keywords, strings, numbers and comments; the source view and HTML exports use the same palette
-- **Extended syntax**: YAML frontmatter as a property card, `[TOC]` expanded into a jumpable outline, heading anchors
+- **Extended syntax**: YAML frontmatter as a property card, `[TOC]` expanded into a jumpable outline, heading anchors, footnotes
 - **Web paste**: content copied from a browser is converted to Markdown on paste (headings, lists, emphasis, links, code, tables, images)
 - **i18n**: English and Simplified Chinese UI, extensible locale packs
 - **Three platforms**: macOS / Windows / Linux
 
 ## Getting Started
 
-> The project is in early development (M6.9 web paste). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, adjustable typesetting and theme, paste-or-drop images stored in the workspace and embedded on export, and batch import of Markdown files.
+> The project is in early development (M6.10 footnotes). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, adjustable typesetting and theme, paste-or-drop images stored in the workspace and embedded on export, and batch import of Markdown files.
 
 Prebuilt installers live on the [Releases](https://github.com/bepersevering/vellink/releases) page. Once installed, new versions arrive in-app: the app checks quietly on launch, and you can force a check with `⌘U` or the version badge in the status bar.
 
@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (328 tests)
+npm test               # run unit tests (336 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -116,6 +116,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.7 | WYSIWYG code highlight | A dependency-free lexer plus PM Decorations colour keywords, strings, numbers and comments in code blocks. Decorations only wrap text nodes, so the document is untouched and blocks stay editable; HTML exports use the same palette. ([notes](./M6.7-代码高亮说明.md), Chinese) |
 | M6.8 | Extended syntax | Top-of-file YAML frontmatter renders as a property card, `[TOC]` expands into a jumpable outline and headings get anchors; source view and Markdown export keep the original syntax, exported HTML carries the same outline. ([checklist](./功能差距清单.md), Chinese) |
 | M6.9 | Web paste to Markdown | Clipboard HTML is walked through a DOM and converted to Markdown before insertion, sharing one undo step in both views; plain text and images keep their existing path. Dependency-free converter at runtime, with script/style dropped and `javascript:` links neutralised. ([notes](./M6.9-网页粘贴转Markdown说明.md), Chinese · [checklist](./功能差距清单.md)) |
+| M6.10 | Footnotes | `[^1]` renders as a superscript jump; `[^1]: text` definitions collect into an end-of-document notes section in exported HTML. Source view and Markdown export keep the original syntax. Lezer does not know footnotes, so recognition happens at the source layer with IR atoms. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

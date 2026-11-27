@@ -398,6 +398,34 @@ svg {
 .doc-body pre .nu {
   color: #b8860b;
 }
+.doc-body .vellink-footnote-ref {
+  color: var(--violet);
+  font-size: 0.75em;
+  margin-left: 1px;
+  cursor: pointer;
+}
+.doc-body .vellink-footnote-def {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-mid);
+  padding: 6px 0 6px 18px;
+  border-left: 2px solid var(--border);
+  margin: 6px 0;
+}
+.doc-body .vellink-footnote-ref {
+  color: var(--violet);
+  font-size: 0.75em;
+  margin-left: 1px;
+  cursor: pointer;
+}
+.doc-body .vellink-footnote-def {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-mid);
+  padding: 6px 0 6px 18px;
+  border-left: 2px solid var(--border);
+  margin: 6px 0;
+}
 .doc-body .vellink-frontmatter,
 .doc-body .vellink-toc {
   margin: 0 0 22px;

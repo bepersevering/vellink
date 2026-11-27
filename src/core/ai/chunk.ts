@@ -31,6 +31,8 @@ function inlineText(nodes: InlineNode[]): string {
           return `[[${node.target}]]`;
         case "inlineMath":
           return `$${node.value}$`;
+        case "footnoteRef":
+          return `[^${node.label}]`;
         case "image":
           return `![${node.alt}](${node.url})`;
         case "link":
@@ -56,6 +58,8 @@ function blockText(node: BlockNode): string {
       return `---\n${node.value}\n---`;
     case "toc":
       return "[TOC]";
+    case "footnoteDef":
+      return `[^${node.label}]: ${node.text}`;
     case "blockquote":
       return node.children.map(blockText).join("\n");
     case "list":

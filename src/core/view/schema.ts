@@ -144,6 +144,46 @@ export const vellinkSchema = new Schema({
       parseDOM: [{ tag: "div[data-toc]" }],
       toDOM: () => ["div", { class: "vellink-toc", "data-toc": "" }, "[TOC]"],
     },
+    footnoteRef: {
+      inline: true,
+      group: "inline",
+      atom: true,
+      attrs: { label: {} },
+      parseDOM: [
+        {
+          tag: "sup[data-footnote]",
+          getAttrs: (dom) => ({ label: (dom as HTMLElement).getAttribute("data-footnote") ?? "" }),
+        },
+      ],
+      toDOM: (node) => [
+        "sup",
+        { class: "vellink-footnote-ref", "data-footnote": String(node.attrs.label ?? "") },
+        `[^${String(node.attrs.label ?? "")}]`,
+      ],
+    },
+    footnoteDef: {
+      group: "block",
+      atom: true,
+      attrs: { label: {}, text: {} },
+      parseDOM: [
+        {
+          tag: "div[data-footnote-def]",
+          getAttrs: (dom) => ({
+            label: (dom as HTMLElement).getAttribute("data-footnote-def") ?? "",
+            text: (dom as HTMLElement).getAttribute("data-text") ?? "",
+          }),
+        },
+      ],
+      toDOM: (node) => [
+        "div",
+        {
+          class: "vellink-footnote-def",
+          "data-footnote-def": String(node.attrs.label ?? ""),
+          "data-text": String(node.attrs.text ?? ""),
+        },
+        `[^${String(node.attrs.label ?? "")}]: ${String(node.attrs.text ?? "")}`,
+      ],
+    },
   },
   marks: {
     strong: { parseDOM: [{ tag: "strong" }, { tag: "b" }], toDOM: () => ["strong", 0] },

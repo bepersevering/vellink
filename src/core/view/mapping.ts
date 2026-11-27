@@ -83,6 +83,11 @@ function inlineToPM(
         spans.set(node, n.span);
         out.push(node);
         break;
+      case "footnoteRef":
+        node = T.footnoteRef.create({ label: n.label });
+        spans.set(node, n.span);
+        out.push(node);
+        break;
       case "inlineMath":
         node = T.inlineMath.create({ value: n.value });
         spans.set(node, n.span);
@@ -152,6 +157,8 @@ function blockToPM(
       return T.frontmatter.create({ value: node.value });
     case "toc":
       return T.toc.create();
+    case "footnoteDef":
+      return T.footnoteDef.create({ label: node.label, text: node.text });
   }
 }
 

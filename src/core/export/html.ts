@@ -100,6 +100,8 @@ function renderInlineNode(node: InlineNode): string {
       return `<img src="${escapeHtml(safeImageUrl(node.url))}" alt="${escapeHtml(node.alt)}" loading="lazy">`;
     case "inlineMath":
       return mathHtml(node.value, false);
+    case "footnoteRef":
+      return `<sup class="fn-ref"><a href="#fn-${escapeHtml(node.label)}">${escapeHtml(node.label)}</a></sup>`;
     default:
       return "";
   }
@@ -153,6 +155,8 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
         .join("");
       return `<dl class="frontmatter">${rows}</dl>`;
     }
+    case "footnoteDef":
+      return ""; // 定义统一收集到文末脚注区
     case "toc": {
       if (!toc.length) return "";
       const items = toc
@@ -228,7 +232,18 @@ export function renderBody(ir: DocumentIR | readonly BlockNode[]): string {
   const toc = blocks
     .filter((b): b is Extract<BlockNode, { type: "heading" }> => b.type === "heading")
     .map((h) => ({ depth: h.depth, text: inlinePlain(h.children), anchor: headingAnchor(inlinePlain(h.children)) }));
-  return renderBlocks(blocks, toc);
+  const body = renderBlocks(blocks, toc);
+  const defs = blocks.filter(
+    (b): b is Extract<BlockNode, { type: "footnoteDef" }> => b.type === "footnoteDef",
+  );
+  if (!defs.length) return body;
+  const items = defs
+    .map(
+      (d) =>
+        `<li id="fn-${escapeHtml(d.label)}">${escapeHtml(d.label)}. ${escapeHtml(d.text)}</li>`,
+    )
+    .join("\n");
+  return `${body}\n<section class="footnotes"><ol>${items}</ol></section>`;
 }
 
 /** 行内节点的纯文本（用于标题锚点与 TOC 文字）。 */
@@ -320,6 +335,17 @@ __R__ li > ul, __R__ li > ol { margin: 8px 0 0; }
 __R__ li.task { list-style: none; margin-left: -22px; }
 __R__ li.task input { margin-right: 8px; vertical-align: 1px; }
 __R__ li.task > p { display: inline; }
+__R__ .footnotes {
+  margin-top: 48px;
+  padding-top: 18px;
+  border-top: 1px solid #e8e8e4;
+  font-family: ${FONT_UI};
+  font-size: 12px;
+  color: #6a6a66;
+}
+__R__ .footnotes li { margin-bottom: 6px; }
+__R__ .fn-ref a { text-decoration: none; }
+
 __R__ .frontmatter {
   margin: 0 0 28px;
   padding: 14px 18px;

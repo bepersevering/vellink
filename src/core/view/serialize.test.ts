@@ -29,6 +29,8 @@ function inlineFP(n: InlineNode): FP {
       return ["image", n.url, n.alt];
     case "inlineMath":
       return ["math", n.value];
+    case "footnoteRef":
+      return ["ref", n.label];
   }
 }
 function blockFP(n: BlockNode): FP {
@@ -62,6 +64,8 @@ function blockFP(n: BlockNode): FP {
       return ["frontmatter", n.value];
     case "toc":
       return ["toc"];
+    case "footnoteDef":
+      return ["def", n.label, n.text];
   }
 }
 function fp(ir: DocumentIR): FP {
@@ -274,6 +278,15 @@ describe("扩展语法往返", () => {
     const { markdown, ir1, ir2 } = roundtrip(src);
     expect(markdown.startsWith("---\n")).toBe(true);
     expect(markdown).toContain("[TOC]");
+    expect(fp(ir2)).toEqual(fp(ir1));
+  });
+});
+
+describe("脚注往返", () => {
+  it("脚注引用与定义往返后语义不变", () => {
+    const src = "正文[^1]。\n\n[^1]: 说明文字\n";
+    const { markdown, ir1, ir2 } = roundtrip(src);
+    expect(markdown).toContain("[^1]");
     expect(fp(ir2)).toEqual(fp(ir1));
   });
 });

@@ -20,6 +20,10 @@ import type {
 } from "../ir/types";
 import { splitMath, standaloneMathBlock } from "../math";
 import { findFrontmatter } from "../ext-syntax";
+import { findFootnotes, splitFootnoteRefs, type FootnoteRef } from "../footnote";
+
+/** 当前解析中的脚注引用；parseMarkdown 入口设置，同步解析无并发。 */
+let currentFootnoteRefs: FootnoteRef[] = [];
 
 /** 开启 GFM：表格 / 任务列表 / 删除线 / 自动链接。注意 GFM 本身是数组，直接传入。 */
 export const mdParser = lezerParser.configure(GFM);
@@ -88,6 +92,8 @@ function collectOldIds(ir: DocumentIR | undefined): Map<string, string[]> {
       case "inlineCode":
       case "inlineMath":
         return fingerprint(n.type, n.value);
+      case "footnoteRef":
+        return fingerprint(n.type, n.label);
       case "wikiLink":
         return fingerprint(n.type, n.target);
       case "image":
@@ -122,6 +128,8 @@ function collectOldIds(ir: DocumentIR | undefined): Map<string, string[]> {
         return fingerprint(n.type, (n.type === "code" ? n.lang ?? "" : "") + n.value);
       case "toc":
         return fingerprint(n.type, "");
+      case "footnoteDef":
+        return fingerprint(n.type, n.label + n.text);
       case "thematicBreak":
         return fingerprint(n.type, "");
       case "heading":
@@ -149,7 +157,8 @@ function isBlock(n: BlockNode | InlineNode): n is BlockNode {
     n.type === "thematicBreak" ||
     n.type === "mathBlock" ||
     n.type === "frontmatter" ||
-    n.type === "toc"
+    n.type === "toc" ||
+    n.type === "footnoteDef"
   );
 }
 
@@ -219,12 +228,23 @@ function parseInline(
     // 块级 `$$...$$` 在 mapBlock 里优先处理；行内场景下也当 atom。
     for (const chunk of splitMath(source, from, to)) {
       if (chunk.kind === "text") {
-        out.push({
-          type: "text",
-          id: ids.next(fingerprint("text", chunk.value)),
-          span: { start: chunk.start, end: chunk.end },
-          value: chunk.value,
-        });
+        for (const piece of splitFootnoteRefs(source, chunk.start, chunk.end, currentFootnoteRefs)) {
+          if (piece.kind === "text") {
+            out.push({
+              type: "text",
+              id: ids.next(fingerprint("text", piece.value)),
+              span: { start: piece.start, end: piece.end },
+              value: piece.value,
+            });
+          } else {
+            out.push({
+              type: "footnoteRef",
+              id: ids.next(fingerprint("footnoteRef", piece.label)),
+              span: { start: piece.start, end: piece.end },
+              label: piece.label,
+            });
+          }
+        }
       } else {
         out.push({
           type: "inlineMath",
@@ -288,6 +308,19 @@ function mapInline(node: SyntaxNode, source: string, ids: IdAllocator): InlineNo
     const kids = childrenOf(node);
     const urlNode = kids.find((c) => c.name === "URL");
     const raw = textOf(node, source);
+
+    // 脚注引用：Lezer 把 `[^1]` 的内层当 Link，连同外层方括号识别
+    if (name === "Link" && !urlNode) {
+      const fm = /^\[\^([\w\u4e00-\u9fff-]+)\]$/.exec(raw);
+      if (fm) {
+        return {
+          type: "footnoteRef",
+          id: ids.next(fingerprint("footnoteRef", fm[1])),
+          span,
+          label: fm[1],
+        };
+      }
+    }
 
     // [[双链]]：Lezer 只把内层 [双链] 当 Link（外层括号是纯文本），
     // 因此检查节点前后各一个字符是否构成额外的 [[ ]]。
@@ -362,6 +395,21 @@ function mapBlock(node: SyntaxNode, source: string, ids: IdAllocator): BlockNode
       depth,
       children: kids,
     };
+  }
+
+  // 脚注定义 `[^1]: 内容`：Lezer 产出 LinkReference 节点
+  if (name === "LinkReference") {
+    const raw = textOf(node, source);
+    const m = /^\[\^([\w\u4e00-\u9fff-]+)\]:\s*(.*)$/.exec(raw);
+    if (m) {
+      return {
+        type: "footnoteDef",
+        id: ids.next(fingerprint("footnoteDef", m[1] + m[2])),
+        span,
+        label: m[1],
+        text: m[2].trim(),
+      };
+    }
   }
 
   // 独占一行的 [TOC]：Lezer 当普通段落，截住换成目录占位节点。
@@ -618,6 +666,8 @@ function reuseUnchangedBlocks(
  */
 export function parseMarkdown(input: ParseInput): ParseResult {
   const { source, fragments, changes, previous } = input;
+  const footnotes = findFootnotes(source);
+  currentFootnoteRefs = footnotes.refs;
 
   let tree;
   if (fragments && fragments.length && changes && changes.length) {

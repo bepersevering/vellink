@@ -180,6 +180,8 @@ function inlineToMarkdown(parent: PMNode, w: Writer): void {
     for (const node of span.nodes) {
       if (node.type.name === "hardBreak") {
         w.emit("  \n");
+      } else if (node.type.name === "footnoteRef") {
+        w.emit(`[^${String(node.attrs.label ?? "")}]`);
       } else if (node.type.name === "inlineMath") {
         // 与图片同理：atom 没有 textContent，必须从 attrs 还原 `$...$`
         w.emit(`$${String(node.attrs.value ?? "")}$`);
@@ -279,6 +281,10 @@ function blockToMarkdown(node: PMNode, w: Writer, prefix: string): void {
     case "toc":
       w.prefix(prefix);
       w.emit("[TOC]\n");
+      break;
+    case "footnoteDef":
+      w.prefix(prefix);
+      w.emit(`[^${String(node.attrs.label ?? "")}]: ${String(node.attrs.text ?? "")}\n`);
       break;
 
     case "blockquote": {
