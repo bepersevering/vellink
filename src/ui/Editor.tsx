@@ -18,6 +18,7 @@ import { expandReplacement, findMatches } from "../core/find";
 import { buildPMTextMap, locateInPM } from "../core/find-pm";
 import { isImageType } from "../core/asset";
 import { renderMath } from "../core/view/math-view";
+import { renderExtSyntax } from "../core/view/ext-view";
 import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
@@ -707,6 +708,8 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         // 公式和代码高亮只改 DOM、不改 PM 文档；无条件调用保证外部回灌
         // （fromSourceRef 分支之前）和首次挂载也能着色。两个函数都幂等。
         renderMath(host);
+        if (bridgeRef.current)
+          renderExtSyntax(host, bridgeRef.current.source);
         // 源码输入 / 撤销回灌引发的事务不再反向提交，避免循环
         if (fromSourceRef.current) return;
         // 输入法组合中的中间态：不序列化、不进撤销栈
@@ -716,6 +719,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     });
     viewRef.current = view;
     renderMath(host);
+    renderExtSyntax(host, bridge.source);
 
     // 外部写入（插件命令、工作区恢复）→ 回灌两个视图
     const unsubscribe = store.subscribe(() => {

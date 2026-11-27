@@ -398,6 +398,24 @@ svg {
 .doc-body pre .nu {
   color: #b8860b;
 }
+.doc-body .vellink-frontmatter,
+.doc-body .vellink-toc {
+  margin: 0 0 22px;
+  padding: 12px 16px;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-mid);
+}
+.doc-body .vellink-frontmatter::before,
+.doc-body .vellink-toc::before {
+  content: attr(data-frontmatter) attr(data-toc);
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
 .doc-body hr {
   border: 0;
   border-top: 1px solid var(--border);

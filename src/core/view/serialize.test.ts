@@ -58,6 +58,10 @@ function blockFP(n: BlockNode): FP {
       return ["hr"];
     case "mathBlock":
       return ["mathBlock", n.value];
+    case "frontmatter":
+      return ["frontmatter", n.value];
+    case "toc":
+      return ["toc"];
   }
 }
 function fp(ir: DocumentIR): FP {
@@ -261,5 +265,15 @@ describe("公式往返", () => {
     transform.insert(2, doc.type.schema.text("X"));
     const { markdown } = serializePM(transform.doc);
     expect(markdown).toContain("$x^2$");
+  });
+});
+
+describe("扩展语法往返", () => {
+  it("frontmatter 与 [TOC] 往返后语义不变", () => {
+    const src = "---\ntitle: 测试\n---\n\n# 标题\n\n[TOC]\n";
+    const { markdown, ir1, ir2 } = roundtrip(src);
+    expect(markdown.startsWith("---\n")).toBe(true);
+    expect(markdown).toContain("[TOC]");
+    expect(fp(ir2)).toEqual(fp(ir1));
   });
 });

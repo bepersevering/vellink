@@ -32,12 +32,13 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **Import**: `⌘⇧O` imports several `.md` files at once — copied into the workspace on the desktop, into localStorage in the browser; titles come from the first heading, duplicates get a suffix
 - **Math**: `$E=mc^2$` and `$$...$$` render as KaTeX in WYSIWYG while the source view keeps the original syntax; exports use self-contained MathML
 - **Code highlight**: WYSIWYG code blocks colour keywords, strings, numbers and comments; the source view and HTML exports use the same palette
+- **Extended syntax**: YAML frontmatter as a property card, `[TOC]` expanded into a jumpable outline, heading anchors
 - **i18n**: English and Simplified Chinese UI, extensible locale packs
 - **Three platforms**: macOS / Windows / Linux
 
 ## Getting Started
 
-> The project is in early development (M6.7 code highlight). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, adjustable typesetting and theme, paste-or-drop images stored in the workspace and embedded on export, and batch import of Markdown files.
+> The project is in early development (M6.8 extended syntax). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, adjustable typesetting and theme, paste-or-drop images stored in the workspace and embedded on export, and batch import of Markdown files.
 
 Prebuilt installers live on the [Releases](https://github.com/bepersevering/vellink/releases) page. Once installed, new versions arrive in-app: the app checks quietly on launch, and you can force a check with `⌘U` or the version badge in the status bar.
 
@@ -48,7 +49,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (307 tests)
+npm test               # run unit tests (319 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -112,6 +113,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.5 | Batch Markdown import | `⌘⇧O`, the file-tree upload button or the command palette. The system dialog accepts multiple `.md` files; the desktop writes them atomically into the workspace, the browser hands them to autosave. Titles come from the first heading rather than the file name (otherwise the title jumps on first edit), duplicates within the batch and against existing notes get a suffix, BOM / CRLF are normalized and non-Markdown files are reported as skipped. ([notes](./M6.5-导入Markdown文件说明.md), Chinese) |
 | M6.6 | Math formulas | `$...$` and `$$...$$` render through KaTeX: IR carries math atom nodes, WYSIWYG swaps placeholder DOM for rendered output, source view and Markdown export keep the original syntax. HTML / PDF exports use MathML (no external assets), not KaTeX HTML with 60 font files. Includes a per-item feature checklist. ([notes](./M6.6-数学公式说明.md), Chinese · [checklist](./功能差距清单.md)) |
 | M6.7 | WYSIWYG code highlight | A dependency-free lexer plus PM Decorations colour keywords, strings, numbers and comments in code blocks. Decorations only wrap text nodes, so the document is untouched and blocks stay editable; HTML exports use the same palette. ([notes](./M6.7-代码高亮说明.md), Chinese) |
+| M6.8 | Extended syntax | Top-of-file YAML frontmatter renders as a property card, `[TOC]` expands into a jumpable outline and headings get anchors; source view and Markdown export keep the original syntax, exported HTML carries the same outline. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

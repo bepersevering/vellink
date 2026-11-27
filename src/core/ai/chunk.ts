@@ -52,6 +52,10 @@ function blockText(node: BlockNode): string {
       return `\`\`\`${node.lang ?? ""}\n${node.value}\n\`\`\``;
     case "mathBlock":
       return `$$${node.value}$$`;
+    case "frontmatter":
+      return `---\n${node.value}\n---`;
+    case "toc":
+      return "[TOC]";
     case "blockquote":
       return node.children.map(blockText).join("\n");
     case "list":

@@ -7,6 +7,7 @@
  * 光标映射的难点正是这套"标记字符 ↔ 节点/mark 边界"的坐标换算。
  */
 import { Schema, type MarkType, type NodeType } from "prosemirror-model";
+import { headingAnchor } from "../ext-syntax";
 
 export const vellinkSchema = new Schema({
   nodes: {
@@ -17,7 +18,7 @@ export const vellinkSchema = new Schema({
       group: "block",
       attrs: { level: { default: 1 } },
       parseDOM: [{ tag: "h1", attrs: { level: 1 } }, { tag: "h2", attrs: { level: 2 } }, { tag: "h3", attrs: { level: 3 } }],
-      toDOM: (node) => [`h${node.attrs.level}`, 0],
+      toDOM: (node) => [`h${node.attrs.level}`, { id: headingAnchor(node.textContent) }, 0],
     },
     blockquote: { content: "block+", group: "block", parseDOM: [{ tag: "blockquote" }], toDOM: () => ["blockquote", 0] },
     bulletList: { content: "listItem+", group: "block", parseDOM: [{ tag: "ul" }], toDOM: () => ["ul", 0] },
@@ -120,6 +121,28 @@ export const vellinkSchema = new Schema({
         { class: "vellink-mathblock", "data-math-block": String(node.attrs.value ?? "") },
         `$$${String(node.attrs.value ?? "")}$$`,
       ],
+    },
+    frontmatter: {
+      group: "block",
+      atom: true,
+      attrs: { value: {} },
+      parseDOM: [
+        {
+          tag: "div[data-frontmatter]",
+          getAttrs: (dom) => ({ value: (dom as HTMLElement).getAttribute("data-frontmatter") ?? "" }),
+        },
+      ],
+      toDOM: (node) => [
+        "div",
+        { class: "vellink-frontmatter", "data-frontmatter": String(node.attrs.value ?? "") },
+        "文档属性",
+      ],
+    },
+    toc: {
+      group: "block",
+      atom: true,
+      parseDOM: [{ tag: "div[data-toc]" }],
+      toDOM: () => ["div", { class: "vellink-toc", "data-toc": "" }, "[TOC]"],
     },
   },
   marks: {

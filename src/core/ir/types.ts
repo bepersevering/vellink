@@ -76,6 +76,17 @@ export interface MathBlockNode extends NodeBase {
   value: string;
 }
 
+/** YAML frontmatter：文档顶部的 `--- ... ---`，不参与正文排版。 */
+export interface FrontmatterNode extends NodeBase {
+  type: "frontmatter";
+  value: string;
+}
+
+/** `[TOC]` 占位符：渲染时展开为标题目录，源码里保持占位符。 */
+export interface TocNode extends NodeBase {
+  type: "toc";
+}
+
 export type InlineNode =
   | TextNode
   | EmphasisNode
@@ -151,7 +162,9 @@ export type BlockNode =
   | ListNode
   | TableNode
   | ThematicBreakNode
-  | MathBlockNode;
+  | MathBlockNode
+  | FrontmatterNode
+  | TocNode;
 
 /** 完整文档 IR：块节点树 + 源文本快照 + 版本。 */
 export interface DocumentIR {

@@ -136,8 +136,8 @@ describe("HTML 导出", () => {
 
   it("标题、粗体、行内代码、链接都成标签", () => {
     const html = htmlOf(SAMPLE);
-    expect(html).toContain("<h1>标题</h1>");
-    expect(html).toContain("<h2>小标题</h2>");
+    expect(html).toContain('<h1 id="标题">标题</h1>');
+    expect(html).toContain('<h2 id="小标题">小标题</h2>');
     expect(html).toContain("<strong>粗体</strong>");
     expect(html).toContain("<code>行内代码</code>");
     expect(html).toContain('<a href="https://example.com" title="说明" rel="noopener">链接</a>');
@@ -242,7 +242,7 @@ describe("PDF 载荷", () => {
     const payload = buildExport({ format: "pdf", title: "标题", source: SAMPLE });
     expect(payload.extension).toBe("pdf");
     expect(payload.fileName).toBe("标题.pdf");
-    expect(payload.contents).toContain("<h1>标题</h1>");
+    expect(payload.contents).toContain('<h1 id="标题">标题</h1>');
     expect(payload.contents).not.toContain("<html");
     expect(payload.contents).not.toContain("<style");
   });

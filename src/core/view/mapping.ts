@@ -148,6 +148,10 @@ function blockToPM(
       return T.horizontalRule.create();
     case "mathBlock":
       return T.mathBlock.create({ value: node.value });
+    case "frontmatter":
+      return T.frontmatter.create({ value: node.value });
+    case "toc":
+      return T.toc.create();
   }
 }
 

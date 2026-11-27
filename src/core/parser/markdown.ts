@@ -19,6 +19,7 @@ import type {
   SourceSpan,
 } from "../ir/types";
 import { splitMath, standaloneMathBlock } from "../math";
+import { findFrontmatter } from "../ext-syntax";
 
 /** 开启 GFM：表格 / 任务列表 / 删除线 / 自动链接。注意 GFM 本身是数组，直接传入。 */
 export const mdParser = lezerParser.configure(GFM);
@@ -117,7 +118,10 @@ function collectOldIds(ir: DocumentIR | undefined): Map<string, string[]> {
     switch (n.type) {
       case "code":
       case "mathBlock":
+      case "frontmatter":
         return fingerprint(n.type, (n.type === "code" ? n.lang ?? "" : "") + n.value);
+      case "toc":
+        return fingerprint(n.type, "");
       case "thematicBreak":
         return fingerprint(n.type, "");
       case "heading":
@@ -143,7 +147,9 @@ function isBlock(n: BlockNode | InlineNode): n is BlockNode {
     n.type === "list" ||
     n.type === "table" ||
     n.type === "thematicBreak" ||
-    n.type === "mathBlock"
+    n.type === "mathBlock" ||
+    n.type === "frontmatter" ||
+    n.type === "toc"
   );
 }
 
@@ -355,6 +361,15 @@ function mapBlock(node: SyntaxNode, source: string, ids: IdAllocator): BlockNode
       span,
       depth,
       children: kids,
+    };
+  }
+
+  // 独占一行的 [TOC]：Lezer 当普通段落，截住换成目录占位节点。
+  if (name === "Paragraph" && /^\s*\[TOC\]\s*$/i.test(textOf(node, source))) {
+    return {
+      type: "toc",
+      id: ids.next(fingerprint("toc", "")),
+      span,
     };
   }
 
@@ -622,8 +637,27 @@ export function parseMarkdown(input: ParseInput): ParseResult {
     ids,
   );
 
+  // frontmatter 在 Lezer 里被拆成 thematicBreak + 若干段落，用纯函数
+  // 精确切出后合成一个块；其余块的 span 不变，不影响增量映射。
+  const fm = findFrontmatter(source);
+  let finalChildren = children;
+  if (fm) {
+    const fmNode: BlockNode = {
+      type: "frontmatter",
+      id: ids.next(fingerprint("frontmatter", fm.yaml)),
+      span: { start: fm.start, end: fm.end },
+      value: fm.yaml,
+    };
+    finalChildren = [
+      fmNode,
+      ...children.filter(
+        (b) => b.span.start >= fm.end || b.span.end <= fm.start,
+      ),
+    ];
+  }
+
   return {
-    ir: { children, source, version: (previous?.version ?? 0) + 1 },
+    ir: { children: finalChildren, source, version: (previous?.version ?? 0) + 1 },
     fragments: TreeFragment.addTree(tree),
   };
 }

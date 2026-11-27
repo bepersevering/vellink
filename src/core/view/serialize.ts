@@ -270,6 +270,16 @@ function blockToMarkdown(node: PMNode, w: Writer, prefix: string): void {
       w.prefix(prefix);
       w.emit(`$$${String(node.attrs.value ?? "")}$$\n`);
       break;
+    case "frontmatter": {
+      w.prefix(prefix);
+      const yaml = String(node.attrs.value ?? "");
+      w.emit(`---\n${yaml}${yaml.endsWith("\n") ? "" : "\n"}---\n`);
+      break;
+    }
+    case "toc":
+      w.prefix(prefix);
+      w.emit("[TOC]\n");
+      break;
 
     case "blockquote": {
       const quotePrefix = prefix + "> ";

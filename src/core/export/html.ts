@@ -12,6 +12,7 @@
 import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
 import katex from "katex";
 import { highlightHtml } from "../view/code-highlight";
+import { headingAnchor } from "../ext-syntax";
 
 /** 公式渲染：MathML 输出是纯标记、零字体依赖，导出的单文件才能真正自包含。 */
 function mathHtml(value: string, displayMode: boolean): string {
@@ -106,14 +107,17 @@ function renderInlineNode(node: InlineNode): string {
 
 /* ------------------------------ 块级 ------------------------------ */
 
-function renderBlocks(nodes: readonly BlockNode[]): string {
+function renderBlocks(
+  nodes: readonly BlockNode[],
+  toc: { depth: number; text: string; anchor: string }[] = [],
+): string {
   return nodes
-    .map(renderBlock)
+    .map((node) => renderBlock(node, toc))
     .filter((html) => html.length > 0)
     .join("\n");
 }
 
-function renderBlock(node: BlockNode): string {
+function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor: string }[] = []): string {
   switch (node.type) {
     case "paragraph": {
       const inner = renderInline(node.children);
@@ -122,7 +126,8 @@ function renderBlock(node: BlockNode): string {
     }
     case "heading": {
       const level = Math.min(6, Math.max(1, node.depth));
-      return `<h${level}>${renderInline(node.children)}</h${level}>`;
+      const anchor = headingAnchor(inlinePlain(node.children));
+      return `<h${level} id="${escapeHtml(anchor)}">${renderInline(node.children)}</h${level}>`;
     }
     case "code": {
       const lang = node.lang ? ` class="language-${escapeHtml(node.lang)}"` : "";
@@ -133,6 +138,31 @@ function renderBlock(node: BlockNode): string {
     }
     case "mathBlock":
       return `<div class="math-block">${mathHtml(node.value, true)}</div>`;
+    case "frontmatter": {
+      // 属性卡：逐行 `key: value` 渲染成定义列表，不解析复杂 YAML 结构
+      const rows = node.value
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#"))
+        .map((line) => {
+          const colon = line.indexOf(":");
+          const key = colon === -1 ? line : line.slice(0, colon).trim();
+          const value = colon === -1 ? "" : line.slice(colon + 1).trim();
+          return `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`;
+        })
+        .join("");
+      return `<dl class="frontmatter">${rows}</dl>`;
+    }
+    case "toc": {
+      if (!toc.length) return "";
+      const items = toc
+        .map(
+          (h) =>
+            `<li class="toc-l${h.depth}"><a href="#${escapeHtml(headingAnchor(h.text))}">${escapeHtml(h.text)}</a></li>`,
+        )
+        .join("\n");
+      return `<nav class="toc"><ul>${items}</ul></nav>`;
+    }
     case "blockquote":
       return `<blockquote>\n${renderBlocks(node.children)}\n</blockquote>`;
     case "list": {
@@ -194,7 +224,22 @@ function renderBlock(node: BlockNode): string {
 /** 只渲染正文片段（打印面板直接塞进 DOM，不需要 <html> 外壳）。 */
 export function renderBody(ir: DocumentIR | readonly BlockNode[]): string {
   const blocks: readonly BlockNode[] = "children" in ir ? ir.children : ir;
-  return renderBlocks(blocks);
+  // [TOC] 要展开整篇的标题，先扫一遍；heading 节点加锚点供站内链接跳转
+  const toc = blocks
+    .filter((b): b is Extract<BlockNode, { type: "heading" }> => b.type === "heading")
+    .map((h) => ({ depth: h.depth, text: inlinePlain(h.children), anchor: headingAnchor(inlinePlain(h.children)) }));
+  return renderBlocks(blocks, toc);
+}
+
+/** 行内节点的纯文本（用于标题锚点与 TOC 文字）。 */
+function inlinePlain(nodes: readonly InlineNode[]): string {
+  let out = "";
+  for (const node of nodes) {
+    if (node.type === "text") out += node.value;
+    else if ("children" in node) out += inlinePlain(node.children as InlineNode[]);
+    else if (node.type === "inlineMath") out += `$${node.value}$`;
+  }
+  return out;
 }
 
 /* ------------------------------ 样式 ------------------------------ */
@@ -275,6 +320,36 @@ __R__ li > ul, __R__ li > ol { margin: 8px 0 0; }
 __R__ li.task { list-style: none; margin-left: -22px; }
 __R__ li.task input { margin-right: 8px; vertical-align: 1px; }
 __R__ li.task > p { display: inline; }
+__R__ .frontmatter {
+  margin: 0 0 28px;
+  padding: 14px 18px;
+  background: #f7f7f5;
+  border: 1px solid #e8e8e4;
+  border-radius: 9px;
+  font-family: ${FONT_UI};
+  font-size: 13px;
+}
+__R__ .frontmatter dt {
+  display: inline-block;
+  min-width: 76px;
+  font-weight: 600;
+  color: #6a6a66;
+}
+__R__ .frontmatter dd { display: inline; margin: 0 0 4px; }
+__R__ .toc {
+  margin: 0 0 28px;
+  padding: 14px 18px;
+  background: #f7f7f5;
+  border: 1px solid #e8e8e4;
+  border-radius: 9px;
+  font-family: ${FONT_UI};
+  font-size: 13px;
+}
+__R__ .toc ul { margin: 0; padding-left: 20px; }
+__R__ .toc li { margin-bottom: 4px; }
+__R__ .toc .toc-l2 { padding-left: 14px; }
+__R__ .toc .toc-l3 { padding-left: 28px; }
+
 __R__ .math-block {
   margin: 24px 0;
   overflow-x: auto;
