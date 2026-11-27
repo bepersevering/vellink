@@ -1652,6 +1652,18 @@ body[data-t="dark"] .find-hit-on {
   stroke-width: 1.9;
   stroke-linecap: round;
 }
+.export-group-label {
+  font-size: 11px;
+  color: var(--text-hint);
+  margin: 12px 0 6px;
+  font-weight: 600;
+}
+.export-group-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .export-formats {
   display: grid;
   gap: 6px;

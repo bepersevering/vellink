@@ -16,8 +16,17 @@ import { renderBody, renderHtmlDocument } from "./html";
 import { renderDocx } from "./docx";
 import { renderEpub } from "./epub";
 import { renderOdt } from "./odt";
+import { renderLatex, renderMediaWiki } from "./text-formats";
 
-export type ExportFormat = "markdown" | "html" | "pdf" | "docx" | "epub" | "odt";
+export type ExportFormat =
+  | "markdown"
+  | "html"
+  | "pdf"
+  | "docx"
+  | "epub"
+  | "odt"
+  | "latex"
+  | "mediawiki";
 
 /** 源码偏移区间（UTF-16），与编辑器内部坐标一致。 */
 export interface ExportRange {
@@ -80,6 +89,8 @@ const FORMAT_META: Record<
     extension: "odt",
     mime: "application/vnd.oasis.opendocument.text",
   },
+  latex: { extension: "tex", mime: "application/x-tex;charset=utf-8" },
+  mediawiki: { extension: "wiki", mime: "text/plain;charset=utf-8" },
 };
 
 /**
@@ -170,6 +181,10 @@ export async function buildExport(request: ExportRequest): Promise<ExportPayload
     contents = await renderEpub(ir, { title, lang: request.lang });
   } else if (request.format === "odt") {
     contents = await renderOdt(ir);
+  } else if (request.format === "latex") {
+    contents = renderLatex(ir, title);
+  } else if (request.format === "mediawiki") {
+    contents = renderMediaWiki(ir);
   } else {
     contents = renderBody(ir);
   }

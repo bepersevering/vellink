@@ -307,6 +307,24 @@ pub fn export_print(app: tauri::AppHandle) -> Result<(), String> {
     window.print().map_err(|err| format!("调起打印失败: {err}"))
 }
 
+/// 导入 Markdown 时读源文件旁边的图片：必须是绝对路径 + 图片扩展名。
+#[tauri::command]
+pub fn fs_read_image(path: String) -> Result<Vec<u8>, String> {
+    let target = PathBuf::from(&path);
+    if !target.is_absolute() {
+        return Err(format!("路径必须是绝对路径: {path}"));
+    }
+    let ext = target
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp") {
+        return Err(format!("只允许读取图片: {path}"));
+    }
+    fs::read(&target).map_err(|err| format!("读取图片失败 {path}: {err}"))
+}
+
 /* ------------------------------ 图片资产 ------------------------------ */
 
 /// 资产文件名只接受「一个普通文件名 + 图片扩展名」。

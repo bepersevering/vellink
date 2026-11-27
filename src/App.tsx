@@ -26,12 +26,14 @@ import {
 import { buildExport, clampRange, type ExportFormat } from "./core/export";
 import { planImports, titleFromFileName } from "./core/import-docs";
 import { buildTable } from "./core/table-insert";
+import { findRelativeImages, rewriteImagePaths } from "./core/import-images";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
 import {
   ASSET_DIR,
   MAX_IMAGE_BYTES,
   assetName,
+  assetRelativePath,
   dataUriOf,
   imageMarkdown,
   inlineLocalImages,
@@ -506,15 +508,34 @@ export default function App() {
 
       for (const item of plan.items) {
         if (files) {
-          // 路径按原文件名推导，不用 H1 标题：标题里的符号 / 中文交给
-          // 文件名 slug 逻辑处理，避免把 H1 原样塞进磁盘名。
+          // 相对路径图片：从源文件所在目录搬到工作区的 .vellink-assets/，
+          // 再把引用改写成新路径。浏览器端没有源目录，跳过这一步。
+          let text = item.text;
+          const refs = findRelativeImages(text);
+          if (refs.length && item.path && files.root) {
+            const sourceDir = item.path.slice(0, item.path.lastIndexOf("/"));
+            text = await rewriteImagePathsAsync(text, refs, async (ref) => {
+              try {
+                const bytes = new Uint8Array(
+                  await desktopAssets.readImage(`${sourceDir}/${ref.path.replace(/^\.\//, "")}`),
+                );
+                const mime = mimeFromAssetPath(ref.fileName);
+                const name = assetName(ref.fileName, mime ?? "image/png", bytes);
+                if (!name || bytes.length > MAX_IMAGE_BYTES) return null;
+                await desktopAssets.write(files.root, name, bytes);
+                return assetRelativePath(name);
+              } catch {
+                return null;
+              }
+            });
+          }
+
           const path = await files.newPath(
             titleFromFileName(item.sourceName, t("doc.untitled")),
           );
-          await desktopFs.write(path, item.text);
-          // 自己写的文件不该被监听器当成外部改动再读一遍
+          await desktopFs.write(path, text);
           detectorRef.current?.markOwn(path);
-          entries.push({ title: item.title, source: item.text, id: path, saved: true });
+          entries.push({ title: item.title, source: text, id: path, saved: true });
         } else {
           entries.push({ title: item.title, source: item.text });
         }
@@ -535,6 +556,23 @@ export default function App() {
       showToast(t("toast.importFailed", { message: errorMessage(error) }));
     }
   }, [showToast]);
+
+  /** 导入图片搬运的异步包装：逐个解析目标路径，再一次性重写源码。 */
+  const rewriteImagePathsAsync = useCallback(
+    async (
+      source: string,
+      refs: ReturnType<typeof findRelativeImages>,
+      targetFor: (ref: (typeof refs)[number]) => Promise<string | null>,
+    ) => {
+      const targets = new Map<number, string>();
+      for (const ref of refs) {
+        const target = await targetFor(ref);
+        if (target) targets.set(ref.from, target);
+      }
+      return rewriteImagePaths(source, refs, (ref) => targets.get(ref.from) ?? null);
+    },
+    [],
+  );
 
   /** 浏览器端拖拽重排文档；桌面端顺序由磁盘决定，不提供此能力。 */
   const reorderDocs = useCallback((ids: string[]) => {

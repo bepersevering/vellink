@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测（398 项）
+npm test               # 运行核心单测（408 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -130,6 +130,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 | M6.21 | 表格行列移动 | 光标在表格里按 Alt + 方向键移动当前行 / 列；Markdown 没有列宽概念，所以「列宽调整」落成可持久化的列顺序调整，序列化后就是新的 Markdown 表格。[清单](./功能差距清单.md) |
 | M6.22 | DOCX 导出 | `⌘E` 选 Word 文档，导出可编辑 `.docx`：标题 / 粗斜体 / 列表 / 表格 / 代码块 / 图片都映射为 WordprocessingML。零依赖最小 ZIP 写出器（store 模式 + CRC32），桌面原子写、浏览器下载。[清单](./功能差距清单.md) |
 | M6.23 | EPUB / ODT 导出 | `⌘E` 再添 EPUB 3 与 OpenDocument 文本：复用 DOCX 的零依赖 ZIP 写出器，EPUB 含 mimetype / OPF / nav / 正文，ODT 按 ODF 元素映射标题 / 列表 / 表格 / 样式。[清单](./功能差距清单.md) |
+| M6.24 | 导出格式补全与图片搬运 | `⌘E` 共 8 种格式，按「文档交换 / 发布 / 归档」分组；新增 LaTeX（ctex）与 MediaWiki 源码导出；导入 Markdown 时把相对路径图片从源目录搬进 `.vellink-assets/` 并改写引用。PDF 书签经评估不做（打印面板路线无法生成，自建引擎成本过高）。[清单](./功能差距清单.md) |
 | M6 | 10 人试用打磨 → 公开发布 | 进行中 |
 
 ## 设计原则
