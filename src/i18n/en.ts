@@ -219,6 +219,11 @@ export const en: Record<string, string> = {
   "export.done": "Exported · {name}",
   "export.failed": "Export failed: {message}",
   "export.noDoc": "no document is open",
+  "drawer.importDocs": "Import Markdown files (⌘⇧O)",
+  "cmd.importDocs": "Import Markdown files",
+  "toast.imported": "Imported {count} document(s){skipped:, skipped {skipped} non-Markdown file(s)}",
+  "toast.importFailed": "Import failed: {message}",
+  "toast.importBadFile": "the selected files are not valid Markdown",
   // Settings
   "settings.title": "Settings",
   "settings.sub": "Changes apply as you make them",

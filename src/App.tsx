@@ -13,6 +13,7 @@ import {
   isDesktop,
   onFsChanged,
   pickFolder,
+  pickMarkdownFiles,
 } from "./core/desktop/bridge";
 import type { FileWorkspaceBackend } from "./core/workspace-fs";
 import { FileChangeDetector } from "./core/file-changes";
@@ -23,6 +24,7 @@ import {
   type WorkspaceBackend,
 } from "./core/workspace-storage";
 import { buildExport, clampRange, type ExportFormat } from "./core/export";
+import { planImports, titleFromFileName } from "./core/import-docs";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
 import {
@@ -467,6 +469,62 @@ export default function App() {
     showToast(t("toast.docCreated"));
   }, [showToast]);
 
+  /**
+   * 导入 Markdown 文件。
+   *
+   * 桌面端先把每篇写进当前工作区目录（拿 newPath 避开重名），再作为「已保存」
+   * 的文档加入工作区；浏览器端没有真实文件，交给自动保存写 localStorage。
+   * 选进来的文件已经自带完整 Markdown，不再套 newDocumentSource 的标题模板。
+   */
+  const importDocs = useCallback(async () => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    try {
+      const picked = await pickMarkdownFiles();
+      if (picked.length === 0) return;
+
+      const plan = planImports(
+        picked,
+        workspace.summaries().map((doc) => doc.title),
+        t("doc.untitled"),
+      );
+      const files = filesRef.current;
+      // 写盘会触发监听；本批来源是用户主动导入，作废可能正在跑的陈旧扫描
+      if (files) mutationRef.current += 1;
+      const entries: { title: string; source: string; id?: string; saved?: boolean }[] = [];
+
+      for (const item of plan.items) {
+        if (files) {
+          // 路径按原文件名推导，不用 H1 标题：标题里的符号 / 中文交给
+          // 文件名 slug 逻辑处理，避免把 H1 原样塞进磁盘名。
+          const path = await files.newPath(
+            titleFromFileName(item.sourceName, t("doc.untitled")),
+          );
+          await desktopFs.write(path, item.text);
+          // 自己写的文件不该被监听器当成外部改动再读一遍
+          detectorRef.current?.markOwn(path);
+          entries.push({ title: item.title, source: item.text, id: path, saved: true });
+        } else {
+          entries.push({ title: item.title, source: item.text });
+        }
+      }
+
+      const added = workspace.importDocs(entries);
+      if (added.length > 0) {
+        showToast(
+          t("toast.imported", {
+            count: added.length,
+            skipped: plan.skipped.length,
+          }),
+        );
+      } else {
+        showToast(t("toast.importFailed", { message: t("toast.importBadFile") }));
+      }
+    } catch (error) {
+      showToast(t("toast.importFailed", { message: errorMessage(error) }));
+    }
+  }, [showToast]);
+
   /** 切换工作区目录：写盘后整页重载，工作区按新目录重建。 */
   const switchFolder = useCallback(async () => {
     if (!isDesktop()) {
@@ -821,7 +879,8 @@ export default function App() {
         void createDoc();
       } else if (key === "o") {
         e.preventDefault();
-        void switchFolder();
+        if (e.shiftKey) void importDocs();
+        else void switchFolder();
       } else if (key === "s") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -855,7 +914,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showToast, locale, createDoc, saveNow, switchFolder, openExport, updater]);
+  }, [showToast, locale, createDoc, importDocs, saveNow, switchFolder, openExport, updater]);
 
   const changeMode = (m: AppMode) => {
     setMode(m);
@@ -909,6 +968,9 @@ export default function App() {
         break;
       case "new-doc":
         void createDoc();
+        break;
+      case "import":
+        void importDocs();
         break;
       case "save":
         void saveNow();
@@ -997,6 +1059,7 @@ export default function App() {
           collapsed={mode === "focus" || !leftOpen}
           onSelect={selectDoc}
           onNew={() => void createDoc()}
+          onImport={() => void importDocs()}
           onDelete={deleteDoc}
           workspaceDir={storage.root}
           onOpenFolder={() => void switchFolder()}

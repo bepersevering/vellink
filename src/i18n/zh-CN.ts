@@ -219,6 +219,11 @@ export const zhCN: Record<string, string> = {
   "export.done": "已导出 · {name}",
   "export.failed": "导出失败：{message}",
   "export.noDoc": "当前没有打开的文档",
+  "drawer.importDocs": "导入 Markdown 文件（⌘⇧O）",
+  "cmd.importDocs": "导入 Markdown 文件",
+  "toast.imported": "已导入 {count} 篇文档{skipped:，跳过 {skipped} 个非 Markdown 文件}",
+  "toast.importFailed": "导入失败：{message}",
+  "toast.importBadFile": "选中的文件不是有效的 Markdown",
   // 设置
   "settings.title": "设置",
   "settings.sub": "改完立即生效",

@@ -18,6 +18,7 @@ interface Props {
   collapsed: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onImport: () => void;
   onDelete: (id: string) => void | Promise<void>;
   /** 桌面端的工作区目录；浏览器版为 null（不显示目录条）。 */
   workspaceDir?: string | null;
@@ -44,6 +45,7 @@ export function FileDrawer({
   collapsed,
   onSelect,
   onNew,
+  onImport,
   onDelete,
   workspaceDir = null,
   onOpenFolder,
@@ -78,6 +80,14 @@ export function FileDrawer({
     >
       <div className="drawer-head">
         <span className="drawer-title">{t("drawer.files")}</span>
+        <button
+          className="icon-btn"
+          title={t("drawer.importDocs")}
+          aria-label={t("drawer.importDocs")}
+          onClick={onImport}
+        >
+          <Icon name="up" />
+        </button>
         <button
           className="icon-btn"
           title={t("drawer.newDoc")}

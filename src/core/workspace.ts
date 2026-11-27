@@ -239,6 +239,48 @@ export class Workspace {
     return doc;
   }
 
+  /**
+   * 批量导入文档：源码由文件提供，不走 `newDocumentSource`。
+   *
+   * `saved: true` 表示内容已经落盘（桌面端先写文件再建文档），不标脏；
+   * 否则留脏让现有自动保存流程写盘（浏览器端写 localStorage）。
+   * 一次通知即可，避免多个文件导致多次重渲染和多次自动保存排队。
+   */
+  importDocs(
+    entries: { title: string; source: string; id?: string; saved?: boolean }[],
+  ): WorkspaceDoc[] {
+    const added: WorkspaceDoc[] = [];
+    const timestamp = this.now();
+    const taken = new Set(this.docs.map((doc) => doc.title));
+
+    for (const entry of entries) {
+      const base = entry.title.trim() || this.fallbackTitle;
+      let title = base;
+      let suffix = 2;
+      while (taken.has(title)) title = `${base} ${suffix++}`;
+      taken.add(title);
+
+      const doc: WorkspaceDoc = {
+        id: entry.id ?? this.idFactory(title),
+        title,
+        source: entry.source,
+        savedSource: entry.saved ? entry.source : "",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      this.docs.unshift(doc);
+      this.uids.set(doc.id, ++this.uidSeq);
+      added.push(doc);
+    }
+
+    if (added.length > 0) {
+      // 第一批里第一个置顶显示：它在列表最上面，用户一眼能看到导入结果
+      this.active = added[0].id;
+      this.notify();
+    }
+    return added;
+  }
+
   /** 删除文档：始终保留至少一篇，删掉当前文档时自动切到第一篇。 */
   remove(id: string): boolean {
     if (this.docs.length <= 1) return false;

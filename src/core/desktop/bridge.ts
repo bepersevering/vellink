@@ -94,3 +94,79 @@ export async function pickFolder(): Promise<string | null> {
   const picked = await open({ directory: true, multiple: false });
   return typeof picked === "string" && picked.length > 0 ? picked : null;
 }
+
+export interface PickedFile {
+  name: string;
+  path?: string;
+  text: string;
+}
+
+/**
+ * 选一个或多个 Markdown 文件。
+ *
+ * 桌面端经系统对话框拿到绝对路径再用 fs_read_markdown 读（顺带做 BOM/CRLF
+ * 归一）；网页端用隐藏 input 读 File.text()。两条路都返回同样的结构，
+ * 调用方不用分辨环境。
+ */
+export async function pickMarkdownFiles(): Promise<PickedFile[]> {
+  if (isDesktop()) {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({
+      multiple: true,
+      filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+    });
+    const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
+    const out: PickedFile[] = [];
+    for (const path of paths) {
+      try {
+        out.push({
+          name: path,
+          path,
+          text: await desktopFs.read(path),
+        });
+      } catch {
+        // 单个文件读失败不该拖垮整批；交给 planImports 记为 skipped
+        out.push({ name: path, path, text: "" });
+      }
+    }
+    return out;
+  }
+  return pickFilesInBrowser();
+}
+
+/** 浏览器端文件选择：动态建 input，选完即移除，不留 DOM 垃圾。 */
+function pickFilesInBrowser(): Promise<PickedFile[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.accept = ".md,.markdown,text/markdown";
+    input.addEventListener("change", async () => {
+      const files = Array.from(input.files ?? []);
+      const out: PickedFile[] = [];
+      for (const file of files) {
+        try {
+          out.push({ name: file.name, text: await file.text() });
+        } catch {
+          out.push({ name: file.name, text: "" });
+        }
+      }
+      input.remove();
+      resolve(out);
+    });
+    // 用户取消对话框时 change 不触发：监听 focus 兜底，稍后清理
+    window.addEventListener(
+      "focus",
+      () => {
+        window.setTimeout(() => {
+          if (input.isConnected) {
+            input.remove();
+            resolve([]);
+          }
+        }, 1000);
+      },
+      { once: true },
+    );
+    input.click();
+  });
+}
