@@ -30,7 +30,17 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
-import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import { emojiCandidates } from "../core/emoji";
+import { autocompletion, closeBrackets, closeBracketsKeymap, type CompletionContext } from "@codemirror/autocomplete";
+
+/** 输入 :smi 时弹 Emoji 候选。 */
+const emojiCompletion = (context: CompletionContext) => {
+  const match = context.matchBefore(/:[a-z0-9_\u4e00-\u9fff]*/);
+  if (!match || (match.from === match.to && !context.explicit)) return null;
+  const options = emojiCandidates(match.text.slice(1));
+  if (!options.length) return null;
+  return { from: match.from, options, validFor: /^[a-z0-9_\u4e00-\u9fff]*$/ };
+};
 
 export interface SourceEditorHandle {
   /** 外部（PM 编辑 / 撤销）更新源码时同步 CM 文档，不回写 bridge。 */
@@ -213,6 +223,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
           bracketMatching(),
           // 输入 ( [ { " ' 时自动补右半边；选中文本时包裹而不是覆盖
           closeBrackets(),
+          autocompletion({ override: [emojiCompletion] }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           markdown(),
           findHighlight,

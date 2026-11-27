@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (340 tests)
+npm test               # run unit tests (347 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -118,6 +118,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.9 | Web paste to Markdown | Clipboard HTML is walked through a DOM and converted to Markdown before insertion, sharing one undo step in both views; plain text and images keep their existing path. Dependency-free converter at runtime, with script/style dropped and `javascript:` links neutralised. ([notes](./M6.9-网页粘贴转Markdown说明.md), Chinese · [checklist](./功能差距清单.md)) |
 | M6.10 | Footnotes | `[^1]` renders as a superscript jump; `[^1]: text` definitions collect into an end-of-document notes section in exported HTML. Source view and Markdown export keep the original syntax. Lezer does not know footnotes, so recognition happens at the source layer with IR atoms. ([checklist](./功能差距清单.md), Chinese) |
 | M6.11 | Symbol auto-pair | Source view uses CodeMirror `closeBrackets` for quotes and brackets; WYSIWYG uses a PM plugin so typing `*`, `_` or a backtick over a selection applies bold / italic / inline code. ([checklist](./功能差距清单.md), Chinese) |
+| M6.12 | Emoji completion | Source view pops a candidate list on `:smi`; WYSIWYG turns `:smile:` into 😄 as you type. Built-in table of common shortcodes (including Chinese), unknown ones stay as text. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

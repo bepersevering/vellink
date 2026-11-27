@@ -22,6 +22,7 @@ import { renderExtSyntax } from "../core/view/ext-view";
 import { clipboardHtml, htmlToMarkdown } from "../core/paste-html";
 import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { createAutoPairPlugin } from "../core/view/auto-pair";
+import { createEmojiPlugin } from "../core/view/emoji-plugin";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -723,6 +724,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         findPlugin,
         createHighlightPlugin(),
         createAutoPairPlugin(),
+        createEmojiPlugin(),
       ],
     });
     const view = new EditorView(host, {

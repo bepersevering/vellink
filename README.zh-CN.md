@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测（340 项）
+npm test               # 运行核心单测（347 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -118,6 +118,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 | M6.9 | 网页粘贴转 Markdown | 剪贴板带 `text/html` 时按 DOM 递归转成 Markdown 再插入，两种视图共用一次撤销；纯文本与图片走原路径。零运行时依赖的转换器，script/style 丢弃、`javascript:` 链接降级。附逐条功能清单。[说明](./M6.9-网页粘贴转Markdown说明.md) · [清单](./功能差距清单.md) |
 | M6.10 | 脚注 | `[^1]` 行内引用渲染为上标跳转，`[^1]: 内容` 定义汇总到导出 HTML 的文末脚注区；源码视图与 Markdown 导出保留原始语法。Lezer 不认识脚注，靠源码层识别 + IR atom 实现。[清单](./功能差距清单.md) |
 | M6.11 | 符号自动配对 | 源码视图接 CodeMirror `closeBrackets`（括号 / 引号自动补齐、选中包裹），所见即所得视图用 PM 插件在选中文本时输入 `*` / `_` / 反引号直接套粗体 / 斜体 / 行内代码。[清单](./功能差距清单.md) |
+| M6.12 | Emoji 补全 | 源码视图输入 `:smi` 弹候选下拉，WYSIWYG 输入 `:smile:` 自动换成 😄；内置常用短码表（含中文短码），未知短码保持原样。[清单](./功能差距清单.md) |
 | M6 | 10 人试用打磨 → 公开发布 | 进行中 |
 
 ## 设计原则
