@@ -10,6 +10,22 @@
  */
 
 import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
+import katex from "katex";
+
+/** 公式渲染：MathML 输出是纯标记、零字体依赖，导出的单文件才能真正自包含。 */
+function mathHtml(value: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(value, {
+      throwOnError: false,
+      output: "mathml",
+      displayMode,
+      strict: "ignore",
+    });
+  } catch {
+    // 极端非法输入降级为可读源码，绝不因为公式把整篇导出搞崩
+    return `<code>${escapeHtml(value)}</code>`;
+  }
+}
 
 const FONT_DOC =
   'Georgia, "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif';
@@ -80,6 +96,8 @@ function renderInlineNode(node: InlineNode): string {
       return `<span class="wl">${escapeHtml(node.target)}</span>`;
     case "image":
       return `<img src="${escapeHtml(safeImageUrl(node.url))}" alt="${escapeHtml(node.alt)}" loading="lazy">`;
+    case "inlineMath":
+      return mathHtml(node.value, false);
     default:
       return "";
   }
@@ -109,6 +127,8 @@ function renderBlock(node: BlockNode): string {
       const lang = node.lang ? ` class="language-${escapeHtml(node.lang)}"` : "";
       return `<pre><code${lang}>${escapeHtml(node.value)}</code></pre>`;
     }
+    case "mathBlock":
+      return `<div class="math-block">${mathHtml(node.value, true)}</div>`;
     case "blockquote":
       return `<blockquote>\n${renderBlocks(node.children)}\n</blockquote>`;
     case "list": {
@@ -247,6 +267,12 @@ __R__ li > ul, __R__ li > ol { margin: 8px 0 0; }
 __R__ li.task { list-style: none; margin-left: -22px; }
 __R__ li.task input { margin-right: 8px; vertical-align: 1px; }
 __R__ li.task > p { display: inline; }
+__R__ .math-block {
+  margin: 24px 0;
+  overflow-x: auto;
+}
+__R__ .katex-display { margin: 0; }
+
 __R__ table {
   border-collapse: collapse;
   width: 100%;

@@ -27,6 +27,8 @@ function inlineFP(n: InlineNode): FP {
       return ["wiki", n.target];
     case "image":
       return ["image", n.url, n.alt];
+    case "inlineMath":
+      return ["math", n.value];
   }
 }
 function blockFP(n: BlockNode): FP {
@@ -54,6 +56,8 @@ function blockFP(n: BlockNode): FP {
       ];
     case "thematicBreak":
       return ["hr"];
+    case "mathBlock":
+      return ["mathBlock", n.value];
   }
 }
 function fp(ir: DocumentIR): FP {
@@ -238,5 +242,24 @@ describe("序列化锚点质量", () => {
     expect(markdown.slice(first.sourceFrom, first.sourceFrom + first.length).length).toBe(
       first.length,
     );
+  });
+});
+
+describe("公式往返", () => {
+  it("行内与块级公式往返后语义不变", () => {
+    const src = "# 标题\n\n公式 $x^2$ 在句中。\n\n$$\\frac{a}{b}$$\n";
+    const { markdown } = roundtrip(src);
+    expect(markdown).toContain("$x^2$");
+    expect(markdown).toContain("$$\\frac{a}{b}$$");
+  });
+
+  it("编辑别处不吞掉公式（atom 从 attrs 还原）", () => {
+    const src = "# 标题\n\n公式 $x^2$ 在句中。\n";
+    const { doc } = buildPMView(parseMarkdown({ source: src }).ir);
+    const transform = new Transform(doc);
+    // 在标题末尾插入文字：整篇序列化，公式 atom 不能被吞
+    transform.insert(2, doc.type.schema.text("X"));
+    const { markdown } = serializePM(transform.doc);
+    expect(markdown).toContain("$x^2$");
   });
 });

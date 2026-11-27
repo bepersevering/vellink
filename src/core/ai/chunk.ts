@@ -29,6 +29,8 @@ function inlineText(nodes: InlineNode[]): string {
           return node.value;
         case "wikiLink":
           return `[[${node.target}]]`;
+        case "inlineMath":
+          return `$${node.value}$`;
         case "image":
           return `![${node.alt}](${node.url})`;
         case "link":
@@ -48,6 +50,8 @@ function blockText(node: BlockNode): string {
       return inlineText(node.children);
     case "code":
       return `\`\`\`${node.lang ?? ""}\n${node.value}\n\`\`\``;
+    case "mathBlock":
+      return `$$${node.value}$$`;
     case "blockquote":
       return node.children.map(blockText).join("\n");
     case "list":

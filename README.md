@@ -30,12 +30,13 @@ Vellink's answer: **a unified document model (IR) as the kernel, with everything
 - **Settings**: `⌘,` opens a panel for body text size, column width, theme (light / dark / follow system) and autosave interval — applied and saved as you drag, with headings and code blocks scaling along
 - **Images**: paste or drop a screenshot into the workspace's `.vellink-assets/`; both views render it, HTML / PDF exports embed the bytes, Markdown exports keep the relative path
 - **Import**: `⌘⇧O` imports several `.md` files at once — copied into the workspace on the desktop, into localStorage in the browser; titles come from the first heading, duplicates get a suffix
+- **Math**: `$E=mc^2$` and `$$...$$` render as KaTeX in WYSIWYG while the source view keeps the original syntax; exports use self-contained MathML
 - **i18n**: English and Simplified Chinese UI, extensible locale packs
 - **Three platforms**: macOS / Windows / Linux
 
 ## Getting Started
 
-> The project is in early development (M6.5 import). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, adjustable typesetting and theme, paste-or-drop images stored in the workspace and embedded on export, and batch import of Markdown files.
+> The project is in early development (M6.6 math). Currently working: React writing UI with live-synced ProseMirror WYSIWYG / CodeMirror 6 views, a multi-document workspace backed by a real folder of `.md` files on the desktop — the file name follows the title and external edits arrive through a filesystem watcher — an installable plugin system, two official plugins (WebDAV cloud sync, AI knowledge-base Q&A), signed installers for macOS / Windows / Linux that update themselves in place, find & replace across both views, export to Markdown / HTML / PDF for the whole document or a selection, adjustable typesetting and theme, paste-or-drop images stored in the workspace and embedded on export, and batch import of Markdown files.
 
 Prebuilt installers live on the [Releases](https://github.com/bepersevering/vellink/releases) page. Once installed, new versions arrive in-app: the app checks quietly on launch, and you can force a check with `⌘U` or the version badge in the status bar.
 
@@ -46,7 +47,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (281 tests)
+npm test               # run unit tests (293 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -108,6 +109,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.3 | Settings panel | `⌘,`, the title-bar gear or the command palette. Body text 13–22px, column 560–960px, theme light / dark / follow-system (reacts to OS appearance changes at once; an existing `vellink-theme` choice migrates to an explicit one), autosave 0.3–3.0s (in-flight timers reschedule immediately). Everything applies and persists as you change it, and out-of-range values from storage are clamped back. ([notes](./M6.3-设置面板说明.md), Chinese) |
 | M6.4 | Image paste and self-contained export | Screenshots paste or drop straight into `.vellink-assets/` (ASCII slug + content hash, atomic Rust write, extension allowlist) render as a thumbnail in WYSIWYG while the source view keeps the Markdown. Block insertion lands after the current line so a heading is never split, and one undo removes the whole image. HTML / PDF export reads local assets back as data URIs; Markdown keeps relative paths. ([notes](./M6.4-图片粘贴与导出内嵌说明.md), Chinese) |
 | M6.5 | Batch Markdown import | `⌘⇧O`, the file-tree upload button or the command palette. The system dialog accepts multiple `.md` files; the desktop writes them atomically into the workspace, the browser hands them to autosave. Titles come from the first heading rather than the file name (otherwise the title jumps on first edit), duplicates within the batch and against existing notes get a suffix, BOM / CRLF are normalized and non-Markdown files are reported as skipped. ([notes](./M6.5-导入Markdown文件说明.md), Chinese) |
+| M6.6 | Math formulas | `$...$` and `$$...$$` render through KaTeX: IR carries math atom nodes, WYSIWYG swaps placeholder DOM for rendered output, source view and Markdown export keep the original syntax. HTML / PDF exports use MathML (no external assets), not KaTeX HTML with 60 font files. Includes a per-item feature checklist. ([notes](./M6.6-数学公式说明.md), Chinese · [checklist](./功能差距清单.md)) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

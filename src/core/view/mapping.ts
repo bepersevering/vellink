@@ -83,6 +83,11 @@ function inlineToPM(
         spans.set(node, n.span);
         out.push(node);
         break;
+      case "inlineMath":
+        node = T.inlineMath.create({ value: n.value });
+        spans.set(node, n.span);
+        out.push(node);
+        break;
     }
   }
   return out;
@@ -141,6 +146,8 @@ function blockToPM(
       );
     case "thematicBreak":
       return T.horizontalRule.create();
+    case "mathBlock":
+      return T.mathBlock.create({ value: node.value });
   }
 }
 

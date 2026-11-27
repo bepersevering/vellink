@@ -17,6 +17,7 @@ import { ViewBridge } from "../core/view/sync";
 import { expandReplacement, findMatches } from "../core/find";
 import { buildPMTextMap, locateInPM } from "../core/find-pm";
 import { isImageType } from "../core/asset";
+import { renderMath } from "../core/view/math-view";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -700,6 +701,8 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
+        // PM 重绘 DOM 后把公式占位节点换成 KaTeX 输出；幂等，不会重复渲染
+        if (tr.docChanged) renderMath(host);
         // 源码输入 / 撤销回灌引发的事务不再反向提交，避免循环
         if (fromSourceRef.current) return;
         // 输入法组合中的中间态：不序列化、不进撤销栈
@@ -708,6 +711,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       },
     });
     viewRef.current = view;
+    renderMath(host);
 
     // 外部写入（插件命令、工作区恢复）→ 回灌两个视图
     const unsubscribe = store.subscribe(() => {

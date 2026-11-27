@@ -18,6 +18,7 @@ import type {
   InlineNode,
   SourceSpan,
 } from "../ir/types";
+import { splitMath, standaloneMathBlock } from "../math";
 
 /** 开启 GFM：表格 / 任务列表 / 删除线 / 自动链接。注意 GFM 本身是数组，直接传入。 */
 export const mdParser = lezerParser.configure(GFM);
@@ -84,6 +85,7 @@ function collectOldIds(ir: DocumentIR | undefined): Map<string, string[]> {
     switch (n.type) {
       case "text":
       case "inlineCode":
+      case "inlineMath":
         return fingerprint(n.type, n.value);
       case "wikiLink":
         return fingerprint(n.type, n.target);
@@ -114,7 +116,8 @@ function collectOldIds(ir: DocumentIR | undefined): Map<string, string[]> {
     }
     switch (n.type) {
       case "code":
-        return fingerprint(n.type, (n.lang ?? "") + n.value);
+      case "mathBlock":
+        return fingerprint(n.type, (n.type === "code" ? n.lang ?? "" : "") + n.value);
       case "thematicBreak":
         return fingerprint(n.type, "");
       case "heading":
@@ -139,7 +142,8 @@ function isBlock(n: BlockNode | InlineNode): n is BlockNode {
     n.type === "blockquote" ||
     n.type === "list" ||
     n.type === "table" ||
-    n.type === "thematicBreak"
+    n.type === "thematicBreak" ||
+    n.type === "mathBlock"
   );
 }
 
@@ -205,8 +209,25 @@ function parseInline(
     if (out.length === 0 && opts.skipLeadingSpaces)
       while (from < to && source[from] === " ") from++;
     if (to <= from) return;
-    const value = source.slice(from, to);
-    out.push({ type: "text", id: ids.next(fingerprint("text", value)), span: { start: from, end: to }, value });
+    // `$...$` 在 Lezer 里是普通文本，这里按公式切开。
+    // 块级 `$$...$$` 在 mapBlock 里优先处理；行内场景下也当 atom。
+    for (const chunk of splitMath(source, from, to)) {
+      if (chunk.kind === "text") {
+        out.push({
+          type: "text",
+          id: ids.next(fingerprint("text", chunk.value)),
+          span: { start: chunk.start, end: chunk.end },
+          value: chunk.value,
+        });
+      } else {
+        out.push({
+          type: "inlineMath",
+          id: ids.next(fingerprint("inlineMath", chunk.value)),
+          span: { start: chunk.start, end: chunk.end },
+          value: chunk.value,
+        });
+      }
+    }
   };
 
   for (const child of childrenOf(parent)) {
@@ -334,6 +355,17 @@ function mapBlock(node: SyntaxNode, source: string, ids: IdAllocator): BlockNode
       span,
       depth,
       children: kids,
+    };
+  }
+
+  // 独占一段的 `$$...$$`：Lezer 把它当普通段落，这里先截住。
+  const math = name === "Paragraph" ? standaloneMathBlock(source, node.from, node.to) : null;
+  if (math) {
+    return {
+      type: "mathBlock",
+      id: ids.next(fingerprint("mathBlock", math.value)),
+      span: { start: math.start, end: math.end },
+      value: math.value,
     };
   }
 

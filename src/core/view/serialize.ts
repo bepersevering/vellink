@@ -180,6 +180,9 @@ function inlineToMarkdown(parent: PMNode, w: Writer): void {
     for (const node of span.nodes) {
       if (node.type.name === "hardBreak") {
         w.emit("  \n");
+      } else if (node.type.name === "inlineMath") {
+        // 与图片同理：atom 没有 textContent，必须从 attrs 还原 `$...$`
+        w.emit(`$${String(node.attrs.value ?? "")}$`);
       } else if (node.type.name === "image") {
         // atom 没有 textContent，必须从 attrs 还原，否则任何一次编辑都会把图吞掉
         const src = String(node.attrs.src ?? "");
@@ -261,6 +264,11 @@ function blockToMarkdown(node: PMNode, w: Writer, prefix: string): void {
     case "horizontalRule":
       w.prefix(prefix);
       w.emit("---\n");
+      break;
+
+    case "mathBlock":
+      w.prefix(prefix);
+      w.emit(`$$${String(node.attrs.value ?? "")}$$\n`);
       break;
 
     case "blockquote": {

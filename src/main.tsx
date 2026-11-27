@@ -2,6 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { isDesktop } from "./core/desktop/bridge";
+// KaTeX 的 htmlAndMathml 输出靠它的 CSS 把 MathML 层藏起来（只给读屏器），
+// 不引入的话屏幕会把 HTML 层和 MathML 注解叠在一起显示成两遍公式。
+import "katex/dist/katex.min.css";
 import "./styles.css";
 
 /**

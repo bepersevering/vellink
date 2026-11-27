@@ -64,6 +64,18 @@ export interface ImageNode extends NodeBase {
   alt: string;
 }
 
+/** 行内公式 `$...$`：value 不含两侧美元符，渲染时由 KaTeX 出 HTML。 */
+export interface InlineMathNode extends NodeBase {
+  type: "inlineMath";
+  value: string;
+}
+
+/** 块级公式 `$$...$$`：独占一段，value 不含两侧 `$$`。 */
+export interface MathBlockNode extends NodeBase {
+  type: "mathBlock";
+  value: string;
+}
+
 export type InlineNode =
   | TextNode
   | EmphasisNode
@@ -71,7 +83,8 @@ export type InlineNode =
   | InlineCodeNode
   | LinkNode
   | WikiLinkNode
-  | ImageNode;
+  | ImageNode
+  | InlineMathNode;
 
 /* ------------------------------ 块级节点 ------------------------------ */
 
@@ -137,7 +150,8 @@ export type BlockNode =
   | BlockquoteNode
   | ListNode
   | TableNode
-  | ThematicBreakNode;
+  | ThematicBreakNode
+  | MathBlockNode;
 
 /** 完整文档 IR：块节点树 + 源文本快照 + 版本。 */
 export interface DocumentIR {

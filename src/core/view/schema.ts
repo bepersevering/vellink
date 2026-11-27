@@ -85,6 +85,42 @@ export const vellinkSchema = new Schema({
         },
       ],
     },
+    // 公式是 atom：schema 只输出占位 DOM，真正的 KaTeX 渲染在视图层
+    // （core/view/math-view.ts）做。这样 schema 保持纯数据，node 测试
+    // 不需要 DOM，浏览器里又能看到排版好的公式。
+    inlineMath: {
+      inline: true,
+      group: "inline",
+      atom: true,
+      attrs: { value: {} },
+      parseDOM: [
+        {
+          tag: "span[data-math]",
+          getAttrs: (dom) => ({ value: (dom as HTMLElement).getAttribute("data-math") ?? "" }),
+        },
+      ],
+      toDOM: (node) => [
+        "span",
+        { class: "vellink-math", "data-math": String(node.attrs.value ?? "") },
+        `$${String(node.attrs.value ?? "")}$`,
+      ],
+    },
+    mathBlock: {
+      group: "block",
+      atom: true,
+      attrs: { value: {} },
+      parseDOM: [
+        {
+          tag: "div[data-math-block]",
+          getAttrs: (dom) => ({ value: (dom as HTMLElement).getAttribute("data-math-block") ?? "" }),
+        },
+      ],
+      toDOM: (node) => [
+        "div",
+        { class: "vellink-mathblock", "data-math-block": String(node.attrs.value ?? "") },
+        `$$${String(node.attrs.value ?? "")}$$`,
+      ],
+    },
   },
   marks: {
     strong: { parseDOM: [{ tag: "strong" }, { tag: "b" }], toDOM: () => ["strong", 0] },
