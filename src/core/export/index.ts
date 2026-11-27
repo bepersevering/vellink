@@ -14,8 +14,10 @@ import type { DocumentIR } from "../ir/types";
 import { parseMarkdown } from "../parser/markdown";
 import { renderBody, renderHtmlDocument } from "./html";
 import { renderDocx } from "./docx";
+import { renderEpub } from "./epub";
+import { renderOdt } from "./odt";
 
-export type ExportFormat = "markdown" | "html" | "pdf" | "docx";
+export type ExportFormat = "markdown" | "html" | "pdf" | "docx" | "epub" | "odt";
 
 /** 源码偏移区间（UTF-16），与编辑器内部坐标一致。 */
 export interface ExportRange {
@@ -72,6 +74,11 @@ const FORMAT_META: Record<
   docx: {
     extension: "docx",
     mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  },
+  epub: { extension: "epub", mime: "application/epub+zip" },
+  odt: {
+    extension: "odt",
+    mime: "application/vnd.oasis.opendocument.text",
   },
 };
 
@@ -159,6 +166,10 @@ export async function buildExport(request: ExportRequest): Promise<ExportPayload
     contents = renderHtmlDocument(ir, { title, lang: request.lang });
   } else if (request.format === "docx") {
     contents = await renderDocx(ir);
+  } else if (request.format === "epub") {
+    contents = await renderEpub(ir, { title, lang: request.lang });
+  } else if (request.format === "odt") {
+    contents = await renderOdt(ir);
   } else {
     contents = renderBody(ir);
   }

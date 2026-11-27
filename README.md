@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (392 tests)
+npm test               # run unit tests (398 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -129,6 +129,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.20 | List input finish | Typing `*`, `_` or a backtick over a selection applies the matching mark; Enter on an empty list item exits the list instead of adding another empty item. ([checklist](./功能差距清单.md), Chinese) |
 | M6.21 | Table row / column move | Alt + arrow keys move the current row or column inside a table. Markdown has no column width, so "resizing" becomes a persistable column reorder, serialized as a new Markdown table. ([checklist](./功能差距清单.md), Chinese) |
 | M6.22 | DOCX export | `⌘E` now offers Word documents: headings, emphasis, lists, tables, code and images map to WordprocessingML. A dependency-free ZIP writer (store + CRC32) produces the package; desktop writes atomically, the browser downloads. ([checklist](./功能差距清单.md), Chinese) |
+| M6.23 | EPUB / ODT export | `⌘E` adds EPUB 3 and OpenDocument text, reusing the dependency-free ZIP writer: EPUB carries mimetype/OPF/nav/content, ODT maps IR blocks to ODF elements. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

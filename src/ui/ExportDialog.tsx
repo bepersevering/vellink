@@ -22,12 +22,14 @@ const FORMATS: ReadonlyArray<{
   { id: "html", label: "export.format.html", hint: "export.format.htmlHint" },
   { id: "pdf", label: "export.format.pdf", hint: "export.format.pdfHint" },
   { id: "docx", label: "export.format.docx", hint: "export.format.docxHint" },
+  { id: "epub", label: "export.format.epub", hint: "export.format.epubHint" },
+  { id: "odt", label: "export.format.odt", hint: "export.format.odtHint" },
 ];
 
 function initialFormat(): ExportFormat {
   try {
     const saved = localStorage.getItem(FORMAT_STORAGE_KEY);
-    if (saved === "markdown" || saved === "html" || saved === "pdf" || saved === "docx") return saved;
+    if (saved === "markdown" || saved === "html" || saved === "pdf" || saved === "docx" || saved === "epub" || saved === "odt") return saved;
   } catch {
     /* 隐私模式下 localStorage 可能不可用 */
   }
