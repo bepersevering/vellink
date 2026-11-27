@@ -224,6 +224,7 @@ export const en: Record<string, string> = {
   "toast.imported": "Imported {count} document(s){skipped:, skipped {skipped} non-Markdown file(s)}",
   "toast.importFailed": "Import failed: {message}",
   "toast.importBadFile": "the selected files are not valid Markdown",
+  "toast.pasteConverted": "Pasted content converted to Markdown",
   // Settings
   "settings.title": "Settings",
   "settings.sub": "Changes apply as you make them",

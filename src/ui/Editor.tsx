@@ -19,6 +19,7 @@ import { buildPMTextMap, locateInPM } from "../core/find-pm";
 import { isImageType } from "../core/asset";
 import { renderMath } from "../core/view/math-view";
 import { renderExtSyntax } from "../core/view/ext-view";
+import { clipboardHtml, htmlToMarkdown } from "../core/paste-html";
 import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
@@ -539,6 +540,35 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     return { from: Math.min(start, end), to: Math.max(start, end) };
   }, []);
 
+  /**
+   * 在当前光标/选处插入一段 Markdown。block:true 时放到当前行之后，
+   * 避免在标题的 `# ` 中间插入把标题拆坏。图片与网页粘贴都走这里，
+   * 因此共享 DocumentStore 的一次撤销。
+   */
+  const insertText = (text: string, options?: { block?: boolean }): boolean => {
+    const bridge = bridgeRef.current;
+    if (!bridge || !text) return false;
+    const range = sourceSelectionRange();
+    const from = range?.from ?? cursorRef.current.source;
+    const to = range?.to ?? from;
+    let insertion = text;
+    let at = from;
+    if (options?.block) {
+      const lineEnd = bridge.source.indexOf("\n", to);
+      at = lineEnd === -1 ? bridge.source.length : lineEnd;
+      const before = at > 0 && bridge.source[at - 1] !== "\n" ? "\n" : "";
+      insertion = `${before}\n${text}\n`;
+    }
+    const next =
+      bridge.source.slice(0, at) +
+      insertion +
+      bridge.source.slice(options?.block ? at : to);
+    commitSource(next, at + insertion.length);
+    return true;
+  };
+  const insertTextRef = useRef(insertText);
+  insertTextRef.current = insertText;
+
   useImperativeHandle(
     ref,
     () => ({
@@ -600,26 +630,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         return true;
       },
       selectionRange: sourceSelectionRange,
-      insertMarkdown: (text: string, options?: { block?: boolean }) => {
-        const bridge = bridgeRef.current;
-        if (!bridge || !text) return false;
-        const range = sourceSelectionRange();
-        const from = range?.from ?? cursorRef.current.source;
-        const to = range?.to ?? from;
-        let insertion = text;
-        let at = from;
-        // 图片必须独立成段：光标在标题的 `# ` 后面时直接插会把标题拆坏，
-        // 所以块级插入一律放到「当前行之后」，用空行和上下隔开。
-        if (options?.block) {
-          const lineEnd = bridge.source.indexOf("\n", to);
-          at = lineEnd === -1 ? bridge.source.length : lineEnd;
-          const before = at > 0 && bridge.source[at - 1] !== "\n" ? "\n" : "";
-          insertion = `${before}\n${text}\n`;
-        }
-        const next = bridge.source.slice(0, at) + insertion + bridge.source.slice(options?.block ? at : to);
-        commitSource(next, at + insertion.length);
-        return true;
-      },
+      insertMarkdown: insertText,
       openFind,
       closeFind,
     }),
@@ -638,6 +649,19 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     if (!el) return;
 
     const onPaste = (event: ClipboardEvent) => {
+      // 网页复制的内容带 text/html：转成 Markdown 再插入，避免把网页样式
+      // 直接灌进编辑器。纯文本或没有 HTML 时交给 PM / CM 原生处理。
+      const html = clipboardHtml(event);
+      if (html) {
+        const { markdown } = htmlToMarkdown(html, document);
+        if (markdown) {
+          event.preventDefault();
+          event.stopPropagation();
+          insertTextRef.current(markdown, { block: true });
+          onNotify?.(t("toast.pasteConverted"));
+          return;
+        }
+      }
       const items = event.clipboardData?.items;
       if (!items || !onImages) return;
       const files = Array.from(items)
