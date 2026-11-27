@@ -1879,6 +1879,16 @@ body[data-t="dark"] .find-hit-on {
   display: flex;
   gap: 6px;
 }
+.set-text {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-sub);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 10px;
+}
 .set-css {
   width: 100%;
   min-height: 76px;

@@ -51,7 +51,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (424 tests)
+npm test               # run unit tests (428 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -138,6 +138,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.28 | Storage quota guard | The browser blocks pasted images over 1.5MB up front (data URI inflates by a third) and reports quota exhaustion on autosave instead of failing silently. ([checklist](./功能差距清单.md), Chinese) |
 | M6.29 | Mermaid diagrams | ` ```mermaid ` blocks render as SVG, covering flowcharts, sequences and Gantt; mermaid is dynamically imported on demand and syntax errors show the reason. HTML / PDF exports keep a readable source block. ([checklist](./功能差距清单.md), Chinese) |
 | M6.30 | Typography details | Settings toggle for heading numbers (CSS counters, display only); images accept `![alt](url =300x200 "title")` with size and tooltip, exported as width/height attributes. ([checklist](./功能差距清单.md), Chinese) |
+| M6.31 | Image path base | Settings accept an export image base path; relative image URLs get prefixed in HTML export for static blogs, while external/data/anchor URLs stay untouched. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

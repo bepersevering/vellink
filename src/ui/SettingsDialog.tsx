@@ -212,6 +212,21 @@ export function SettingsDialog({ open, settings, onChange, onClose }: Props) {
 
         <section className="set-row">
           <div className="set-head">
+            <span className="set-label">{t("settings.imageBase")}</span>
+          </div>
+          <input
+            className="set-text"
+            type="text"
+            value={settings.imageBase}
+            onChange={(e) => patch({ imageBase: e.target.value })}
+            placeholder={t("settings.imageBasePlaceholder")}
+            aria-label={t("settings.imageBase")}
+          />
+          <p className="set-hint">{t("settings.imageBaseHint")}</p>
+        </section>
+
+        <section className="set-row">
+          <div className="set-head">
             <span className="set-label">{t("settings.customCss")}</span>
           </div>
           <textarea

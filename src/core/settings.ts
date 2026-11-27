@@ -31,6 +31,8 @@ export interface Settings {
   maxImageEdge: number;
   /** 标题自动编号（仅渲染层，不写进 Markdown）。 */
   headingNumbers: boolean;
+  /** 导出 HTML 时相对图片路径的根目录，空表示不改写。 */
+  imageBase: string;
 }
 
 export const LIMITS = {
@@ -51,6 +53,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // 默认压到 2048：足够看清文字截图，又能把 4K 图压到零头大小
   maxImageEdge: 2048,
   headingNumbers: false,
+  imageBase: "",
 };
 
 const STORAGE_KEY = "vellink-settings:v1";
@@ -105,6 +108,7 @@ export function normalizeSettings(raw: unknown): Settings {
     customCss: typeof input.customCss === "string" ? input.customCss.slice(0, 20000) : "",
     maxImageEdge: clampNumber(input.maxImageEdge, 0, 4096, DEFAULT_SETTINGS.maxImageEdge),
     headingNumbers: input.headingNumbers === true,
+    imageBase: typeof input.imageBase === "string" ? input.imageBase.slice(0, 200) : "",
   };
 }
 

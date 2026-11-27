@@ -14,6 +14,7 @@ import katex from "katex";
 import { highlightHtml } from "../view/code-highlight";
 import { headingAnchor } from "../ext-syntax";
 import { sanitizeCss } from "../custom-css";
+import { resolveImageBase } from "./image-base";
 
 /** 公式渲染：MathML 输出是纯标记、零字体依赖，导出的单文件才能真正自包含。 */
 function mathHtml(value: string, displayMode: boolean): string {
@@ -69,13 +70,13 @@ function safeImageUrl(raw: string): string {
 
 /* ------------------------------ 行内 ------------------------------ */
 
-function renderInline(nodes: readonly InlineNode[]): string {
+function renderInline(nodes: readonly InlineNode[], imageBase = ""): string {
   let out = "";
-  for (const node of nodes) out += renderInlineNode(node);
+  for (const node of nodes) out += renderInlineNode(node, imageBase);
   return out;
 }
 
-function renderInlineNode(node: InlineNode): string {
+function renderInlineNode(node: InlineNode, imageBase = ""): string {
   switch (node.type) {
     case "text": {
       // 段内换行在编辑器里就是空格（HTML 也会折叠）；整段只有换行的文本节点
@@ -84,14 +85,14 @@ function renderInlineNode(node: InlineNode): string {
       return escapeHtml(node.value);
     }
     case "emphasis":
-      return `<em>${renderInline(node.children)}</em>`;
+      return `<em>${renderInline(node.children, imageBase)}</em>`;
     case "strong":
-      return `<strong>${renderInline(node.children)}</strong>`;
+      return `<strong>${renderInline(node.children, imageBase)}</strong>`;
     case "inlineCode":
       return `<code>${escapeHtml(node.value)}</code>`;
     case "link": {
       const title = node.title ? ` title="${escapeHtml(node.title)}"` : "";
-      return `<a href="${escapeHtml(safeUrl(node.url))}"${title} rel="noopener">${renderInline(node.children)}</a>`;
+      return `<a href="${escapeHtml(safeUrl(node.url))}"${title} rel="noopener">${renderInline(node.children, imageBase)}</a>`;
     }
     case "wikiLink":
       // 双链指向的是工作区里的另一篇笔记，导出后未必在身边：
@@ -103,7 +104,7 @@ function renderInlineNode(node: InlineNode): string {
         node.width && node.height
           ? ` width="${Number(node.width)}" height="${Number(node.height)}"`
           : "";
-      return `<img src="${escapeHtml(safeImageUrl(node.url))}" alt="${escapeHtml(node.alt)}"${title}${size} loading="lazy">`;
+      return `<img src="${escapeHtml(safeImageUrl(resolveImageBase(node.url, imageBase)))}" alt="${escapeHtml(node.alt)}"${title}${size} loading="lazy">`;
     }
     case "inlineMath":
       return mathHtml(node.value, false);
@@ -119,24 +120,25 @@ function renderInlineNode(node: InlineNode): string {
 function renderBlocks(
   nodes: readonly BlockNode[],
   toc: { depth: number; text: string; anchor: string }[] = [],
+  imageBase = "",
 ): string {
   return nodes
-    .map((node) => renderBlock(node, toc))
+    .map((node) => renderBlock(node, toc, imageBase))
     .filter((html) => html.length > 0)
     .join("\n");
 }
 
-function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor: string }[] = []): string {
+function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor: string }[] = [], imageBase = ""): string {
   switch (node.type) {
     case "paragraph": {
-      const inner = renderInline(node.children);
+      const inner = renderInline(node.children, imageBase);
       // 空段落就是编辑器里的一行留白：给个 <br> 才不会被浏览器折没
       return inner ? `<p>${inner}</p>` : "<p><br></p>";
     }
     case "heading": {
       const level = Math.min(6, Math.max(1, node.depth));
       const anchor = headingAnchor(inlinePlain(node.children));
-      return `<h${level} id="${escapeHtml(anchor)}">${renderInline(node.children)}</h${level}>`;
+      return `<h${level} id="${escapeHtml(anchor)}">${renderInline(node.children, imageBase)}</h${level}>`;
     }
     case "code": {
       // Mermaid 是图表源码，导出里保留可读源码（浏览器里 WYSIWYG 已渲染成图）；
@@ -195,7 +197,7 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
           // 单项单段：不要包一层 <p>，否则列表项之间凭空多出段距
           const compact =
             item.children.length === 1 && item.children[0].type === "paragraph"
-              ? renderInline(item.children[0].children)
+              ? renderInline(item.children[0].children, imageBase)
               : renderBlocks(item.children);
           const cls = task === undefined ? "" : ' class="task"';
           return `<li${cls}>${box}${compact}</li>`;
@@ -238,13 +240,16 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
 }
 
 /** 只渲染正文片段（打印面板直接塞进 DOM，不需要 <html> 外壳）。 */
-export function renderBody(ir: DocumentIR | readonly BlockNode[]): string {
+export function renderBody(
+  ir: DocumentIR | readonly BlockNode[],
+  imageBase = "",
+): string {
   const blocks: readonly BlockNode[] = "children" in ir ? ir.children : ir;
   // [TOC] 要展开整篇的标题，先扫一遍；heading 节点加锚点供站内链接跳转
   const toc = blocks
     .filter((b): b is Extract<BlockNode, { type: "heading" }> => b.type === "heading")
     .map((h) => ({ depth: h.depth, text: inlinePlain(h.children), anchor: headingAnchor(inlinePlain(h.children)) }));
-  const body = renderBlocks(blocks, toc);
+  const body = renderBlocks(blocks, toc, imageBase);
   const defs = blocks.filter(
     (b): b is Extract<BlockNode, { type: "footnoteDef" }> => b.type === "footnoteDef",
   );
@@ -461,6 +466,8 @@ export interface HtmlDocumentOptions {
   dark?: boolean;
   /** 用户自定义 CSS，经过清洗后内联在文档末尾。 */
   extraCss?: string;
+  /** 相对图片路径的根目录，用于静态博客场景。 */
+  imageBase?: string;
 }
 
 /**
@@ -487,7 +494,7 @@ ${sanitizeCss(options.extraCss)}` : ""}
 </style>
 </head>
 <body>
-${renderBody(ir)}
+${renderBody(ir, options.imageBase)}
 </body>
 </html>
 `;

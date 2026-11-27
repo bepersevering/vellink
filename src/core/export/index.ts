@@ -59,6 +59,8 @@ export interface ExportRequest {
   lang?: string;
   /** 用户自定义 CSS，导出 HTML 时内联。 */
   customCss?: string;
+  /** 相对图片路径的根目录。 */
+  imageBase?: string;
 }
 
 export interface ExportPayload {

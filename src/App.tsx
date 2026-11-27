@@ -793,6 +793,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
           selectionSuffix: t("export.fileSuffix.selection"),
           lang: locale,
           customCss: settings.customCss,
+          imageBase: settings.imageBase,
         });
 
         if (format === "pdf") {
