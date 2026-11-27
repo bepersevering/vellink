@@ -1,8 +1,8 @@
 /**
- * CodeMirror 6 源码视图。
+ * CodeMirror 6 source view.
  *
- * 刻意不装 history / historyKeymap：撤销唯一权威是 DocumentStore。
- * Markdown 语言包复用 @lezer/markdown，与 M1 的解析器同源，不引入第二棵语法树。
+ * Deliberately no history / historyKeymap: DocumentStore is the sole undo authority.
+ * The Markdown language package reuses @lezer/markdown, the same parser as M1, so there's no second syntax tree.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import {
@@ -34,7 +34,7 @@ import { emojiCandidates } from "../core/emoji";
 import { indentListLine } from "../core/list-indent";
 import { autocompletion, closeBrackets, closeBracketsKeymap, type CompletionContext } from "@codemirror/autocomplete";
 
-/** 输入 :smi 时弹 Emoji 候选。 */
+/** Show emoji candidates when the user types :smi. */
 const emojiCompletion = (context: CompletionContext) => {
   const match = context.matchBefore(/:[a-z0-9_\u4e00-\u9fff]*/);
   if (!match || (match.from === match.to && !context.explicit)) return null;
@@ -43,7 +43,7 @@ const emojiCompletion = (context: CompletionContext) => {
   return { from: match.from, options, validFor: /^[a-z0-9_\u4e00-\u9fff]*$/ };
 };
 
-/** 列表项 Tab / Shift+Tab：缩进两个空格；非列表项走 CodeMirror 默认行为。 */
+/** Tab / Shift+Tab on list items: indent by two spaces; non-list items use CodeMirror's default behavior. */
 const listIndent = (outdent: boolean) => (view: EditorView): boolean => {
   const line = view.state.doc.lineAt(view.state.selection.main.head);
   const next = indentListLine(line.text, outdent);
@@ -58,18 +58,18 @@ const listIndent = (outdent: boolean) => (view: EditorView): boolean => {
 };
 
 export interface SourceEditorHandle {
-  /** 外部（PM 编辑 / 撤销）更新源码时同步 CM 文档，不回写 bridge。 */
+  /** Sync the CM document when source is updated externally (PM edit / undo), without writing back to the bridge. */
   setDocument(text: string, caret: number): void;
-  /** 切到源码模式：聚焦并把光标放到指定 offset；给了 `end` 就选中这一段。 */
+  /** Switch to source mode: focus and place the caret at the given offset; if `end` is given, select that range. */
   focusAt(caret: number, end?: number): void;
   getSelection(): number;
-  /** 当前选区文本（打开查找时作为初始查询）。 */
+  /** Currently selected text (used as the initial query when opening Find). */
   getSelectedText(): string;
-  /** 当前选区区间（导出「选中内容」用）；折叠时 from === to。 */
+  /** Current selection range (for exporting "selection"); from === to when collapsed. */
   getRange(): { from: number; to: number };
-  /** 查找高亮：全部命中 + 当前一处，交给 CM 的装饰器画。 */
+  /** Find highlights: all matches plus the current one, drawn by CM decorations. */
   setFindHits(ranges: ReadonlyArray<{ from: number; to: number }>, current: number): void;
-  /** 选中一处命中并滚动到可见（不抢焦点，输入框要保持可输入）。 */
+  /** Select one match and scroll it into view (without stealing focus, so the input stays editable). */
   selectRange(from: number, to: number): void;
 }
 
@@ -89,7 +89,7 @@ const vellinkTheme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
     fontFamily: "var(--font-mono)",
-    // 跟着设置里的正文字号走，但代码看起来要比衬线正文小一号
+    // Follow the configured body font size, but render code slightly smaller than the serif body
     fontSize: "calc(var(--doc-font, 16px) * 0.8125)",
     lineHeight: "1.75",
   },
@@ -111,10 +111,11 @@ const vellinkTheme = EditorView.theme({
 });
 
 /**
- * 查找高亮。
+ * Find highlighting.
  *
- * 用 StateField 而不是每次整体重建扩展：命中列表随输入频繁变化，走 effect
- * 只换装饰集，视图与撤销栈都不受扰动（查找不该产生任何文档变更）。
+ * Use a StateField instead of rebuilding the whole extension each time: the match list changes
+ * constantly while typing, so an effect swaps only the decoration set, leaving the view and undo
+ * stack untouched (Find shouldn't produce any document changes).
  */
 interface FindHits {
   ranges: ReadonlyArray<{ from: number; to: number }>;
@@ -126,7 +127,7 @@ const applyFindHits = StateEffect.define<FindHits>();
 const findHighlight = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(decorations, tr) {
-    // 文档一变，旧的偏移立刻失效；等上层算完新命中再画
+    // When the document changes, old offsets go stale immediately; wait for the caller to compute new matches
     let next = tr.docChanged ? Decoration.none : decorations.map(tr.changes);
     for (const effect of tr.effects) {
       if (!effect.is(applyFindHits)) continue;
@@ -154,7 +155,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
     const hostRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const applyingRef = useRef(false);
-    // 回调放进 ref：CM 视图只创建一次，不因 React 重渲染重建
+    // Keep callbacks in a ref: the CM view is created once and isn't rebuilt on React re-renders
     const callbacks = useRef(props);
     callbacks.current = props;
 
@@ -237,7 +238,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
           drawSelection(),
           indentOnInput(),
           bracketMatching(),
-          // 输入 ( [ { " ' 时自动补右半边；选中文本时包裹而不是覆盖
+          // Auto-close ( [ { " ' when typed; wrap the selection instead of overwriting it
           closeBrackets(),
           autocompletion({ override: [emojiCompletion] }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -268,7 +269,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
       const view = new EditorView({ state, parent: host });
       viewRef.current = view;
 
-      // 行号在 contentDOM 外面，CM 的 domEventHandlers 收不到，用原生监听
+      // Line numbers sit outside contentDOM, so CM's domEventHandlers don't see them; use a native listener
       const onGutterClick = (event: MouseEvent) => {
         const target = event.target as HTMLElement | null;
         if (!target || !target.classList.contains("cm-gutterElement")) return;
@@ -283,7 +284,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
       };
       view.dom.addEventListener("mousedown", onGutterClick, true);
 
-      // CM 内部也监听 compositionend；注册在其后，读取的是最终文档
+      // CM also listens for compositionend internally; register afterwards to read the final document
       const onCompositionEnd = () => {
         window.setTimeout(() => {
           const v = viewRef.current;

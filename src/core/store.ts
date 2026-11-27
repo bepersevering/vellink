@@ -9,18 +9,19 @@ import { bus, type EventBus } from "./event/bus";
 import { commands, type CommandRegistry } from "./command/registry";
 
 /**
- * DocumentStore — 全应用唯一的撤销权威。
+ * DocumentStore — the app's single source of truth for undo.
  *
- * M2 起 ProseMirror 不再持有自己的 history：WYSIWYG 与源码视图的每次编辑
- * 都通过 replaceDocument 原子 op 提交到这里，撤销/重做统一由本栈驱动。
- * 这样插件命令（doc.undo / doc.redo）、键盘快捷键、两个视图回退到的是同一份 IR。
+ * Since M2, ProseMirror no longer keeps its own history: every edit from the WYSIWYG and source
+ * views is committed here as an atomic replaceDocument op, and undo/redo are driven solely by
+ * this stack. Plugin commands (doc.undo / doc.redo), keyboard shortcuts and both views therefore
+ * roll back to the same IR.
  */
 export class DocumentStore {
   private doc: DocumentIR;
   private undoStack: Transaction[] = [];
   private redoStack: Transaction[] = [];
   private unregisterCommands: Array<() => void> = [];
-  /** 视图/工作区订阅：任何来源（编辑器、插件命令、撤销）改文档都会收到通知。 */
+  /** View/workspace subscriptions: notified whenever the document changes, from any source (editor, plugin command or undo). */
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -42,14 +43,14 @@ export class DocumentStore {
       }),
       this.registry.register({
         id: "doc.redo",
-        title: "重做",
+        title: "Redo",
         keybinding: "Mod+Shift+Z",
         run: () => this.redo(),
       }),
     );
   }
 
-  /** 卸载 store 时注销命令；React StrictMode 双挂载不会撞重复注册。 */
+  /** Unregister commands when the store is disposed; React StrictMode's double-mount won't cause duplicate registrations. */
   dispose(): void {
     for (const unregister of this.unregisterCommands) unregister();
     this.unregisterCommands = [];
@@ -57,10 +58,11 @@ export class DocumentStore {
   }
 
   /**
-   * 订阅文档变更（含插件写入、撤销/重做）。
+   * Subscribe to document changes (including plugin writes and undo/redo).
    *
-   * 视图层用它在「非自己发起」的变更后回灌 IR；工作区用它同步 dirty 状态。
-   * 回调是同步的，调用方需自行用标志位避免自触发循环。
+   * Views use it to re-ingest IR after changes they didn't initiate; the workspace uses it to
+   * sync dirty state. Callbacks are synchronous, so callers must guard with a flag to avoid
+   * self-triggering loops.
    */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -76,10 +78,11 @@ export class DocumentStore {
   }
 
   /**
-   * 整篇替换为外部内容（磁盘被其它编辑器 / git 改动）。
+   * Replace the whole document with external content (the file was changed by another editor or git).
    *
-   * 与 apply 不同：这是一次「文件重新载入」，旧的撤销栈指向的已是另一份文档，
-   * 继续回退只会把用户带回到不存在的历史，所以直接清空，并通知视图回灌。
+   * Unlike apply, this is a "file reload": the old undo stack points at a different document, so
+   * continuing to undo would take the user back to a history that no longer exists. We clear it
+   * and notify views to re-ingest.
    */
   reset(ir: DocumentIR): void {
     this.doc = ir;
@@ -89,10 +92,11 @@ export class DocumentStore {
   }
 
   /**
-   * 应用一组 op，并广播 document:changed 事件。
+   * Apply a group of ops and broadcast a document:changed event.
    *
-   * 连续输入合并：同 mergeKey、时间窗内、单条 replaceDocument 事务会合并到
-   * 上一次撤销步骤（保留最早的 inverse），避免每敲一个字就产生一个撤销点。
+   * Continuous typing is merged: a single replaceDocument transaction with the same mergeKey
+   * inside the time window folds into the previous undo step (keeping the earliest inverse), so
+   * each keystroke doesn't create its own undo point.
    */
   apply(ops: Op[], options: ApplyOptions = {}): Transaction {
     const result = commit(this.doc, ops);
@@ -111,14 +115,14 @@ export class DocumentStore {
       ops[0].type === "replaceDocument";
 
     if (canMerge && last) {
-      // 只更新"当前状态"，inverse 保留为最早快照，一次撤销回到连续输入之前
+      // Only update the "current state"; keep the earliest inverse so one undo returns to before the typing burst
       last.ops = result.transaction.ops;
       last.timestamp = result.transaction.timestamp;
     } else {
       result.transaction.mergeKey = options.mergeKey;
       this.undoStack.push(result.transaction);
     }
-    // 新编辑之后，旧的 redo 分支失效
+    // A new edit invalidates the old redo branch
     this.redoStack = [];
 
     this.eventBus.emit({
@@ -147,7 +151,7 @@ export class DocumentStore {
   redo(): boolean {
     const tx = this.redoStack.pop();
     if (!tx) return false;
-    // 正向重放：重新应用当时的 ops
+    // Replay forward: re-apply the original ops
     this.doc = commit(this.doc, tx.ops, tx.id).document;
     this.undoStack.push(tx);
     this.eventBus.emit({

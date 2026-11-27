@@ -3,44 +3,44 @@ import { findMath, splitMath, standaloneMathBlock } from "./math";
 import { parseMarkdown } from "./parser/markdown";
 import { renderBody, renderHtmlDocument } from "./export/html";
 
-describe("公式识别", () => {
-  it("行内 $...$ 与块级 $$...$$", () => {
-    expect(findMath("能量 $E=mc^2$ 很有名")).toEqual([
-      { start: 3, end: 11, value: "E=mc^2", block: false },
+describe("math recognition", () => {
+  it("inline $...$ and block $$...$$", () => {
+    expect(findMath("Energy $E=mc^2$ is famous")).toEqual([
+      { start: 7, end: 15, value: "E=mc^2", block: false },
     ]);
     expect(findMath("$$x^2$$")[0].block).toBe(true);
   });
 
-  it("转义的 $ 与货币金额不算公式", () => {
-    expect(findMath("价格 \\$5 到 \\$10")).toEqual([]);
+  it("escaped $ and currency amounts aren't math", () => {
+    expect(findMath("price \\$5 to \\$10")).toEqual([]);
     expect(findMath("cost $5 and $x$")).toEqual([
       { start: 12, end: 15, value: "x", block: false },
     ]);
   });
 
-  it("空公式和 opening 后紧跟空白都被忽略", () => {
+  it("ignores empty formulas and whitespace right after the opening delimiter", () => {
     expect(findMath("$$$")).toEqual([]);
     expect(findMath("$ x$")).toEqual([]);
   });
 
-  it("切分保留前后文本与精确 span", () => {
-    const chunks = splitMath("前 $a$ 后", 0, 7);
+  it("splitting preserves surrounding text and exact spans", () => {
+    const chunks = splitMath("before $a$ after", 0, 16);
     expect(chunks).toEqual([
-      { kind: "text", start: 0, end: 2, value: "前 " },
-      { kind: "math", start: 2, end: 5, value: "a", block: false },
-      { kind: "text", start: 5, end: 7, value: " 后" },
+      { kind: "text", start: 0, end: 7, value: "before " },
+      { kind: "math", start: 7, end: 10, value: "a", block: false },
+      { kind: "text", start: 10, end: 16, value: " after" },
     ]);
   });
 
-  it("独占一段的 $$ 才是块级公式", () => {
+  it("only a standalone $$ becomes a block formula", () => {
     expect(standaloneMathBlock("  $$x+1$$  ", 0, 11)?.value).toBe("x+1");
-    expect(standaloneMathBlock("前 $$x$$ 后", 0, 9)).toBeNull();
+    expect(standaloneMathBlock("before $$x$$ after", 0, 18)).toBeNull();
   });
 });
 
-describe("公式进入 IR", () => {
-  it("行内公式成为 inlineMath 原子，源码 span 准确", () => {
-    const src = "公式 $x^2$ 结束";
+describe("math in IR", () => {
+  it("turns inline math into an inlineMath atom with an accurate source span", () => {
+    const src = "Formula $x^2$ end";
     const { ir } = parseMarkdown({ source: src });
     const paragraph = ir.children[0];
     if (paragraph.type !== "paragraph") throw new Error("expected paragraph");
@@ -50,7 +50,7 @@ describe("公式进入 IR", () => {
     expect(src.slice(math!.span.start, math!.span.end)).toBe("$x^2$");
   });
 
-  it("独占段落的 $$ 成为 mathBlock", () => {
+  it("turns a standalone $$ into a mathBlock", () => {
     const { ir } = parseMarkdown({ source: "$$\\frac{a}{b}$$" });
     expect(ir.children[0].type).toBe("mathBlock");
     expect(ir.children[0].type === "mathBlock" && ir.children[0].value).toBe(
@@ -58,27 +58,27 @@ describe("公式进入 IR", () => {
     );
   });
 
-  it("普通美元符号不是公式", () => {
-    const { ir } = parseMarkdown({ source: "价格 $5" });
+  it("treats ordinary dollar signs as plain text", () => {
+    const { ir } = parseMarkdown({ source: "Price $5" });
     const p = ir.children[0];
     if (p.type !== "paragraph") throw new Error("expected paragraph");
     expect(p.children.every((n) => n.type === "text")).toBe(true);
   });
 });
 
-describe("公式导出", () => {
-  it("导出 HTML 用 MathML，无字体外链，源码不出现在可见文本里", () => {
-    const { ir } = parseMarkdown({ source: "行内 $x^2$\n\n$$y_1$$" });
-    const html = renderHtmlDocument(ir, { title: "公式", lang: "zh-CN" });
+describe("math export", () => {
+  it("uses MathML with no external fonts and keeps raw source out of visible text", () => {
+    const { ir } = parseMarkdown({ source: "Inline $x^2$\n\n$$y_1$$" });
+    const html = renderHtmlDocument(ir, { title: "Formula", lang: "zh-CN" });
     expect(html).toContain("<math");
     expect(html).toContain("application/x-tex");
     expect(html).toContain("math-block");
-    // MathML 路线不该引 KaTeX 的 CSS / 字体
+    // The MathML path shouldn't pull in KaTeX CSS / fonts
     expect(html).not.toContain("katex.min.css");
     expect(html).not.toContain(".woff");
   });
 
-  it("非法公式不拖垮导出", () => {
+  it("doesn't let invalid math break export", () => {
     const { ir } = parseMarkdown({ source: "$\\unknown{}$" });
     expect(() => renderBody(ir)).not.toThrow();
   });

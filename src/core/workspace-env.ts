@@ -1,11 +1,12 @@
 /**
- * 启动时决定「文档存哪儿」。
+ * Decide where documents live at startup.
  *
- * 桌面端：读写一个真实的本地文件夹（默认 `~/Documents/Vellink`，可切换）。
- * 浏览器：退回 localStorage，功能一致，只是数据留在浏览器里。
+ * Desktop: read/write a real local folder (default `~/Documents/Vellink`, switchable).
+ * Browser: fall back to localStorage — same features, but data stays in the browser.
  *
- * 选择结果记在 localStorage，下次启动直接沿用；切换目录 = 写新值后重载页面，
- * 这样工作区、撤销栈、插件都按新目录重新构建，不会出现半切换状态。
+ * The choice is persisted in localStorage and reused on next launch; switching folders writes
+ * the new value then reloads, so the workspace, undo stack and plugins are all rebuilt for the
+ * new folder and there's no half-switched state.
  */
 
 import { desktopFs, isDesktop } from "./desktop/bridge";
@@ -21,10 +22,10 @@ import {
 export interface WorkspaceEnv {
   kind: "files" | "browser";
   backend: WorkspaceBackend;
-  /** 文件后端专有；浏览器下为 null。 */
+  /** File backend only; null in the browser. */
   files: FileWorkspaceBackend | null;
   root: string | null;
-  /** 首次使用该目录：可以写入种子文档。 */
+  /** First use of this folder: seed documents may be written. */
   fresh: boolean;
 }
 
@@ -47,7 +48,7 @@ export function persistRoot(root: string): void {
   try {
     globalThis.localStorage?.setItem(ROOT_KEY, root);
   } catch {
-    // 隐私模式下写不进去：本次会话仍然可用，只是下次要重新选目录
+    // Private mode may block writes: the current session still works, but the folder must be picked again next time
   }
 }
 
@@ -58,7 +59,7 @@ export async function resolveWorkspaceEnv(): Promise<WorkspaceEnv> {
       backend: createLocalWorkspaceBackend(),
       files: null,
       root: null,
-      // 浏览器里 localStorage 为空就是首次使用，同样给两篇种子
+      // Empty localStorage in the browser means first use; seed two documents as well
       fresh: true,
     };
   }
@@ -75,8 +76,8 @@ export async function resolveWorkspaceEnv(): Promise<WorkspaceEnv> {
     const files = createFileWorkspaceBackend(root, desktopFs);
     return { kind: "files", backend: files, files, root, fresh };
   } catch (error) {
-    // 目录不可用（权限、只读盘）时不能让应用起不来：退回浏览器存储并保留数据
-    console.warn("[vellink] 本地目录不可用，退回浏览器存储", error);
+    // An unusable folder (permissions, read-only disk) must not block startup: fall back to browser storage and keep the data
+    console.warn("[vellink] local folder unavailable, falling back to browser storage", error);
     return {
       kind: "browser",
       backend: createLocalWorkspaceBackend(),

@@ -1,13 +1,13 @@
-//! 本地 Markdown 文件系统命令。
+//! Local Markdown filesystem commands.
 //!
-//! 只暴露「一个工作区目录里的 .md 文件」这一层能力，不做通用 fs：
-//! 读写删全部限制在 Markdown 扩展名内，删除是移动到 `.vellink-trash/`
-//! 而不是真删，避免编辑器误删用户唯一一份稿子。
+//! Only exposes the ability to work with ".md files inside one workspace directory"; no general-purpose fs:
+//! reads, writes and deletes are all restricted to Markdown extensions, and deleting moves a file to
+//! `.vellink-trash/` instead of removing it, so the editor can't accidentally destroy the user's only copy.
 //!
-//! 写入走「临时文件 + rename」，Crash 或断电时不会留下半截文件。
+//! Writes go through "temp file + rename", so a crash or power loss never leaves a half-written file.
 //!
-//! 另外提供一个目录监听器：外部编辑器、git pull、同步盘改动会以事件形式推给
-//! 前端，取代固定间隔轮询。
+//! Also provides a directory watcher: changes from external editors, `git pull`, or sync drives are
+//! pushed to the frontend as events, replacing fixed-interval polling.
 
 use std::fs::{self, File};
 use std::io::Write;
@@ -19,28 +19,28 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
-/// 前端监听的事件名；payload 是发生变化的路径列表。
+/// Event name the frontend listens for; the payload is the list of changed paths.
 const WATCH_EVENT: &str = "vellink://fs-changed";
 
-/// 一份 Markdown 文件的元信息；`path` 是绝对路径，也被前端当作文档 id。
+/// Metadata for a Markdown file; `path` is an absolute path and is also used by the frontend as the document id.
 #[derive(Serialize)]
 pub struct FsEntry {
     pub path: String,
     pub name: String,
     pub size: u64,
-    /// 修改时间（Unix 毫秒），前端用它判断文件是否被外部改动。
+    /// Modification time (Unix milliseconds); the frontend uses it to detect external changes.
     pub modified: u64,
 }
 
 const MARKDOWN_EXTS: [&str; 2] = ["md", "markdown"];
-/// 图片资产的目录名（点开头：列举笔记时会跳过，不会被当成文档）。
+/// Directory name for image assets (starts with a dot so it is skipped when listing notes and never treated as a document).
 const ASSET_DIR: &str = ".vellink-assets";
 const ASSET_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
-/// 单张图片上限 20MB，和前端的 MAX_IMAGE_BYTES 保持一致。
+/// 20 MB limit per image; keep in sync with the frontend's MAX_IMAGE_BYTES.
 const MAX_ASSET_BYTES: usize = 20 * 1024 * 1024;
-/// 递归列举的最大深度：笔记目录再深也不该超过这个层数。
+/// Maximum recursion depth when listing; note directories should never be deeper than this.
 const MAX_DEPTH: usize = 6;
-/// 这些目录一定不是写作内容，跳过以免列举 node_modules 卡死。
+/// These directories are never writing content; skip them so listing doesn't hang on node_modules.
 const SKIP_DIRS: [&str; 5] = ["node_modules", "target", "dist", "build", "vendor"];
 
 fn is_markdown(path: &Path) -> bool {
@@ -50,7 +50,7 @@ fn is_markdown(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// 自己制造的噪音：回收目录、原子写的临时文件、隐藏文件。
+/// Noise we create ourselves: the trash directory, atomic-write temp files, and hidden files.
 fn is_ignored(path: &Path) -> bool {
     if path
         .components()
@@ -90,22 +90,23 @@ fn entry_of(path: &Path) -> FsEntry {
     }
 }
 
-/// 校验并规范化一个 Markdown 文件路径；拒绝目录与非 Markdown 文件。
+/// Validate and normalize a Markdown file path; reject directories and non-Markdown files.
 fn markdown_path(raw: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(raw);
     if !path.is_absolute() {
-        return Err(format!("路径必须是绝对路径: {raw}"));
+        return Err(format!("path must be absolute: {raw}"));
     }
     if !is_markdown(&path) {
-        return Err(format!("只允许操作 .md / .markdown 文件: {raw}"));
+        return Err(format!("only .md / .markdown files are allowed: {raw}"));
     }
     Ok(path)
 }
 
-/// 去掉 UTF-8 BOM 并把 CRLF / 孤立 CR 统一成 LF。
+/// Strip a UTF-8 BOM and normalize CRLF / lone CR to LF.
 ///
-/// 编辑器内部只用 `\n` 作为换行，Windows 文件直接读进来会导致每个块尾多一个
-/// 不可见字符、往返序列化不相等；入口处统一比在每个视图里兼容便宜得多。
+/// The editor internally uses only `\n`. Reading a Windows file as-is leaves an invisible
+/// character at the end of every block and breaks round-trip serialization; normalizing at
+/// the entry point is far cheaper than handling it in every view.
 fn normalize_text(raw: String) -> String {
     let without_bom = raw.strip_prefix('\u{feff}').unwrap_or(&raw).to_string();
     without_bom.replace("\r\n", "\n").replace('\r', "\n")
@@ -120,7 +121,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<FsEntry>) {
     };
     for item in entries.flatten() {
         let path = item.path();
-        // 符号链接目录可能成环，一律不跟进
+        // Symlinked directories can form cycles; never follow them
         let Ok(file_type) = item.file_type() else {
             continue;
         };
@@ -139,23 +140,23 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<FsEntry>) {
     }
 }
 
-/// 默认工作区：`~/Documents/Vellink`（拿不到文档目录时退回家目录）。
+/// Default workspace: `~/Documents/Vellink` (falls back to the home directory if the Documents dir is unavailable).
 #[tauri::command]
 pub fn fs_default_root(app: tauri::AppHandle) -> Result<String, String> {
     let base = app
         .path()
         .document_dir()
         .or_else(|_| app.path().home_dir())
-        .map_err(|err| format!("无法定位文档目录: {err}"))?;
+        .map_err(|err| format!("could not locate the Documents directory: {err}"))?;
     Ok(to_string_path(&base.join("Vellink")))
 }
 
 #[tauri::command]
 pub fn fs_ensure_dir(path: String) -> Result<(), String> {
-    fs::create_dir_all(&path).map_err(|err| format!("创建目录失败 {path}: {err}"))
+    fs::create_dir_all(&path).map_err(|err| format!("failed to create directory {path}: {err}"))
 }
 
-/// 递归列举工作区里的全部 Markdown 文件，按修改时间倒序。
+/// Recursively list all Markdown files in the workspace, newest first.
 #[tauri::command]
 pub fn fs_list_markdown(root: String) -> Result<Vec<FsEntry>, String> {
     let path = PathBuf::from(&root);
@@ -171,18 +172,18 @@ pub fn fs_list_markdown(root: String) -> Result<Vec<FsEntry>, String> {
 #[tauri::command]
 pub fn fs_read_markdown(path: String) -> Result<String, String> {
     let target = markdown_path(&path)?;
-    let raw = fs::read_to_string(&target).map_err(|err| format!("读取失败 {path}: {err}"))?;
+    let raw = fs::read_to_string(&target).map_err(|err| format!("failed to read {path}: {err}"))?;
     Ok(normalize_text(raw))
 }
 
-/// 原子写：先写同目录临时文件并 fsync，再 rename 覆盖。
+/// Atomic write: create a temp file in the same directory, fsync it, then rename over the target.
 ///
-/// 半截文件和「写完但还在页缓存里」的结果都不该被用户看到：断电或崩溃时
-/// 目标文件要么是旧内容，要么是新内容。
+/// Users should never see a half-written file or data still sitting in the page cache: on a
+/// power loss or crash the target is either the old content or the new content.
 fn write_atomic_bytes(target: &Path, bytes: &[u8]) -> Result<(), String> {
     let path = to_string_path(target);
     if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|err| format!("创建目录失败: {err}"))?;
+        fs::create_dir_all(parent).map_err(|err| format!("failed to create directory: {err}"))?;
     }
 
     let file_name = target
@@ -192,16 +193,16 @@ fn write_atomic_bytes(target: &Path, bytes: &[u8]) -> Result<(), String> {
     let temp = target.with_file_name(format!(".{file_name}.vellink.tmp"));
 
     {
-        let mut file = File::create(&temp).map_err(|err| format!("写入失败 {path}: {err}"))?;
+        let mut file = File::create(&temp).map_err(|err| format!("failed to write {path}: {err}"))?;
         file.write_all(bytes)
-            .map_err(|err| format!("写入失败 {path}: {err}"))?;
+            .map_err(|err| format!("failed to write {path}: {err}"))?;
         file.sync_all()
-            .map_err(|err| format!("落盘失败 {path}: {err}"))?;
+            .map_err(|err| format!("failed to flush {path} to disk: {err}"))?;
     }
 
     fs::rename(&temp, target).map_err(|err| {
         let _ = fs::remove_file(&temp);
-        format!("替换文件失败 {path}: {err}")
+        format!("failed to replace {path}: {err}")
     })
 }
 
@@ -209,7 +210,7 @@ fn write_atomic(target: &Path, contents: &str) -> Result<(), String> {
     write_atomic_bytes(target, contents.as_bytes())
 }
 
-/// 写入 Markdown：必要时补建目录，先写临时文件再 rename 覆盖。
+/// Write Markdown: create parent directories if needed, write a temp file, then rename over the target.
 #[tauri::command]
 pub fn fs_write_markdown(path: String, contents: String) -> Result<FsEntry, String> {
     let target = markdown_path(&path)?;
@@ -217,14 +218,15 @@ pub fn fs_write_markdown(path: String, contents: String) -> Result<FsEntry, Stri
     Ok(entry_of(&target))
 }
 
-/// 把文件移到回收目录（而不是删除），返回移动后的路径。
+/// Move a file to the trash directory (instead of deleting it) and return the new path.
 ///
-/// 显式声明 `snake_case`：这是唯一带下划线的参数，不依赖 Tauri 的默认重命名规则，
-/// 前端发什么就是什么，避免 IPC 层悄悄改名导致「删除无反应」。
+/// `snake_case` is declared explicitly: this is the only underscored argument, so we don't rely
+/// on Tauri's default renaming rules. The frontend's field names pass through unchanged, avoiding
+/// silent IPC renames that would make "delete" appear to do nothing.
 #[tauri::command(rename_all = "snake_case")]
 pub fn fs_trash_markdown(path: String, trash_dir: String) -> Result<String, String> {
     let source = markdown_path(&path)?;
-    fs::create_dir_all(&trash_dir).map_err(|err| format!("创建回收目录失败: {err}"))?;
+    fs::create_dir_all(&trash_dir).map_err(|err| format!("failed to create trash directory: {err}"))?;
 
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -242,7 +244,7 @@ pub fn fs_trash_markdown(path: String, trash_dir: String) -> Result<String, Stri
         index += 1;
     }
 
-    fs::rename(&source, &destination).map_err(|err| format!("移动到回收目录失败: {err}"))?;
+    fs::rename(&source, &destination).map_err(|err| format!("failed to move to trash: {err}"))?;
     Ok(to_string_path(&destination))
 }
 
@@ -251,24 +253,25 @@ pub fn fs_rename_markdown(from: String, to: String) -> Result<FsEntry, String> {
     let source = markdown_path(&from)?;
     let target = markdown_path(&to)?;
     if target.exists() {
-        return Err(format!("目标文件已存在: {to}"));
+        return Err(format!("target file already exists: {to}"));
     }
-    fs::rename(&source, &target).map_err(|err| format!("重命名失败: {err}"))?;
+    fs::rename(&source, &target).map_err(|err| format!("failed to rename: {err}"))?;
     Ok(entry_of(&target))
 }
 
-/// 导出允许落盘的扩展名。这里不含 `.pdf`：PDF 由系统打印面板写出，
-/// 应用自己不做 PDF 编码。
+/// Extensions allowed for exports. `.pdf` is intentionally absent: PDFs are written by the
+/// system print dialog, the app does not encode PDFs itself.
 const EXPORT_EXTS: [&str; 7] = ["md", "markdown", "html", "htm", "docx", "epub", "odt"];
 
-/// 校验导出目标：必须是绝对路径，且扩展名在白名单里。
+/// Validate an export target: it must be an absolute path with an allowed extension.
 ///
-/// 与 `markdown_path` 分开是刻意的：工作区只认 `.md`（防止编辑器把任意文件
-/// 当笔记打开），导出要能写 `.html`；两套白名单混用迟早会放开错的那一个。
+/// Kept separate from `markdown_path` on purpose: the workspace only accepts `.md` (so the
+/// editor can't open arbitrary files as notes), while exports must be able to write `.html`.
+/// Mixing the two allowlists would eventually open the wrong one up.
 fn export_target(raw: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(raw);
     if !path.is_absolute() {
-        return Err(format!("导出路径必须是绝对路径: {raw}"));
+        return Err(format!("export path must be absolute: {raw}"));
     }
     let allowed = path
         .extension()
@@ -276,43 +279,44 @@ fn export_target(raw: &str) -> Result<PathBuf, String> {
         .map(|ext| EXPORT_EXTS.contains(&ext.to_ascii_lowercase().as_str()))
         .unwrap_or(false);
     if !allowed {
-        return Err(format!("不支持导出的扩展名: {raw}"));
+        return Err(format!("unsupported export extension: {raw}"));
     }
     Ok(path)
 }
 
-/// 写一个导出文件（Markdown / HTML），同样是原子写。
+/// Write an export file (Markdown / HTML), also atomically.
 #[tauri::command]
 pub fn export_write_text(path: String, contents: String) -> Result<(), String> {
     let target = export_target(&path)?;
     write_atomic(&target, &contents)
 }
 
-/// 导出二进制格式（DOCX / EPUB / ODT）：字节经 IPC 传来，同样原子写。
+/// Export binary formats (DOCX / EPUB / ODT): bytes arrive over IPC and are also written atomically.
 #[tauri::command]
 pub fn export_write_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
     let target = export_target(&path)?;
     write_atomic_bytes(&target, &data)
 }
 
-/// 调起系统打印对话框。
+/// Open the system print dialog.
 ///
-/// PDF 不走自建渲染器：系统打印面板本来就能「存储为 PDF」，字体、分页、
-/// 中文断行全交给平台，比在应用里重造一套排版可靠得多。
+/// PDFs don't use a custom renderer: the system print panel already supports "Save as PDF",
+/// and fonts, pagination and CJK line breaking are all left to the platform, which is far more
+/// reliable than rebuilding a layout engine in the app.
 #[tauri::command]
 pub fn export_print(app: tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
-        .ok_or_else(|| "找不到主窗口".to_string())?;
-    window.print().map_err(|err| format!("调起打印失败: {err}"))
+        .ok_or_else(|| "main window not found".to_string())?;
+    window.print().map_err(|err| format!("failed to open print dialog: {err}"))
 }
 
-/// 导入 Markdown 时读源文件旁边的图片：必须是绝对路径 + 图片扩展名。
+/// Read images next to a source file when importing Markdown: must be an absolute path with an image extension.
 #[tauri::command]
 pub fn fs_read_image(path: String) -> Result<Vec<u8>, String> {
     let target = PathBuf::from(&path);
     if !target.is_absolute() {
-        return Err(format!("路径必须是绝对路径: {path}"));
+        return Err(format!("path must be absolute: {path}"));
     }
     let ext = target
         .extension()
@@ -320,22 +324,22 @@ pub fn fs_read_image(path: String) -> Result<Vec<u8>, String> {
         .unwrap_or("")
         .to_ascii_lowercase();
     if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp") {
-        return Err(format!("只允许读取图片: {path}"));
+        return Err(format!("only images may be read: {path}"));
     }
-    fs::read(&target).map_err(|err| format!("读取图片失败 {path}: {err}"))
+    fs::read(&target).map_err(|err| format!("failed to read image {path}: {err}"))
 }
 
-/* ------------------------------ 图片资产 ------------------------------ */
+/* ------------------------------ Image assets ------------------------------ */
 
-/// 资产文件名只接受「一个普通文件名 + 图片扩展名」。
+/// Asset filenames accept only "a plain filename + an image extension".
 ///
-/// 名字来自前端的 slug + 内容哈希，但 IPC 传来的东西一律不可信：
-/// 带分隔符或 `..` 就会跳出资源目录，点开头会变成隐藏文件，
-/// SVG 能带脚本，所以也不收。
+/// The name comes from the frontend's slug + content hash, but anything arriving over IPC is
+/// untrusted: separators or `..` could escape the asset directory, a leading dot makes a hidden
+/// file, and SVGs can carry scripts, so they are rejected too.
 fn asset_target(root: &str, name: &str) -> Result<PathBuf, String> {
     let dir = PathBuf::from(root);
     if !dir.is_absolute() {
-        return Err(format!("工作区路径必须是绝对路径: {root}"));
+        return Err(format!("workspace path must be absolute: {root}"));
     }
     if name.is_empty()
         || name.len() > 128
@@ -344,7 +348,7 @@ fn asset_target(root: &str, name: &str) -> Result<PathBuf, String> {
         || name.contains('\\')
         || name.contains("..")
     {
-        return Err(format!("非法的资产文件名: {name}"));
+        return Err(format!("invalid asset filename: {name}"));
     }
     let ext = Path::new(name)
         .extension()
@@ -352,30 +356,30 @@ fn asset_target(root: &str, name: &str) -> Result<PathBuf, String> {
         .map(|ext| ext.to_ascii_lowercase())
         .unwrap_or_default();
     if !ASSET_EXTS.contains(&ext.as_str()) {
-        return Err(format!("不支持的图片格式: {name}"));
+        return Err(format!("unsupported image format: {name}"));
     }
     Ok(dir.join(ASSET_DIR).join(name))
 }
 
-/// 写入一张图片，返回 Markdown 里用的相对路径。
+/// Write an image and return the relative path used in Markdown.
 #[tauri::command]
 pub fn fs_write_asset(root: String, name: String, data: Vec<u8>) -> Result<String, String> {
     if data.len() > MAX_ASSET_BYTES {
-        return Err(format!("图片超过 20MB（{} 字节）", data.len()));
+        return Err(format!("image exceeds 20 MB ({} bytes)", data.len()));
     }
     let target = asset_target(&root, &name)?;
     write_atomic_bytes(&target, &data)?;
     Ok(format!("{ASSET_DIR}/{name}"))
 }
 
-/// 导出 HTML / PDF 时读回图片，交给前端转 data URI。
+/// Read an image back when exporting HTML / PDF, handing it to the frontend to convert to a data URI.
 #[tauri::command]
 pub fn fs_read_asset(root: String, name: String) -> Result<Vec<u8>, String> {
     let target = asset_target(&root, &name)?;
-    fs::read(&target).map_err(|err| format!("读取图片失败 {}: {err}", to_string_path(&target)))
+    fs::read(&target).map_err(|err| format!("failed to read image {}: {err}", to_string_path(&target)))
 }
 
-/// 列出工作区资产目录里的文件名（只给名字，不读内容）。
+/// List filenames in the workspace asset directory (names only, no content).
 #[tauri::command]
 pub fn fs_list_assets(root: String) -> Result<Vec<String>, String> {
     let dir = PathBuf::from(&root).join(".vellink-assets");
@@ -383,8 +387,8 @@ pub fn fs_list_assets(root: String) -> Result<Vec<String>, String> {
         return Ok(vec![]);
     }
     let mut out = vec![];
-    for entry in fs::read_dir(&dir).map_err(|err| format!("列举资产失败: {err}"))? {
-        let entry = entry.map_err(|err| format!("列举资产失败: {err}"))?;
+    for entry in fs::read_dir(&dir).map_err(|err| format!("failed to list assets: {err}"))? {
+        let entry = entry.map_err(|err| format!("failed to list assets: {err}"))?;
         if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
             if let Some(name) = entry.file_name().to_str() {
                 out.push(name.to_string());
@@ -394,28 +398,29 @@ pub fn fs_list_assets(root: String) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-/// 把孤立资产移到回收站（不直接删除，保留恢复可能）。
+/// Move orphaned assets to the trash (rather than deleting them, so they can be recovered).
 #[tauri::command(rename_all = "snake_case")]
 pub fn fs_trash_asset(root: String, name: String, trash_dir: String) -> Result<String, String> {
     let asset = asset_target(&root, &name)?;
-    fs::create_dir_all(&trash_dir).map_err(|err| format!("创建回收目录失败: {err}"))?;
+    fs::create_dir_all(&trash_dir).map_err(|err| format!("failed to create trash directory: {err}"))?;
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let target = PathBuf::from(&trash_dir).join(format!("{}-{}", stamp, name));
-    fs::rename(&asset, &target).map_err(|err| format!("回收资产失败: {err}"))?;
+    fs::rename(&asset, &target).map_err(|err| format!("failed to trash asset: {err}"))?;
     Ok(to_string_path(&target))
 }
 
-/// 当前工作区的目录监听器；换目录时整体替换，旧的自然被 drop 停止。
+/// Directory watcher for the current workspace; replacing it drops and stops the old one.
 #[derive(Default)]
 pub struct WatchState(pub Mutex<Option<RecommendedWatcher>>);
 
-/// 开始监听一个目录（递归）。
+/// Start watching a directory (recursively).
 ///
-/// 事件只带路径，前端自己决定要不要读：一次保存会触发多条事件，
-/// 去重与判定放在前端，Rust 侧不做节流，避免两边各有一套时间窗口。
+/// Events carry only paths; the frontend decides whether to read them. A single save can
+/// trigger multiple events, so deduplication is left to the frontend. The Rust side does no
+/// throttling, avoiding a second set of timing windows on this side.
 #[tauri::command]
 pub fn fs_watch_start(
     app: tauri::AppHandle,
@@ -424,13 +429,13 @@ pub fn fs_watch_start(
 ) -> Result<(), String> {
     let path = PathBuf::from(&root);
     if !path.is_dir() {
-        return Err(format!("目录不存在: {root}"));
+        return Err(format!("directory does not exist: {root}"));
     }
 
     let mut guard = state
         .0
         .lock()
-        .map_err(|_| "监听器状态异常".to_string())?;
+        .map_err(|_| "watcher state is invalid".to_string())?;
     *guard = None;
 
     let app_handle = app.clone();
@@ -448,17 +453,17 @@ pub fn fs_watch_start(
             if changed.is_empty() {
                 return;
             }
-            // 调试构建里留一行痕迹：桌面上没法自动点 UI，日志是唯一可观测证据
+            // Leave a trace in debug builds: on the desktop we can't automate UI clicks, so logs are the only observable evidence
             #[cfg(debug_assertions)]
             eprintln!("[vellink] fs-changed: {changed:?}");
             let _ = app_handle.emit(WATCH_EVENT, changed);
         },
     )
-    .map_err(|err| format!("创建监听器失败: {err}"))?;
+    .map_err(|err| format!("failed to create watcher: {err}"))?;
 
     watcher
         .watch(&path, RecursiveMode::Recursive)
-        .map_err(|err| format!("监听目录失败 {root}: {err}"))?;
+        .map_err(|err| format!("failed to watch directory {root}: {err}"))?;
 
     *guard = Some(watcher);
     #[cfg(debug_assertions)]
@@ -471,12 +476,12 @@ pub fn fs_watch_stop(state: tauri::State<'_, WatchState>) -> Result<(), String> 
     let mut guard = state
         .0
         .lock()
-        .map_err(|_| "监听器状态异常".to_string())?;
+        .map_err(|_| "watcher state is invalid".to_string())?;
     *guard = None;
     Ok(())
 }
 
-/// 在系统文件管理器里定位文件（macOS 选中，其它平台打开所在目录）。
+/// Reveal a file in the system file manager (select it on macOS, open its directory elsewhere).
 #[tauri::command]
 pub fn fs_reveal(path: String) -> Result<(), String> {
     let target = PathBuf::from(&path);
@@ -509,7 +514,7 @@ pub fn fs_reveal(path: String) -> Result<(), String> {
     command
         .spawn()
         .map(|_| ())
-        .map_err(|err| format!("无法打开文件管理器: {err}"))
+        .map_err(|err| format!("failed to open file manager: {err}"))
 }
 
 #[cfg(test)]
@@ -529,22 +534,22 @@ mod tests {
         assert!(export_target("/tmp/note.MARKDOWN").is_ok());
         assert!(export_target("/tmp/report.html").is_ok());
         assert!(export_target("/tmp/report.HTM").is_ok());
-        // PDF 由系统打印面板写，应用不自己编码
+        // PDFs are written by the system print panel, not encoded by the app
         assert!(export_target("/tmp/report.pdf").is_err());
         assert!(export_target("/tmp/run.sh").is_err());
         assert!(export_target("/tmp/noext").is_err());
-        // 相对路径一律拒绝：导出路径必须来自保存对话框
+        // Always reject relative paths: export paths must come from a save dialog
         assert!(export_target("note.md").is_err());
     }
 
     #[test]
     fn writes_export_atomically() {
         let dir = temp_dir("export-write");
-        let target = dir.join("导出.html");
+        let target = dir.join("export.html");
         export_target(target.to_str().unwrap()).unwrap();
         write_atomic(&target, "<h1>hi</h1>").unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "<h1>hi</h1>");
-        // 覆盖写：不残留临时文件
+        // Overwrite: no temp files should remain
         write_atomic(&target, "<h1>bye</h1>").unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "<h1>bye</h1>");
         let leftovers: Vec<_> = fs::read_dir(&dir)
@@ -586,7 +591,7 @@ mod tests {
         assert!(entry.modified > 0);
         assert_eq!(fs_read_markdown(to_string_path(&nested)).unwrap(), "# Deep\n\nbody");
 
-        // 临时文件不应残留
+        // Temp files should not remain
         let leftovers: Vec<_> = fs::read_dir(root.join("notes"))
             .unwrap()
             .flatten()
@@ -630,21 +635,21 @@ mod tests {
     #[test]
     fn renames_and_refuses_occupied_target() {
         let root = temp_dir("rename");
-        let source = root.join("旧.md");
-        fs_write_markdown(to_string_path(&source), "# 旧".into()).unwrap();
+        let source = root.join("old.md");
+        fs_write_markdown(to_string_path(&source), "# Old".into()).unwrap();
 
-        let target = root.join("新.md");
+        let target = root.join("new.md");
         let entry = fs_rename_markdown(to_string_path(&source), to_string_path(&target)).unwrap();
-        assert_eq!(entry.name, "新.md");
+        assert_eq!(entry.name, "new.md");
         assert!(!source.exists());
-        assert_eq!(fs_read_markdown(to_string_path(&target)).unwrap(), "# 旧");
+        assert_eq!(fs_read_markdown(to_string_path(&target)).unwrap(), "# Old");
 
-        // 目标已存在时拒绝，不覆盖别人的稿子
-        fs_write_markdown(to_string_path(&source), "# 又建了一个".into()).unwrap();
+        // Reject an existing target; don't overwrite someone else's draft
+        fs_write_markdown(to_string_path(&source), "# Created another".into()).unwrap();
         assert!(fs_rename_markdown(to_string_path(&source), to_string_path(&target)).is_err());
         assert_eq!(
             fs_read_markdown(to_string_path(&target)).unwrap(),
-            "# 旧"
+            "# Old"
         );
         let _ = fs::remove_dir_all(&root);
     }
@@ -675,13 +680,13 @@ mod tests {
             .watch(&root, RecursiveMode::Recursive)
             .unwrap();
 
-        let target = root.join("新文件.md");
-        fs::write(&target, "# 新").unwrap();
+        let target = root.join("new-file.md");
+        fs::write(&target, "# New").unwrap();
 
         let hits = rx
             .recv_timeout(std::time::Duration::from_secs(10))
-            .expect("监听器没有上报新建的 Markdown 文件");
-        assert!(hits.iter().any(|path| path.ends_with("新文件.md")));
+            .expect("watcher did not report the newly created Markdown file");
+        assert!(hits.iter().any(|path| path.ends_with("new-file.md")));
 
         drop(watcher);
         let _ = fs::remove_dir_all(&root);
@@ -693,12 +698,12 @@ mod tests {
         let root = dir.to_str().unwrap();
         assert!(asset_target(root, "shot-a1b2c3d4.png").is_ok());
         assert!(asset_target(root, "photo.JPG").is_ok());
-        // 不能跳出资源目录，也不能伪装成隐藏文件
+        // Must not escape the asset directory or masquerade as a hidden file
         assert!(asset_target(root, "../outside.png").is_err());
         assert!(asset_target(root, "sub/shot.png").is_err());
         assert!(asset_target(root, "..\\windows.png").is_err());
         assert!(asset_target(root, ".hidden.png").is_err());
-        // SVG 能带脚本，不当图片收
+        // SVGs can carry scripts, so they are not accepted as images
         assert!(asset_target(root, "x.svg").is_err());
         assert!(asset_target(root, "x.exe").is_err());
         assert!(asset_target("relative/root", "x.png").is_err());
@@ -716,7 +721,7 @@ mod tests {
             fs_read_asset(root.to_string(), "shot-1234abcd.png".into()).unwrap(),
             vec![1, 2, 3]
         );
-        // 覆盖写，且不留临时文件
+        // Overwrite, and leave no temp files behind
         fs_write_asset(root.to_string(), "shot-1234abcd.png".into(), vec![9, 8]).unwrap();
         assert_eq!(
             fs_read_asset(root.to_string(), "shot-1234abcd.png".into()).unwrap(),

@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    // 只有测试会碰 node: 内置模块（真磁盘集成测试），业务代码不依赖 Node
+    // Only tests touch node: built-ins (real-disk integration tests); app code does not depend on Node
     "types": ["node"],
 
     "strict": true,

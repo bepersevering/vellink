@@ -1,13 +1,16 @@
 /**
- * 导出：把「当前文档 / 当前选区」变成一份可以直接拿走的文件。
+ * Export: turn "the current document / current selection" into a file you can take away directly.
  *
- * 三种格式的分工：
- * - `markdown`：原样搬运源码（选区就是源码切片），不重新序列化，零信息损失；
- * - `html`：走 IR → 独立 HTML，样式内联，发给别人双击就能读；
- * - `pdf`：同样生成 IR → HTML，但交给系统打印面板渲染（见 ui/ExportDialog）。
+ * The three formats divide the work like this:
+ * - `markdown`: copy the source verbatim (a selection is just a source slice), no
+ *   re-serialization, zero information loss;
+ * - `html`: go IR → standalone HTML with inlined styles, readable by anyone who double-clicks it;
+ * - `pdf`: likewise generate IR → HTML, but hand it to the system print dialog for rendering
+ *   (see ui/ExportDialog).
  *
- * 这里只做纯计算，不碰 DOM、不碰文件系统：文件名、内容、MIME 一次算清，
- * 落地方式（系统保存对话框 / 浏览器下载 / 打印）由调用方决定。
+ * This module only does pure computation — no DOM, no filesystem: file name, contents and MIME
+ * are all computed at once. How the result is saved (system save dialog / browser download /
+ * printing) is up to the caller.
  */
 
 import type { DocumentIR } from "../ir/types";
@@ -28,7 +31,7 @@ export type ExportFormat =
   | "latex"
   | "mediawiki";
 
-/** 源码偏移区间（UTF-16），与编辑器内部坐标一致。 */
+/** A source offset range (UTF-16), consistent with the editor's internal coordinates. */
 export interface ExportRange {
   from: number;
   to: number;
@@ -36,42 +39,42 @@ export interface ExportRange {
 
 export interface ExportRequest {
   format: ExportFormat;
-  /** 文档标题（H1 或文件名），用于文件名与 HTML 的 <title>。 */
+  /** Document title (H1 or file name), used for the file name and the HTML <title>. */
   title: string;
-  /** 当前文档的 Markdown 源码。 */
+  /** Markdown source of the current document. */
   source: string;
-  /** 只导出这一段；不给或为空表示整篇。 */
+  /** Export only this range; omitted or empty means the whole document. */
   range?: ExportRange | null;
   /**
-   * 选区导出时追加到文件名末尾（如「 · 摘录」）。
+   * Appended to the file name for a selection export (e.g. " · Excerpt").
    *
-   * 不加这一步，选区导出和整篇导出会算出同一个文件名，用户在保存对话框里
-   * 一路回车就把整篇的导出覆盖掉了。
+   * Without this, a selection export and a full export would compute the same file name,
+   * and the user could overwrite the full export just by hitting Enter in the save dialog.
    */
   selectionSuffix?: string;
   /**
-   * 调用方已经切好选区时显式标明是「摘录」。
+   * Explicitly mark the export as an "excerpt" when the caller has already sliced the source.
    *
-   * 图片内嵌会改变源码偏移，所以那种情况下先切后导，range 不再传进来，
-   * 但仍然要让用户拿到带后缀的文件名。
+   * Inlining images changes source offsets, so in that case the source is sliced before
+   * export, range is not passed in, but the user still needs a suffixed file name.
    */
   partial?: boolean;
   lang?: string;
-  /** 用户自定义 CSS，导出 HTML 时内联。 */
+  /** User-defined CSS, inlined when exporting HTML. */
   customCss?: string;
-  /** 相对图片路径的根目录。 */
+  /** Base directory for relative image paths. */
   imageBase?: string;
 }
 
 export interface ExportPayload {
   format: ExportFormat;
-  /** 建议文件名，已含扩展名。 */
+  /** Suggested file name, including the extension. */
   fileName: string;
   /**
-   * Markdown / HTML 是完整文件内容；PDF 是待打印的正文片段
-   * （打印面板会自己套上 docCss，不需要 <html> 外壳）。
+   * Markdown / HTML are complete file contents; PDF is the body fragment to be printed
+   * (the print dialog applies docCss itself and needs no <html> wrapper).
    */
-  /** 二进制格式（DOCX）是 Uint8Array，其余是字符串。 */
+  /** Binary formats (DOCX) produce a Uint8Array; the rest produce a string. */
   contents: string | Uint8Array;
   mime: string;
   extension: string;
@@ -98,20 +101,22 @@ const FORMAT_META: Record<
 };
 
 /**
- * 文件名里不能出现的字符（跨 macOS / Windows / Linux 取并集）。
- * 连续命中压成一个 `-`，否则 "a/b:c*?d" 会得到一串连字符。
+ * Characters not allowed in file names (the union across macOS / Windows / Linux).
+ * Consecutive matches collapse to a single `-`, otherwise "a/b:c*?d" would yield a run of hyphens.
  */
 const ILLEGAL_RUN = /[\\/:*?"<>|\u0000-\u001f]+/g;
 
 /**
- * 标题 → 文件名。
+ * Title → file name.
  *
- * 用标题而不是「当前时间戳」：导出十次之后，用户靠文件名找得到东西。
+ * Use the title rather than a "current timestamp": after ten exports the user can still
+ * find things by file name.
  */
 export function fileNameFor(title: string, extension: string): string {
   const base = (title || "")
     .replace(ILLEGAL_RUN, "-")
-    // 连续空白压成一个空格，首尾空白与点去掉（Windows 不许文件名以点结尾）
+    // Collapse runs of whitespace to a single space, strip leading/trailing whitespace and dots
+    // (Windows doesn't allow file names ending in a dot)
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^[.\s]+|[.\s]+$/g, "")
@@ -120,7 +125,7 @@ export function fileNameFor(title: string, extension: string): string {
   return `${base || "untitled"}.${extension}`;
 }
 
-/** 把外部传来的区间夹进源码范围，并保证 from <= to。 */
+/** Clamp an externally supplied range into the source bounds and ensure from <= to. */
 export function clampRange(
   source: string,
   range: ExportRange | null | undefined,
@@ -134,17 +139,17 @@ export function clampRange(
   return to > from ? { from, to } : null;
 }
 
-/** 选区有可能只选中空白，导出这种内容等于导出一个空文件。 */
+/** A selection may contain only whitespace; exporting that is equivalent to exporting an empty file. */
 function meaningful(text: string): boolean {
   return text.trim().length > 0;
 }
 
-/** Markdown 收尾：去掉尾部空行，补一个换行（POSIX 文本文件约定）。 */
+/** Finish Markdown: strip trailing blank lines and add one newline (the POSIX text-file convention). */
 function normalizeMarkdown(text: string): string {
   return `${text.replace(/[ \t]+$/gm, "").replace(/\n+$/, "")}\n`;
 }
 
-/** 取这次导出的源码与对应 IR。 */
+/** Get the source and corresponding IR for this export. */
 function sourceOf(
   source: string,
   range: ExportRange | null | undefined,
@@ -161,11 +166,12 @@ function sourceOf(
 }
 
 /**
- * 组装一次导出。
+ * Assemble one export.
  *
- * 选区导出不是「把整篇渲染好再截一段」——那样会切断 DOM、丢掉未闭合的标签。
- * 做法是把选区那一段源码重新解析成 IR，再走同一条渲染链：结构可能被规范化
- * （比如从段落中间开始选），但产出的永远是一份合法的文档。
+ * A selection export is not "render the whole document then cut a piece" — that would
+ * sever the DOM and drop unclosed tags. Instead, re-parse the selected source into IR and
+ * run it through the same rendering pipeline: the structure may be normalized (e.g. when
+ * selecting from the middle of a paragraph), but the output is always a valid document.
  */
 export async function buildExport(request: ExportRequest): Promise<ExportPayload> {
   const meta = FORMAT_META[request.format];

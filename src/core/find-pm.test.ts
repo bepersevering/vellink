@@ -1,4 +1,4 @@
-/** WYSIWYG 可见文本投影：命中能换算回 PM 区间，跨块命中被拒绝。 */
+/** WYSIWYG visible-text projection: hits map back to PM ranges; cross-block hits are rejected. */
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "./parser/markdown";
 import { buildPMView } from "./view/mapping";
@@ -8,7 +8,7 @@ import { findMatches } from "./find";
 const docOf = (source: string) =>
   buildPMView(parseMarkdown({ source }).ir).doc;
 
-/** 在源码里搜 `query`，返回第一处命中对应的 PM 文本（查不到返回 null）。 */
+/** Search `query` in the source and return the PM text of the first hit (null if not found). */
 function pmTextOfHit(source: string, query: string): string | null {
   const doc = docOf(source);
   const map = buildPMTextMap(doc);
@@ -20,12 +20,12 @@ function pmTextOfHit(source: string, query: string): string | null {
 }
 
 describe("buildPMTextMap", () => {
-  it("块之间补一个换行，避免跨段落拼出假命中", () => {
+  it("inserts a newline between blocks so fake cross-paragraph hits can't form", () => {
     const map = buildPMTextMap(docOf("# Title\n\npara one\n\npara two\n"));
     expect(map.text).toBe("Title\npara one\npara two");
   });
 
-  it("空文档得到空文本", () => {
+  it("produces empty text for an empty document", () => {
     const map = buildPMTextMap(docOf(""));
     expect(map.text).toBe("");
     expect(map.segments).toEqual([]);
@@ -33,23 +33,23 @@ describe("buildPMTextMap", () => {
 });
 
 describe("locateInPM", () => {
-  it("普通段落里的命中精确对应", () => {
+  it("maps hits in normal paragraphs exactly", () => {
     expect(pmTextOfHit("hello world\n", "world")).toBe("world");
   });
 
-  it("被 mark 切成多个文本节点的命中也能跨节点定位", () => {
+  it("locates hits split across multiple text nodes by marks", () => {
     expect(pmTextOfHit("a **bold** tail\n", "bold")).toBe("bold");
   });
 
-  it("中文命中对应", () => {
-    expect(pmTextOfHit("# 农业保险\n\n遥感定损\n", "遥感")).toBe("遥感");
+  it("maps multi-word phrase hits inside headings", () => {
+    expect(pmTextOfHit("# Crop Insurance\n\nRemote Sensing Assessment\n", "Remote Sensing")).toBe("Remote Sensing");
   });
 
-  it("代码块里的文本可命中", () => {
+  it("finds text inside code blocks", () => {
     expect(pmTextOfHit("```ts\nconst answer = 42\n```\n", "answer")).toBe("answer");
   });
 
-  it("跨段落的命中返回 null（不在 WYSIWYG 里硬塞近似位置）", () => {
+  it("returns null for cross-paragraph hits (no fake approximate position in WYSIWYG)", () => {
     const doc = docOf("alpha\n\nbeta\n");
     const map = buildPMTextMap(doc);
     const from = map.text.indexOf("alpha");
@@ -58,7 +58,7 @@ describe("locateInPM", () => {
     expect(locateInPM(map, from, to)).toBeNull();
   });
 
-  it("区间非法时返回 null，不返回负长度", () => {
+  it("returns null for invalid ranges, never a negative-length range", () => {
     const map = buildPMTextMap(docOf("abc\n"));
     expect(locateInPM(map, 2, 2)).toBeNull();
     expect(locateInPM(map, 0, 99)).toBeNull();

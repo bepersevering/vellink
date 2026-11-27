@@ -1,33 +1,35 @@
 /**
- * 数学公式的识别与切分（纯函数，无 KaTeX 依赖）。
+ * Math formula detection and splitting (pure function, no KaTeX dependency).
  *
- * Lezer markdown 不认识 `$...$`，它会整段落在 TextNode 里。与其改语法，
- * 不如在解析出文本后做一次切分：把 `$...$` 换成 inlineMath 原子节点，
- * `$$...$$` 换成 mathBlock。这样源码视图里的 `$` 原样保留，往返不丢。
+ * Lezer markdown doesn't recognize `$...$`; it leaves the whole thing inside a TextNode.
+ * Rather than change the grammar, split the text once after parsing: turn `$...$` into
+ * an inlineMath atom and `$$...$$` into a mathBlock. That way the `$` stays intact in the
+ * source view and round-trips without loss.
  *
- * 边界规则（照常见 Markdown 数学扩展）：
- * - `$x$` 行内；`$$x$$` 块级，可以跨行。
- * -  opening `$` 后面紧跟空白不算公式（`price $ 5`）。
- * - 反斜杠转义的 `\$` 不是公式边界。
- * - 闭合符前紧跟反斜杠、或闭合符后紧跟数字（`$20` 的 `$`）不算。
+ * Boundary rules (following common Markdown math extensions):
+ * - `$x$` is inline; `$$x$$` is block-level and may span lines.
+ * - An opening `$` immediately followed by whitespace is not a formula (`price $ 5`).
+ * - A backslash-escaped `\$` is not a formula boundary.
+ * - A closer preceded by a backslash, or followed immediately by a digit (the `$` in `$20`),
+ *   doesn't count.
  */
 
 export interface MathSpan {
   start: number;
   end: number;
-  /** 公式内容，不含两侧分隔符。 */
+  /** Formula content, excluding the delimiters on both sides. */
   value: string;
   block: boolean;
 }
 
-/** 该位置的 `$` 是否被反斜杠转义。 */
+/** Whether the `$` at this position is backslash-escaped. */
 function escaped(source: string, at: number): boolean {
   let slashes = 0;
   for (let i = at - 1; i >= 0 && source[i] === "\\"; i--) slashes++;
   return slashes % 2 === 1;
 }
 
-/** 从 `at` 开始找匹配的闭合分隔符，返回结束偏移（不含）与内容。 */
+/** Find the matching closing delimiter starting at `at`; return the end offset (exclusive) and content. */
 function closing(
   source: string,
   at: number,
@@ -39,26 +41,26 @@ function closing(
     if (escaped(source, i)) continue;
     const value = source.slice(contentStart, i);
     if (!value.trim()) return null;
-    // 内容里含裸 $ 说明这个 opening 不是公式开头（如 `cost $5 and $x$`），
-    // 放弃它，让调用方从下一个 $ 重新尝试。
+    // A bare $ inside the content means this opening isn't the start of a formula
+    // (e.g. `cost $5 and $x$`); give up and let the caller retry from the next $.
     if (/(^|[^\\])\$/.test(value)) return null;
-    // 闭合符前紧跟空白 → 不是边界，继续找下一个闭合符
+    // Whitespace right before the closer → not a boundary, keep looking for the next one.
     if (/\s$/.test(value)) continue;
-    // 闭合符后紧跟数字：更像货币符号而不是公式（`cost $5`）
+    // A digit right after the closer: more like a currency symbol than a formula (`cost $5`).
     if (/[0-9]/.test(source[i + delim.length] ?? "")) continue;
     return { end: i + delim.length, value };
   }
   return null;
 }
 
-/** 扫一段源码，找出所有公式片段（互不重叠，按位置升序）。 */
+/** Scan a piece of source and find all formula spans (non-overlapping, in ascending position order). */
 export function findMath(source: string): MathSpan[] {
   const out: MathSpan[] = [];
   for (let i = 0; i < source.length; i++) {
     if (source[i] !== "$" || escaped(source, i)) continue;
     const block = source.slice(i, i + 2) === "$$";
     const delim = block ? "$$" : "$";
-    // opening 后紧跟空白 → 不是公式
+    // Whitespace right after the opening → not a formula.
     if (/\s/.test(source[i + delim.length] ?? "")) continue;
     const found = closing(source, i, delim);
     if (!found) continue;
@@ -69,8 +71,8 @@ export function findMath(source: string): MathSpan[] {
 }
 
 /**
- * 把一段纯文本按公式切成「文本 / 公式」片段。
- * `text` 的 span 是绝对偏移，调用方据此建 TextNode / InlineMathNode。
+ * Split a piece of plain text into text / formula chunks at formula boundaries.
+ * The `text` spans are absolute offsets; the caller uses them to build TextNode / InlineMathNode.
  */
 export type MathChunk =
   | { kind: "text"; start: number; end: number; value: string }
@@ -113,8 +115,9 @@ export function splitMath(source: string, from: number, to: number): MathChunk[]
 }
 
 /**
- * 块级公式独占一段：一段去掉首尾空白后若整个被 `$$...$$` 覆盖，
- * 则返回公式内容，否则 null。调用方在 mapBlock 里优先判这个。
+ * A block formula occupies a whole paragraph: if a block, trimmed of surrounding whitespace,
+ * is entirely covered by `$$...$$`, return the formula content; otherwise null.
+ * The caller checks this first in mapBlock.
  */
 export function standaloneMathBlock(source: string, from: number, to: number): MathSpan | null {
   const raw = source.slice(from, to);

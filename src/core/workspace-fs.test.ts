@@ -8,7 +8,7 @@ import {
 
 const ROOT = "/docs";
 
-/** 内存里的「磁盘」，接口与 Tauri 命令一致，方便在 node 里跑。 */
+/** In-memory "disk" whose interface mirrors the Tauri commands, so tests run in node. */
 function fakeDisk(initial: Record<string, { content: string; modified: number }> = {}) {
   const store = new Map(Object.entries(initial));
   const trashed: Array<{ path: string; dir: string }> = [];
@@ -28,7 +28,7 @@ function fakeDisk(initial: Record<string, { content: string; modified: number }>
     },
     async read(path) {
       const file = store.get(path);
-      if (!file) throw new Error(`没有这个文件: ${path}`);
+      if (!file) throw new Error(`no such file: ${path}`);
       return file.content;
     },
     async write(path, contents) {
@@ -49,8 +49,8 @@ function fakeDisk(initial: Record<string, { content: string; modified: number }>
     },
     async rename(from, to) {
       const file = store.get(from);
-      if (!file) throw new Error(`没有这个文件: ${from}`);
-      if (store.has(to)) throw new Error(`目标文件已存在: ${to}`);
+      if (!file) throw new Error(`no such file: ${from}`);
+      if (store.has(to)) throw new Error(`target file already exists: ${to}`);
       clock += 1;
       store.delete(from);
       store.set(to, { content: file.content, modified: clock });
@@ -67,27 +67,27 @@ function fakeDisk(initial: Record<string, { content: string; modified: number }>
 }
 
 describe("slugifyTitle", () => {
-  it("保留中日韩文字，替换文件系统非法字符", () => {
+  it("preserves CJK characters, replaces filesystem-illegal characters", () => {
     expect(slugifyTitle("如何建立自己的知识体系")).toBe("如何建立自己的知识体系");
     expect(slugifyTitle('a/b:c*d?e"f<g>h|i')).toBe("a-b-c-d-e-f-g-h-i");
   });
 
-  it("空格折叠成连字符，去掉首尾的点和连字符", () => {
+  it("collapses spaces into hyphens and strips leading/trailing dots and hyphens", () => {
     expect(slugifyTitle("  Hello   World  ")).toBe("Hello-World");
     expect(slugifyTitle("..hidden..")).toBe("hidden");
   });
 
-  it("空标题回退到默认名，超长截断", () => {
+  it("falls back for empty titles and truncates long ones", () => {
     expect(slugifyTitle("   ")).toBe("untitled");
     expect(slugifyTitle("x".repeat(200)).length).toBeLessThanOrEqual(60);
   });
 });
 
-describe("文件后端", () => {
-  it("load：id 是绝对路径，标题取首个一级标题，内容即已保存版本", async () => {
+describe("File backend", () => {
+  it("load: id is the absolute path, title comes from the first H1, content is the saved version", async () => {
     const disk = fakeDisk({
-      [`${ROOT}/a.md`]: { content: "# Alpha\n\n正文", modified: 100 },
-      [`${ROOT}/notes/b.md`]: { content: "# Beta\n\n正文", modified: 300 },
+      [`${ROOT}/a.md`]: { content: "# Alpha\n\nBody text", modified: 100 },
+      [`${ROOT}/notes/b.md`]: { content: "# Beta\n\nBody text", modified: 300 },
     });
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
 
@@ -102,7 +102,7 @@ describe("文件后端", () => {
     expect(docs[0].updatedAt).toBe(300);
   });
 
-  it("load：单篇读失败不影响其它文档", async () => {
+  it("load: one failed read doesn't affect other documents", async () => {
     const disk = fakeDisk({ [`${ROOT}/ok.md`]: { content: "# OK", modified: 1 } });
     const backend = createFileWorkspaceBackend(ROOT, {
       ...disk.deps,
@@ -120,40 +120,40 @@ describe("文件后端", () => {
     expect(docs.map((doc) => doc.id)).toEqual([`${ROOT}/ok.md`]);
   });
 
-  it("newPath：避开目录里已有文件名，pathFor 不去重", async () => {
+  it("newPath: avoids existing filenames in the directory, pathFor doesn't deduplicate", async () => {
     const disk = fakeDisk({
-      [`${ROOT}/未命名文档.md`]: { content: "# 未命名文档", modified: 1 },
+      [`${ROOT}/Untitled.md`]: { content: "# Untitled", modified: 1 },
     });
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
 
-    expect(await backend.newPath("未命名文档")).toBe(`${ROOT}/未命名文档-2.md`);
-    expect(await backend.newPath("全新标题")).toBe(`${ROOT}/全新标题.md`);
-    expect(backend.pathFor("未命名文档")).toBe(`${ROOT}/未命名文档.md`);
+    expect(await backend.newPath("Untitled")).toBe(`${ROOT}/Untitled-2.md`);
+    expect(await backend.newPath("Fresh")).toBe(`${ROOT}/Fresh.md`);
+    expect(backend.pathFor("Untitled")).toBe(`${ROOT}/Untitled.md`);
   });
 
-  it("连按两次新建不会拿到同一个路径", async () => {
+  it("two rapid creates don't get the same path", async () => {
     const disk = fakeDisk({});
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
 
     const [first, second] = await Promise.all([
-      backend.newPath("未命名文档"),
-      backend.newPath("未命名文档"),
+      backend.newPath("Untitled"),
+      backend.newPath("Untitled"),
     ]);
 
     expect(first).not.toBe(second);
     expect([first, second]).toEqual([
-      `${ROOT}/未命名文档.md`,
-      `${ROOT}/未命名文档-2.md`,
+      `${ROOT}/Untitled.md`,
+      `${ROOT}/Untitled-2.md`,
     ]);
   });
 
-  it("save 写回同一个文件，remove 移到回收目录而不是删除", async () => {
+  it("save writes back to the same file, remove moves to trash instead of deleting", async () => {
     const disk = fakeDisk({ [`${ROOT}/a.md`]: { content: "# A", modified: 1 } });
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
     const [doc] = (await backend.load())!;
 
-    await backend.save({ ...doc, source: "# A\n\n改过了" });
-    expect(disk.store.get(`${ROOT}/a.md`)?.content).toBe("# A\n\n改过了");
+    await backend.save({ ...doc, source: "# A\n\nEdited" });
+    expect(disk.store.get(`${ROOT}/a.md`)?.content).toBe("# A\n\nEdited");
 
     await backend.remove(doc.id);
     expect(disk.trashed).toEqual([
@@ -162,7 +162,7 @@ describe("文件后端", () => {
     expect(backend.trashDir).toBe(`${ROOT}/.vellink-trash`);
   });
 
-  it("listMeta 只列举不读内容，供轮询增量对比", async () => {
+  it("listMeta lists metadata only, for incremental polling diffs", async () => {
     const disk = fakeDisk({ [`${ROOT}/a.md`]: { content: "# A", modified: 7 } });
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
 
@@ -172,40 +172,40 @@ describe("文件后端", () => {
     expect(await backend.read(entries[0].path)).toBe("# A");
   });
 
-  it("pathForTitle：标题没变就原样返回自己，变了则在同一目录里挑不冲突的名字", async () => {
+  it("pathForTitle: returns itself when the title is unchanged, otherwise picks a non-conflicting name in the same directory", async () => {
     const disk = fakeDisk({
       [`${ROOT}/notes/a.md`]: { content: "# A", modified: 1 },
-      [`${ROOT}/notes/新标题.md`]: { content: "# 别人占了这个名字", modified: 2 },
+      [`${ROOT}/notes/NewTitle.md`]: { content: "# Someone else took this name", modified: 2 },
     });
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
 
-    // 标题仍是 A：文件名已经是它了，不需要改名
+    // Title is still A: the filename already matches, no rename needed
     expect(await backend.pathForTitle("A", `${ROOT}/notes/a.md`)).toBe(
       `${ROOT}/notes/a.md`,
     );
-    // 换成「新标题」：同目录下已被占用，顺延
-    expect(await backend.pathForTitle("新标题", `${ROOT}/notes/a.md`)).toBe(
-      `${ROOT}/notes/新标题-2.md`,
+    // Switch to "NewTitle": already taken in this directory, so append a number
+    expect(await backend.pathForTitle("NewTitle", `${ROOT}/notes/a.md`)).toBe(
+      `${ROOT}/notes/NewTitle-2.md`,
     );
-    // 保留原有子目录，不会把文件搬到根目录
-    expect(await backend.pathForTitle("搬到别处", `${ROOT}/notes/a.md`)).toBe(
-      `${ROOT}/notes/搬到别处.md`,
+    // Keep the original subdirectory; don't move the file to the root
+    expect(await backend.pathForTitle("Elsewhere", `${ROOT}/notes/a.md`)).toBe(
+      `${ROOT}/notes/Elsewhere.md`,
     );
   });
 
-  it("rename：改完路径就是新的 id，内容不变", async () => {
-    const disk = fakeDisk({ [`${ROOT}/a.md`]: { content: "# 旧", modified: 1 } });
+  it("rename: the new path becomes the id, content unchanged", async () => {
+    const disk = fakeDisk({ [`${ROOT}/a.md`]: { content: "# Old", modified: 1 } });
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
 
-    await backend.rename(`${ROOT}/a.md`, `${ROOT}/新名字.md`);
+    await backend.rename(`${ROOT}/a.md`, `${ROOT}/NewName.md`);
 
     expect(disk.store.has(`${ROOT}/a.md`)).toBe(false);
-    expect(disk.store.get(`${ROOT}/新名字.md`)?.content).toBe("# 旧");
+    expect(disk.store.get(`${ROOT}/NewName.md`)?.content).toBe("# Old");
     const listed = await backend.listMeta();
-    expect(listed.map((entry) => entry.path)).toEqual([`${ROOT}/新名字.md`]);
+    expect(listed.map((entry) => entry.path)).toEqual([`${ROOT}/NewName.md`]);
   });
 
-  it("rename 之后新名字可以立刻被再次新建（占位不会泄漏）", async () => {
+  it("after rename, the new name can be created again immediately (no reservation leak)", async () => {
     const disk = fakeDisk({ [`${ROOT}/a.md`]: { content: "# A", modified: 1 } });
     const backend = createFileWorkspaceBackend(ROOT, disk.deps);
 

@@ -1,24 +1,24 @@
 import type { BlockNode, DocumentIR } from "../ir/types";
 
 /**
- * 事务与操作 — 所有文档修改的唯一入口。
+ * Transactions and ops — the single entry point for all document changes.
  *
- * 约束：
- * 1. 每个 op 必须能生成 inverse（反向 op），undo 靠它。
- * 2. applyTransaction 是纯函数：返回新 IR，不改原树。
- * 3. 事务是 CRDT 同步、插件监听、撤销栈的共同载体。
+ * Constraints:
+ * 1. Every op must produce an inverse op; undo relies on it.
+ * 2. applyTransaction is pure: it returns a new IR without mutating the original tree.
+ * 3. Transactions are the shared carrier for CRDT sync, plugin listeners and the undo stack.
  */
 
 export interface InsertOp {
   type: "insert";
-  /** 插入到该索引之前（顶层 children 位置） */
+  /** Insert before this index (position among top-level children) */
   at: number;
   nodes: BlockNode[];
 }
 
 export interface DeleteOp {
   type: "delete";
-  /** 从该索引开始删除 count 个顶层节点 */
+  /** Delete `count` top-level nodes starting at this index */
   at: number;
   count: number;
 }
@@ -36,8 +36,8 @@ export interface UpdateSourceOp {
 }
 
 /**
- * 整份文档替换：IR 节点树 + 源文本一起换。
- * 为双视图同步设计——WYSIWYG / 源码编辑产出的新 IR 作为一个原子撤销步骤。
+ * Replace the whole document: swap the IR node tree and source text together.
+ * Designed for dual-view sync — the new IR from a WYSIWYG or source edit is one atomic undo step.
  */
 export interface ReplaceDocumentOp {
   type: "replaceDocument";
@@ -52,20 +52,20 @@ export type Op =
   | UpdateSourceOp
   | ReplaceDocumentOp;
 
-/** 事务：一组原子 op。 */
+/** A transaction: a group of atomic ops. */
 export interface Transaction {
   id: string;
   ops: Op[];
-  /** 该事务生成的反向 op 序列（按逆序应用） */
+  /** Inverse ops produced by this transaction (applied in reverse order) */
   inverse: Op[];
   timestamp: number;
-  /** 连续输入合并用；同一 key 且时间窗内的 replaceDocument 事务合并为一个撤销步骤 */
+  /** For merging continuous typing; replaceDocument transactions with the same key inside the time window merge into one undo step */
   mergeKey?: string;
 }
 
-/** apply 的可选行为。 */
+/** Optional behavior for apply. */
 export interface ApplyOptions {
-  /** 与上次同 key 且间隔小于 mergeWindowMs 的单 op 文档替换合并 */
+  /** Merge a single-op document replacement with the last one if the key matches and the gap is under mergeWindowMs */
   mergeKey?: string;
   mergeWindowMs?: number;
 }

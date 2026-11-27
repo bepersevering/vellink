@@ -1,21 +1,22 @@
 /**
- * IR 语义切片 — 按标题层级切成可检索的段落。
+ * IR semantic chunking — split by heading level into searchable passages.
  *
- * 策略：
- * 1. 每个 heading 开一个新 chunk，标题路径（# / ##）作为元数据；
- * 2. heading 之前的引言单独成 chunk；连续小段落合并到同一 chunk，
- *    超过 maxChars 则切分，避免向量检索时上下文过碎或过长；
- * 3. 代码块保留完整语言标记，表格按行文本化。
+ * Strategy:
+ * 1. Each heading starts a new chunk, with the heading path (# / ##) as metadata;
+ * 2. Text before the first heading becomes its own chunk; consecutive short paragraphs are
+ *    merged into one chunk and split when they exceed maxChars, so vector search contexts are
+ *    neither too fragmented nor too long;
+ * 3. Code blocks keep their full language tag; tables are linearized row by row.
  */
 
 import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
 
 export interface DocChunk {
   id: string;
-  /** 标题路径，如 ["架构", "IR"] */
+  /** Heading path, e.g. ["Architecture", "IR"] */
   headings: string[];
   text: string;
-  /** 起点在源文档的 offset，便于检索后回跳 */
+  /** Offset in the source document, for jumping back after a search */
   start: number;
   end: number;
 }
@@ -80,7 +81,7 @@ function blockText(node: BlockNode): string {
   }
 }
 
-/** 把行内文本渲染为纯文本（标题路径用），去掉 Markdown 装饰。 */
+/** Render inline nodes as plain text (for heading paths), stripping Markdown decorations. */
 export function plainText(nodes: InlineNode[]): string {
   return inlineText(nodes).replace(/\[\[([^\]]+)\]\]/g, "$1").trim();
 }
@@ -91,7 +92,7 @@ interface Piece {
   end: number;
 }
 
-/** 单个块超过 maxChars 时按句号/换行优先切开，offset 按字符比例回映射。 */
+/** When a single block exceeds maxChars, prefer sentence/newline breaks and remap offsets proportionally. */
 function splitPiece(node: BlockNode, maxChars: number): Piece[] {
   const text = blockText(node);
   const spanLength = Math.max(1, node.span.end - node.span.start);
@@ -104,7 +105,7 @@ function splitPiece(node: BlockNode, maxChars: number): Piece[] {
   while (cursor < text.length) {
     let stop = Math.min(cursor + maxChars, text.length);
     if (stop < text.length) {
-      // 在前 60% 之后寻找自然断点，避免把句子拦腰截断
+      // Look for a natural break after the first 60% to avoid cutting a sentence in half
       const lower = cursor + Math.floor(maxChars * 0.6);
       for (let i = stop; i >= lower; i--) {
         if (text[i - 1] === "\n" || /[。！？；.!?;]/.test(text[i - 1])) {

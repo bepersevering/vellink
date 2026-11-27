@@ -1,10 +1,10 @@
 /**
- * 插件 manifest — 插件与内核之间唯一的声明式契约。
+ * Plugin manifest — the sole declarative contract between a plugin and the host.
  *
- * 设计原则：
- * 1. 校验发生在安装时，坏 manifest 绝不让宿主崩溃（返回带字段路径的错误）。
- * 2. 命令/视图 id 强制以插件 id 命名空间开头，杜绝插件之间撞名。
- * 3. 权限是显式白名单，运行时真的会门控 API，不做纸面声明。
+ * Design principles:
+ * 1. Validation happens at install time; a bad manifest must never crash the host (errors include the field path).
+ * 2. Command/view ids must start with the plugin id namespace, so plugins can't collide with each other.
+ * 3. Permissions are an explicit allowlist and the runtime actually gates APIs — not a paper declaration.
  */
 
 export const PLUGIN_PERMISSIONS = [
@@ -54,9 +54,9 @@ export interface PluginManifest {
   description?: string;
   author?: string;
   license?: string;
-  /** ESM 入口，相对插件目录；禁止绝对路径、路径穿越与远程 URL。 */
+  /** ESM entry point, relative to the plugin directory; absolute paths, traversal and remote URLs are forbidden. */
   entry: string;
-  /** 兼容的应用版本范围，如 "^0.1.0"。 */
+  /** Compatible app version range, e.g. "^0.1.0". */
   engines?: { vellink?: string };
   activationEvents?: ActivationEvent[];
   permissions?: PluginPermission[];
@@ -85,11 +85,11 @@ function readString(
 ): string | undefined {
   const value = obj[key];
   if (value === undefined) {
-    if (required) throw new PluginManifestError(path, "缺少必填字段");
+    if (required) throw new PluginManifestError(path, "missing required field");
     return undefined;
   }
   if (typeof value !== "string" || value.trim().length === 0)
-    throw new PluginManifestError(path, "必须是非空字符串");
+    throw new PluginManifestError(path, "must be a non-empty string");
   return value.trim();
 }
 
@@ -101,11 +101,11 @@ function readOptionalStringArray(
   const value = obj[key];
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || value.some((v) => typeof v !== "string"))
-    throw new PluginManifestError(path, "必须是字符串数组");
+    throw new PluginManifestError(path, "must be an array of strings");
   return value as string[];
 }
 
-/** 轻量 semver 解析：x.y.z[-prerelease]，够覆盖 engines 声明。 */
+/** Lightweight semver parsing: x.y.z[-prerelease], enough for engines declarations. */
 function parseVersion(input: string): [number, number, number, string | undefined] | null {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(input);
   if (!match) return null;
@@ -121,7 +121,7 @@ function compare(a: Version, b: Version): number {
     if (av !== bv) return av < bv ? -1 : 1;
   }
   if (!a[3] && !b[3]) return 0;
-  if (!a[3]) return 1; // 正式版 > 预发布版
+  if (!a[3]) return 1; // stable > prerelease
   if (!b[3]) return -1;
   return a[3] < b[3] ? -1 : a[3] > b[3] ? 1 : 0;
 }
@@ -132,7 +132,7 @@ function matchesComparator(version: Version, part: string): boolean {
   const op = operators.find((candidate) => part.startsWith(candidate));
   const raw = op ? part.slice(op.length) : part;
   const base = parseVersion(raw);
-  if (!base) throw new PluginManifestError("engines.vellink", `无法识别的版本范围: ${part}`);
+  if (!base) throw new PluginManifestError("engines.vellink", `unrecognized version range: ${part}`);
 
   switch (op) {
     case ">=":
@@ -144,7 +144,7 @@ function matchesComparator(version: Version, part: string): boolean {
     case "<":
       return compare(version, base) < 0;
     case "^": {
-      // 0.x 锁定 minor，>=1 锁定 major
+      // 0.x locks the minor version; >=1 locks the major version
       const upper: Version =
         base[0] === 0
           ? base[1] === 0
@@ -162,7 +162,7 @@ function matchesComparator(version: Version, part: string): boolean {
   }
 }
 
-/** 判断应用版本是否满足 engines.vellink；多个比较器用空格分隔表示 AND。 */
+/** Check whether an app version satisfies engines.vellink; space-separated comparators mean AND. */
 export function satisfiesVersion(version: string, range: string): boolean {
   const parsed = parseVersion(version);
   if (!parsed) return false;
@@ -184,25 +184,25 @@ function validateActivationEvents(manifest: Record<string, unknown>): Activation
     ) {
       return value as ActivationEvent;
     }
-    throw new PluginManifestError(path, `无法识别的激活事件: ${value}`);
+    throw new PluginManifestError(path, `unrecognized activation event: ${value}`);
   });
 }
 
-/** 校验未知输入，返回规范化 manifest；任何问题都以 PluginManifestError 抛出。 */
+/** Validate unknown input and return a normalized manifest; any problem is thrown as a PluginManifestError. */
 export function validateManifest(input: unknown): PluginManifest {
-  if (!isRecord(input)) throw new PluginManifestError("manifest", "必须是对象");
+  if (!isRecord(input)) throw new PluginManifestError("manifest", "must be an object");
 
   const id = readString(input, "id", "id")!;
   if (!/^[a-z][a-z0-9-]{1,63}$/.test(id))
-    throw new PluginManifestError("id", "只能使用小写字母、数字与连字符，长度 2-64");
+    throw new PluginManifestError("id", "may only use lowercase letters, digits, and hyphens; length 2-64");
 
   const name = readString(input, "name", "name")!;
   const version = readString(input, "version", "version")!;
-  if (!parseVersion(version)) throw new PluginManifestError("version", "必须是 x.y.z 语义化版本");
+  if (!parseVersion(version)) throw new PluginManifestError("version", "must be an x.y.z semantic version");
 
   const entry = readString(input, "entry", "entry")!;
   if (entry.startsWith("/") || entry.includes("..") || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(entry))
-    throw new PluginManifestError("entry", "必须是插件目录内的相对路径，禁止 .. 与远程 URL");
+    throw new PluginManifestError("entry", "must be a relative path inside the plugin directory; .. and remote URLs are not allowed");
 
   const description = readString(input, "description", "description", false);
   const author = readString(input, "author", "author", false);
@@ -211,10 +211,10 @@ export function validateManifest(input: unknown): PluginManifest {
   let engines: PluginManifest["engines"];
   if (input.engines !== undefined) {
     if (!isRecord(input.engines))
-      throw new PluginManifestError("engines", "必须是对象");
+      throw new PluginManifestError("engines", "must be an object");
     const range = readString(input.engines, "vellink", "engines.vellink", false);
     if (range !== undefined) {
-      // 立即解析一次，坏范围在安装期就报错
+      // Parse once immediately so a bad range fails at install time
       satisfiesVersion("0.0.0", range);
       engines = { vellink: range };
     }
@@ -227,7 +227,7 @@ export function validateManifest(input: unknown): PluginManifest {
     const values = readOptionalStringArray(input, "permissions", "permissions") ?? [];
     permissions = values.map((value, index) => {
       if (!(PLUGIN_PERMISSIONS as readonly string[]).includes(value))
-        throw new PluginManifestError(`permissions[${index}]`, `未知权限: ${value}`);
+        throw new PluginManifestError(`permissions[${index}]`, `unknown permission: ${value}`);
       return value as PluginPermission;
     });
   }
@@ -251,22 +251,22 @@ export function validateManifest(input: unknown): PluginManifest {
 
 function validateContributes(raw: unknown, pluginId: string): ManifestContributes | undefined {
   if (raw === undefined) return undefined;
-  if (!isRecord(raw)) throw new PluginManifestError("contributes", "必须是对象");
+  if (!isRecord(raw)) throw new PluginManifestError("contributes", "must be an object");
 
   const ns = (value: string | undefined, path: string): string => {
     const v = readString({ value }, "value", path)!;
     if (!v.startsWith(`${pluginId}.`) || v.length <= pluginId.length + 1)
-      throw new PluginManifestError(path, `必须以 ${pluginId}. 开头（插件命名空间）`);
+      throw new PluginManifestError(path, `must start with ${pluginId}. (plugin namespace)`);
     return v;
   };
 
   const result: ManifestContributes = {};
 
   if (raw.commands !== undefined) {
-    if (!Array.isArray(raw.commands)) throw new PluginManifestError("contributes.commands", "必须是数组");
+    if (!Array.isArray(raw.commands)) throw new PluginManifestError("contributes.commands", "must be an array");
     result.commands = raw.commands.map((entry, index) => {
       const path = `contributes.commands[${index}]`;
-      if (!isRecord(entry)) throw new PluginManifestError(path, "必须是对象");
+      if (!isRecord(entry)) throw new PluginManifestError(path, "must be an object");
       const command = ns(entry.command as string | undefined, `${path}.command`);
       const title = readString(entry, "title", `${path}.title`)!;
       const keybinding = readString(entry, "keybinding", `${path}.keybinding`, false);
@@ -275,13 +275,13 @@ function validateContributes(raw: unknown, pluginId: string): ManifestContribute
   }
 
   if (raw.menus !== undefined) {
-    if (!Array.isArray(raw.menus)) throw new PluginManifestError("contributes.menus", "必须是数组");
+    if (!Array.isArray(raw.menus)) throw new PluginManifestError("contributes.menus", "must be an array");
     result.menus = raw.menus.map((entry, index) => {
       const path = `contributes.menus[${index}]`;
-      if (!isRecord(entry)) throw new PluginManifestError(path, "必须是对象");
+      if (!isRecord(entry)) throw new PluginManifestError(path, "must be an object");
       const location = entry.location;
       if (location !== "commandPalette" && location !== "editorContext")
-        throw new PluginManifestError(`${path}.location`, "必须是 commandPalette 或 editorContext");
+        throw new PluginManifestError(`${path}.location`, "must be commandPalette or editorContext");
       const commands = readOptionalStringArray(entry, "commands", `${path}.commands`) ?? [];
       commands.forEach((command, i) => ns(command, `${path}.commands[${i}]`));
       return { location, commands };
@@ -289,15 +289,15 @@ function validateContributes(raw: unknown, pluginId: string): ManifestContribute
   }
 
   if (raw.views !== undefined) {
-    if (!Array.isArray(raw.views)) throw new PluginManifestError("contributes.views", "必须是数组");
+    if (!Array.isArray(raw.views)) throw new PluginManifestError("contributes.views", "must be an array");
     result.views = raw.views.map((entry, index) => {
       const path = `contributes.views[${index}]`;
-      if (!isRecord(entry)) throw new PluginManifestError(path, "必须是对象");
+      if (!isRecord(entry)) throw new PluginManifestError(path, "must be an object");
       const id = ns(entry.id as string | undefined, `${path}.id`);
       const title = readString(entry, "title", `${path}.title`)!;
       const location = entry.location;
       if (location !== "leftDrawer" && location !== "rightDrawer" && location !== "editor")
-        throw new PluginManifestError(`${path}.location`, "必须是 leftDrawer / rightDrawer / editor");
+        throw new PluginManifestError(`${path}.location`, "must be leftDrawer / rightDrawer / editor");
       const icon = readString(entry, "icon", `${path}.icon`, false);
       return { id, title, location, ...(icon ? { icon } : {}) };
     });
@@ -305,10 +305,10 @@ function validateContributes(raw: unknown, pluginId: string): ManifestContribute
 
   if (raw.blockRenderers !== undefined) {
     if (!Array.isArray(raw.blockRenderers))
-      throw new PluginManifestError("contributes.blockRenderers", "必须是数组");
+      throw new PluginManifestError("contributes.blockRenderers", "must be an array");
     result.blockRenderers = raw.blockRenderers.map((entry, index) => {
       const path = `contributes.blockRenderers[${index}]`;
-      if (!isRecord(entry)) throw new PluginManifestError(path, "必须是对象");
+      if (!isRecord(entry)) throw new PluginManifestError(path, "must be an object");
       const type = readString(entry, "type", `${path}.type`)!;
       const label = readString(entry, "label", `${path}.label`, false);
       return { type, ...(label ? { label } : {}) };
@@ -316,10 +316,10 @@ function validateContributes(raw: unknown, pluginId: string): ManifestContribute
   }
 
   if (raw.syntax !== undefined) {
-    if (!Array.isArray(raw.syntax)) throw new PluginManifestError("contributes.syntax", "必须是数组");
+    if (!Array.isArray(raw.syntax)) throw new PluginManifestError("contributes.syntax", "must be an array");
     result.syntax = raw.syntax.map((entry, index) => {
       const path = `contributes.syntax[${index}]`;
-      if (!isRecord(entry)) throw new PluginManifestError(path, "必须是对象");
+      if (!isRecord(entry)) throw new PluginManifestError(path, "must be an object");
       const id = ns(entry.id as string | undefined, `${path}.id`);
       const extensions = readOptionalStringArray(entry, "extensions", `${path}.extensions`);
       return { id, ...(extensions ? { extensions } : {}) };
@@ -327,13 +327,13 @@ function validateContributes(raw: unknown, pluginId: string): ManifestContribute
   }
 
   if (raw.providers !== undefined) {
-    if (!Array.isArray(raw.providers)) throw new PluginManifestError("contributes.providers", "必须是数组");
+    if (!Array.isArray(raw.providers)) throw new PluginManifestError("contributes.providers", "must be an array");
     result.providers = raw.providers.map((entry, index) => {
       const path = `contributes.providers[${index}]`;
-      if (!isRecord(entry)) throw new PluginManifestError(path, "必须是对象");
+      if (!isRecord(entry)) throw new PluginManifestError(path, "must be an object");
       const kind = entry.kind;
       if (kind !== "storage" && kind !== "vfs" && kind !== "ai" && kind !== "vector")
-        throw new PluginManifestError(`${path}.kind`, "未知 Provider 类型");
+        throw new PluginManifestError(`${path}.kind`, "unknown provider type");
       const id = ns(entry.id as string | undefined, `${path}.id`);
       return { kind, id };
     });

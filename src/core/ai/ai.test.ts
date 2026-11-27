@@ -4,45 +4,45 @@ import { chunkDocument } from "./chunk";
 import { OpenAICompatProvider } from "./provider";
 import { MemoryVectorStore, cosineSimilarity, hashEmbed, indexChunks } from "./vector";
 
-const DOC = `# 架构总览
+const DOC = `# Architecture Overview
 
-本文描述 Vellink 的整体架构。
+This document describes the overall architecture of Vellink.
 
-## IR 内核
+## IR Core
 
-DocumentIR 是唯一真源，所有视图都是投影。
+DocumentIR is the single source of truth; every view is a projection.
 
-## 插件系统
+## Plugin System
 
-插件通过 manifest 声明贡献点，ESM 动态加载。
+Plugins declare contribution points through their manifest and are loaded dynamically as ESM modules.
 
-## WebDAV 同步
+## WebDAV Sync
 
-远端 ETag 用于条件写入，断网时本地先写。`;
+The remote ETag is used for conditional writes; when offline, writes go local first.`;
 
-describe("IR 语义切片", () => {
+describe("IR semantic chunking", () => {
   const ir = parseMarkdown({ source: DOC }).ir;
 
-  it("按标题切块并保留标题路径与 offset", () => {
+  it("splits by heading and preserves heading paths and offsets", () => {
     const chunks = chunkDocument(ir);
     expect(chunks.length).toBeGreaterThanOrEqual(4);
-    expect(chunks.some((c) => c.headings.join("/") === "架构总览/IR 内核")).toBe(true);
-    expect(chunks.some((c) => c.text.includes("DocumentIR 是唯一真源"))).toBe(true);
+    expect(chunks.some((c) => c.headings.join("/") === "Architecture Overview/IR Core")).toBe(true);
+    expect(chunks.some((c) => c.text.includes("DocumentIR is the single source of truth"))).toBe(true);
     for (const chunk of chunks) {
       expect(ir.source.slice(chunk.start, chunk.end)).toContain(chunk.text.split("\n")[0].slice(0, 4));
     }
   });
 
-  it("长段落按 maxChars 切开", () => {
-    const long = parseMarkdown({ source: `# T\n\n${"很长的段落 ".repeat(300)}` }).ir;
+  it("splits long paragraphs at maxChars", () => {
+    const long = parseMarkdown({ source: `# T\n\n${"a long paragraph ".repeat(300)}` }).ir;
     const chunks = chunkDocument(long, 400);
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((c) => c.text.length <= 600)).toBe(true);
   });
 });
 
-describe("向量检索", () => {
-  it("能召回正确段落，相似度自反最高", async () => {
+describe("vector search", () => {
+  it("recalls the right passage; self-similarity is highest", async () => {
     const ir = parseMarkdown({ source: DOC }).ir;
     const chunks = chunkDocument(ir);
     const store = new MemoryVectorStore();
@@ -50,22 +50,22 @@ describe("向量检索", () => {
     expect(store.size()).toBe(chunks.length);
 
     const target = chunks.find((c) => c.text.includes("WebDAV"))!;
-    const matches = await store.query(hashEmbed("WebDAV ETag 条件写入"), 3);
+    const matches = await store.query(hashEmbed("WebDAV ETag conditional write"), 3);
     expect(matches[0].text).toBe(target.text);
     expect(cosineSimilarity(hashEmbed("hello"), hashEmbed("hello"))).toBeCloseTo(1);
   });
 
-  it("哈希嵌入维度固定且与输入确定性一致", () => {
-    expect(hashEmbed("测试")).toHaveLength(256);
-    expect(hashEmbed("测试")).toEqual(hashEmbed("测试"));
+  it("hash embeddings have a fixed dimension and are deterministic", () => {
+    expect(hashEmbed("test")).toHaveLength(256);
+    expect(hashEmbed("test")).toEqual(hashEmbed("test"));
   });
 });
 
 describe("AIProvider", () => {
-  it("OpenAI 兼容接口带 Bearer Key 并解析回答", async () => {
+  it("sends the Bearer key and parses the reply on an OpenAI-compatible endpoint", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
-        JSON.stringify({ choices: [{ message: { content: "回答内容" } }] }),
+        JSON.stringify({ choices: [{ message: { content: "answer content" } }] }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     ) as unknown as typeof fetch;
@@ -75,16 +75,16 @@ describe("AIProvider", () => {
       model: "deepseek-flash",
       fetch: fetchMock,
     });
-    expect(await provider.chat([{ role: "user", content: "问题" }])).toBe("回答内容");
+    expect(await provider.chat([{ role: "user", content: "question" }])).toBe("answer content");
     const [url, init] = vi.mocked(fetchMock).mock.calls[0];
     expect(String(url)).toBe("https://api.deepseek.com/v1/chat/completions");
     expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer sk-test");
     expect(JSON.parse(String(init?.body)).model).toBe("deepseek-flash");
   });
 
-  it("错误响应抛出可读信息，空 Key 拒绝构造", async () => {
+  it("throws readable errors for failed responses and rejects an empty key", async () => {
     const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ error: { message: "额度不足" } }), { status: 402 }),
+      new Response(JSON.stringify({ error: { message: "insufficient quota" } }), { status: 402 }),
     ) as unknown as typeof fetch;
     const provider = new OpenAICompatProvider({
       baseUrl: "https://api.deepseek.com",
@@ -92,7 +92,7 @@ describe("AIProvider", () => {
       model: "deepseek-flash",
       fetch: fetchMock,
     });
-    await expect(provider.chat([{ role: "user", content: "x" }])).rejects.toThrow("额度不足");
+    await expect(provider.chat([{ role: "user", content: "x" }])).rejects.toThrow("insufficient quota");
     expect(
       () =>
         new OpenAICompatProvider({ baseUrl: "https://x", apiKey: "", model: "m" }),

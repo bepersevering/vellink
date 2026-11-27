@@ -1,9 +1,9 @@
 /**
- * 导入 Markdown 时搬运相对路径图片（纯函数部分）。
+ * Migrate relative-path images when importing Markdown (pure functions).
  *
- * 从源文件所在目录读 `![alt](./img.png)` 这类引用，写进工作区
- * `.vellink-assets/`，并把引用改写成新路径。绝对 URL / data URI /
- * 带协议的引用原样保留——那些不是能搬运的本地文件。
+ * Read references like `![alt](./img.png)` from the source file's directory, write them into the
+ * workspace's `.vellink-assets/`, and rewrite the references to the new paths. Absolute URLs, data
+ * URIs and protocol-qualified references are left as-is — they aren't local files we can migrate.
  */
 
 import { imageExtension } from "./asset";
@@ -11,25 +11,25 @@ import { imageExtension } from "./asset";
 export interface ImageRef {
   from: number;
   to: number;
-  /** 引用里的原始路径（已 trim）。 */
+  /** Raw path from the reference (trimmed). */
   path: string;
-  /** 图片原始文件名（用于命名资产）。 */
+  /** Original image filename (used to name the asset). */
   fileName: string;
-  /** 引用里的 title 部分（含引号），改写时保留。 */
+  /** Title portion of the reference (including quotes), preserved when rewriting. */
   title: string;
 }
 
-/** 找 Markdown 源码里的图片引用及其相对路径。 */
+/** Find image references and their relative paths in Markdown source. */
 export function findRelativeImages(source: string): ImageRef[] {
   const out: ImageRef[] = [];
-  // 只匹配 ![alt](path)，不含 title（带 title 的交给下一步）
+  // Match only ![alt](path) without a title (titled ones are handled by the next step)
   const re = /!\[([^\]]*)\]\(([^)]+)\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const raw = m[2].trim();
     const path = raw.replace(/\s+"[^"]*"$/, "").trim();
     if (!path || /^(?:[a-z][a-z0-9+.-]*:|\/|data:|#)/i.test(path)) continue;
-    if (path.includes("..")) continue; // 不越出源文件目录
+    if (path.includes("..")) continue; // don't escape the source file's directory
     const ext = path.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
     const mime = `image/${ext === "jpg" ? "jpeg" : ext}`;
     if (!imageExtension(mime)) continue;
@@ -44,7 +44,7 @@ export function findRelativeImages(source: string): ImageRef[] {
   return out;
 }
 
-/** 按引用顺序把源码里的图片路径替换成新路径。 */
+/** Replace image paths in the source with new ones, in reference order. */
 export function rewriteImagePaths(
   source: string,
   refs: readonly ImageRef[],
@@ -56,7 +56,7 @@ export function rewriteImagePaths(
     if (ref.from < cursor) continue;
     out += source.slice(cursor, ref.from);
     const target = targetFor(ref);
-    // 读不到的图：保留原引用，不静默丢内容
+    // Unreadable image: keep the original reference, never silently drop content
     out += target ? `![${altOf(source, ref)}](${target}${ref.title}` : source.slice(ref.from, ref.to);
     cursor = ref.to;
   }

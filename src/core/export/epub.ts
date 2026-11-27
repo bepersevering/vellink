@@ -1,10 +1,10 @@
 /**
- * DocumentIR → EPUB 3。
+ * DocumentIR → EPUB 3.
  *
- * 用写 DOCX 的同一个 ZIP 写出器（store 模式）。结构遵循 EPUB 3 最小规范：
- * mimetype 必须是第一个条目、不压缩、无额外字段；其余是 container.xml /
- * content.opf / nav.xhtml / 正文 xhtml。正文复用 HTML 渲染器，保证与编辑器
- * 和 HTML 导出同一套排版语义。
+ * Uses the same ZIP writer as DOCX (store mode). The structure follows the minimal
+ * EPUB 3 spec: mimetype must be the first entry, uncompressed, with no extra fields;
+ * the rest are container.xml / content.opf / nav.xhtml / the body xhtml. The body reuses
+ * the HTML renderer, ensuring the same layout semantics as the editor and HTML export.
  */
 
 import type { BlockNode, DocumentIR } from "../ir/types";
@@ -51,7 +51,7 @@ function xhtml(title: string, lang: string, body: string): string {
 </html>`;
 }
 
-/** 从正文标题生成 nav（一级条目，二级缩进）。 */
+/** Generate the nav from body headings (top-level entries, second level indented). */
 function nav(ir: DocumentIR | readonly BlockNode[]): string {
   const blocks: readonly BlockNode[] = "children" in ir ? ir.children : ir;
   const items = blocks
@@ -65,12 +65,12 @@ function nav(ir: DocumentIR | readonly BlockNode[]): string {
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head><title>目录</title></head>
+<head><title>Table of Contents</title></head>
 <body><nav epub:type="toc"><ol>${items}</ol></nav></body>
 </html>`;
 }
 
-/** 生成 EPUB 3 二进制。 */
+/** Generate the EPUB 3 binary. */
 export async function renderEpub(
   ir: DocumentIR | readonly BlockNode[],
   options: { title: string; lang?: string } = { title: "Untitled" },
@@ -79,7 +79,7 @@ export async function renderEpub(
   const lang = options.lang ?? "zh-CN";
   const body = renderBody(ir);
   return createZip([
-    // EPUB 规范要求 mimetype 是第一个条目且不能压缩（我们的 store 正好满足）
+    // The EPUB spec requires mimetype to be the first entry and uncompressed (our store mode satisfies this)
     textEntry("mimetype", "application/epub+zip"),
     textEntry("META-INF/container.xml", CONTAINER),
     textEntry("OEBPS/content.opf", opf(title, lang)),

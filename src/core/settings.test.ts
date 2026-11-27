@@ -11,7 +11,7 @@ import {
   secondsOf,
 } from "./settings";
 
-/** 最小的 Storage 替身：只要 getItem / setItem 就够这个模块用。 */
+/** Minimal Storage stub: only getItem / setItem are needed for this module. */
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const map = new Map(Object.entries(initial));
   return {
@@ -26,8 +26,8 @@ function memoryStorage(initial: Record<string, string> = {}): Storage {
   };
 }
 
-describe("设置的边界", () => {
-  it("越界的数字被夹回可用区间，而不是照单全收", () => {
+describe("settings bounds", () => {
+  it("out-of-range numbers are clamped to the valid range instead of accepted as-is", () => {
     const huge = normalizeSettings({ fontSize: 99, lineWidth: 4000, autosaveMs: 99999 });
     expect(huge.fontSize).toBe(LIMITS.fontSize.max);
     expect(huge.lineWidth).toBe(LIMITS.lineWidth.max);
@@ -39,7 +39,7 @@ describe("设置的边界", () => {
     expect(tiny.autosaveMs).toBe(LIMITS.autosaveMs.min);
   });
 
-  it("类型不对、NaN、字符串一律退回默认值", () => {
+  it("wrong types, NaN, and strings all fall back to defaults", () => {
     const junk = normalizeSettings({
       fontSize: "18",
       lineWidth: Number.NaN,
@@ -50,29 +50,29 @@ describe("设置的边界", () => {
     expect(junk.autosaveMs).toBe(DEFAULT_SETTINGS.autosaveMs);
   });
 
-  it("非对象输入不会炸，主题只认三个合法值", () => {
+  it("non-object input doesn't throw; theme only accepts three valid values", () => {
     expect(normalizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(normalizeSettings("dark")).toEqual(DEFAULT_SETTINGS);
     expect(normalizeSettings({ theme: "dark" }).theme).toBe("dark");
     expect(normalizeSettings({ theme: "sepia" }).theme).toBe("system");
   });
 
-  it("取整到整数：滑块只应该给出整数值", () => {
+  it("rounds to integers: sliders should only produce integer values", () => {
     expect(normalizeSettings({ fontSize: 16.7 }).fontSize).toBe(17);
   });
 });
 
-describe("读写设置", () => {
-  it("没存过 → 默认值", () => {
+describe("settings read/write", () => {
+  it("nothing stored → defaults", () => {
     expect(loadSettings(memoryStorage())).toEqual(DEFAULT_SETTINGS);
   });
 
-  it("老版本的 vellink-theme 会迁移成显式选择，不被「跟随系统」覆盖", () => {
+  it("legacy vellink-theme migrates to an explicit choice, not overridden by 'follow system'", () => {
     const store = memoryStorage({ "vellink-theme": "dark" });
     expect(loadSettings(store).theme).toBe("dark");
   });
 
-  it("存过设置就以设置为准，哪怕同时有老键", () => {
+  it("stored settings take precedence even when legacy keys are also present", () => {
     const store = memoryStorage({
       "vellink-theme": "dark",
       "vellink-settings:v1": JSON.stringify({ theme: "light", fontSize: 20 }),
@@ -82,12 +82,12 @@ describe("读写设置", () => {
     expect(loaded.fontSize).toBe(20);
   });
 
-  it("坏 JSON 当作没存过，而不是让应用起不来", () => {
+  it("malformed JSON is treated as nothing stored rather than preventing startup", () => {
     const store = memoryStorage({ "vellink-settings:v1": "{not json" });
     expect(loadSettings(store)).toEqual(DEFAULT_SETTINGS);
   });
 
-  it("写入时也走一遍校验，坏值不会落进 storage", () => {
+  it("writes also run validation so bad values never reach storage", () => {
     const store = memoryStorage();
     saveSettings({ ...DEFAULT_SETTINGS, fontSize: 500 }, store);
     const raw = JSON.parse(store.getItem("vellink-settings:v1") ?? "{}");
@@ -95,8 +95,8 @@ describe("读写设置", () => {
   });
 });
 
-describe("主题解析", () => {
-  it("跟随系统时看系统，固定时忽略系统", () => {
+describe("theme resolution", () => {
+  it("follows the system when set to 'system', ignores it when fixed", () => {
     expect(resolveTheme("system", true)).toBe("dark");
     expect(resolveTheme("system", false)).toBe("light");
     expect(resolveTheme("light", true)).toBe("light");
@@ -104,8 +104,8 @@ describe("主题解析", () => {
   });
 });
 
-describe("落地到样式", () => {
-  it("把字号与栏宽写成 CSS 变量", () => {
+describe("applying styles", () => {
+  it("writes font size and column width as CSS variables", () => {
     const written: Record<string, string> = {};
     const root = {
       style: { setProperty: (name: string, value: string) => void (written[name] = value) },
@@ -115,28 +115,28 @@ describe("落地到样式", () => {
     expect(written["--doc-width"]).toBe("640px");
   });
 
-  it("毫秒换算成一位小数的秒", () => {
+  it("converts milliseconds to seconds with one decimal place", () => {
     expect(secondsOf(300)).toBe("0.3");
     expect(secondsOf(700)).toBe("0.7");
     expect(secondsOf(3000)).toBe("3.0");
   });
 
-  it("「恢复默认」的禁用条件只认完整相等", () => {
+  it("'Reset to defaults' is disabled only on full equality", () => {
     expect(isDefaultSettings({ ...DEFAULT_SETTINGS })).toBe(true);
     expect(isDefaultSettings({ ...DEFAULT_SETTINGS, theme: "dark" })).toBe(false);
   });
 });
 
 
-describe("写作模式偏好", () => {
-  it("布尔字段只认 true，坏值回落 false", () => {
+describe("writing mode preferences", () => {
+  it("boolean fields only accept true; bad values fall back to false", () => {
     expect(normalizeSettings({ typewriter: true, focusLines: true }).typewriter).toBe(true);
     expect(normalizeSettings({ typewriter: true, focusLines: true }).focusLines).toBe(true);
     expect(normalizeSettings({ typewriter: "true", focusLines: 1 }).typewriter).toBe(false);
     expect(normalizeSettings({ typewriter: "true", focusLines: 1 }).focusLines).toBe(false);
   });
 
-  it("缺省值不开启这两种模式", () => {
+  it("defaults don't enable either mode", () => {
     const s = normalizeSettings({});
     expect(s.typewriter).toBe(false);
     expect(s.focusLines).toBe(false);

@@ -10,16 +10,16 @@ import {
 } from "./sourcemap";
 import { walkBlocks } from "../ir/types";
 
-const DOC = `# 标题一
+const DOC = `# Heading One
 
-这是第一段，包含 **粗体**、*斜体*、\`行内代码\`、[链接](https://example.com) 和 [[双链]]。
+This is the first paragraph, with **bold**, *italic*, \`inline code\`, [link](https://example.com) and [[wiki-link]].
 
-## 标题二
+## Heading Two
 
-- 列表项一
-- [x] 已完成任务
+- List item one
+- [x] Completed task
 
-> 引用块
+> Blockquote
 
 \`\`\`ts
 const x = 1;
@@ -30,10 +30,10 @@ const x = 1;
 | 1 | 2 |
 `;
 
-describe("Markdown → IR 解析", () => {
-  it("映射所有主要块类型", () => {
+describe("Markdown → IR parsing", () => {
+  it("maps all major block types", () => {
     const { ir } = parseMarkdown({ source: DOC });
-    // 只看顶层块，不递归容器内部
+    // Only top-level blocks; no recursion into containers
     const types = ir.children.map((b) => b.type);
     expect(types).toEqual([
       "heading",
@@ -46,16 +46,16 @@ describe("Markdown → IR 解析", () => {
     ]);
   });
 
-  it("span 精确对应源文本", () => {
+  it("spans map exactly to source text", () => {
     const { ir } = parseMarkdown({ source: DOC });
     expect(validateSpans(ir)).toEqual([]);
     const heading = ir.children[0];
-    expect(DOC.slice(heading.span.start, heading.span.end)).toBe("# 标题一");
+    expect(DOC.slice(heading.span.start, heading.span.end)).toBe("# Heading One");
     const code = ir.children.find((b) => b.type === "code")!;
     expect(DOC.slice(code.span.start, code.span.end)).toContain("const x = 1;");
   });
 
-  it("解析行内节点：粗体 / 斜体 / 行内代码 / 链接 / 双链", () => {
+  it("parses inline nodes: bold / italic / inline code / link / wiki link", () => {
     const { ir } = parseMarkdown({ source: DOC });
     const para = ir.children.find((b) => b.type === "paragraph")!;
     if (para.type !== "paragraph") throw new Error("unreachable");
@@ -68,10 +68,10 @@ describe("Markdown → IR 解析", () => {
 
     const wiki = para.children.find((n) => n.type === "wikiLink")!;
     if (wiki.type !== "wikiLink") throw new Error("unreachable");
-    expect(wiki.target).toBe("双链");
+    expect(wiki.target).toBe("wiki-link");
   });
 
-  it("解析 GFM：任务列表与表格", () => {
+  it("parses GFM: task lists and tables", () => {
     const { ir } = parseMarkdown({ source: DOC });
     const list = ir.children.find((b) => b.type === "list")!;
     if (list.type !== "list") throw new Error("unreachable");
@@ -80,11 +80,11 @@ describe("Markdown → IR 解析", () => {
 
     const table = ir.children.find((b) => b.type === "table")!;
     if (table.type !== "table") throw new Error("unreachable");
-    expect(table.children).toHaveLength(2); // header + 1 数据行
+    expect(table.children).toHaveLength(2); // header + 1 data row
     expect(table.children[0].children).toHaveLength(2);
   });
 
-  it("代码块保留 lang 与内容", () => {
+  it("code blocks preserve lang and content", () => {
     const { ir } = parseMarkdown({ source: DOC });
     const code = ir.children.find((b) => b.type === "code")!;
     if (code.type !== "code") throw new Error("unreachable");
@@ -93,14 +93,14 @@ describe("Markdown → IR 解析", () => {
   });
 });
 
-describe("增量解析与 ID 稳定性", () => {
-  it("未修改节点 ID 保持稳定，修改节点 ID 改变", () => {
+describe("incremental parsing and ID stability", () => {
+  it("unchanged node IDs stay stable, edited node IDs change", () => {
     const first = parseMarkdown({ source: DOC });
 
-    // 在第一个段落里改一个字
-    const editAt = DOC.indexOf("第一段") + 1;
-    const newSource = DOC.slice(0, editAt) + "新" + DOC.slice(editAt + 1);
-    // 注意：这里是替换 1 字为 1 字，长度不变
+    // Change one character in the first paragraph
+    const editAt = DOC.indexOf("first paragraph") + 1;
+    const newSource = DOC.slice(0, editAt) + "X" + DOC.slice(editAt + 1);
+    // Note: one character is replaced by one, so the length stays the same
     const second = parseMarkdown({ source: newSource });
 
     const oldById = new Map<string, string>();
@@ -108,18 +108,18 @@ describe("增量解析与 ID 稳定性", () => {
     const newById = new Map<string, string>();
     walkBlocks(second.ir.children, (b) => newById.set(b.span.start.toString(), b.id));
 
-    // 标题（未变）ID 应稳定
+    // Unchanged headings should keep stable IDs
     expect(newById.get("0")).toBe(oldById.get("0"));
-    // 后面的标题、列表、引用、代码块、表格（未变）ID 都应稳定
+    // Later headings, lists, blockquotes, code blocks and tables (unchanged) should keep stable IDs
     for (const [pos, id] of oldById) {
       if (Number(pos) > editAt) expect(newById.get(pos)).toBe(id);
     }
   });
 
-  it("增量解析结果与全量解析结构一致", () => {
+  it("incremental parsing produces the same structure as full parsing", () => {
     const first = parseMarkdown({ source: DOC });
-    const editAt = DOC.indexOf("## 标题二");
-    const newSource = DOC.slice(0, editAt) + "插入段落。\n\n" + DOC.slice(editAt);
+    const editAt = DOC.indexOf("## Heading Two");
+    const newSource = DOC.slice(0, editAt) + "Added\n\n" + DOC.slice(editAt);
 
     const full = parseMarkdown({ source: newSource });
     const incr = parseMarkdown({
@@ -137,25 +137,25 @@ describe("增量解析与 ID 稳定性", () => {
   });
 });
 
-describe("双向 source map", () => {
+describe("bidirectional source map", () => {
   const { ir } = parseMarkdown({ source: DOC });
 
-  it("offset → 最深节点：行内标记内部", () => {
-    const boldAt = DOC.indexOf("粗体");
+  it("offset → deepest node: inside inline marks", () => {
+    const boldAt = DOC.indexOf("bold");
     const hit = nodeAtOffset(ir, boldAt);
     expect(hit).toBeDefined();
     expect(hit!.block.type).toBe("paragraph");
     expect(hit!.deepest.type).toBe("strong");
   });
 
-  it("offset → 节点：代码块内部不进入行内", () => {
+  it("offset → node: no inline nodes inside code blocks", () => {
     const codeAt = DOC.indexOf("const x");
     const hit = nodeAtOffset(ir, codeAt);
     expect(hit?.block.type).toBe("code");
     expect(hit?.inline).toBeUndefined();
   });
 
-  it("id → 节点与 span（块与行内均可）", () => {
+  it("id → node and span (both blocks and inlines)", () => {
     const heading = ir.children[0];
     const found = blockById(ir, heading.id);
     expect(found?.span).toEqual(heading.span);
@@ -167,19 +167,19 @@ describe("双向 source map", () => {
     expect(foundInline?.span).toEqual(strong.span);
   });
 
-  it("脏区范围 → 受影响块", () => {
+  it("dirty range → affected blocks", () => {
     const codeAt = DOC.indexOf("const x");
     const affected = blocksInRange(ir, codeAt, codeAt + 5);
     expect(affected).toHaveLength(1);
     expect(affected[0].type).toBe("code");
   });
 
-  it("光标偏移在编辑后正确平移", () => {
-    // 在位置 10 插入 5 字，之后的光标应右移 5
+  it("cursor offsets shift correctly after an edit", () => {
+    // Insert 5 chars at position 10; later cursors should shift right by 5
     expect(shiftOffset(20, { from: 10, to: 10, inserted: 5 })).toBe(25);
-    // 编辑点之前的光标不动
+    // Cursors before the edit point don't move
     expect(shiftOffset(5, { from: 10, to: 10, inserted: 5 })).toBe(5);
-    // 替换：删 3 插 1，delta = -2
+    // Replacement: delete 3, insert 1, delta = -2
     expect(shiftOffset(20, { from: 10, to: 13, inserted: 1 })).toBe(18);
   });
 });

@@ -1,14 +1,16 @@
 /**
- * WYSIWYG 代码块的轻量语法着色。
+ * Lightweight syntax highlighting for WYSIWYG code blocks.
  *
- * 为什么不用 highlight.js / Shiki：
- * - PM 的 codeBlock 是 atom 式内容（text*，marks 为空），着色只能改 DOM，
- *   不能进文档；把几千行的语言包塞进每一次重绘不划算。
- * - 这里的目标是「代码块不再是单色」，不是 IDE 级语法树。一个几十行的
- *   分词器覆盖常见语言的关键字 / 字符串 / 注释 / 数字就够，且零依赖、
- *   可在 node 单测里直接断言。
+ * Why not highlight.js / Shiki:
+ * - PM's codeBlock is atom-like content (text*, no marks), so highlighting can only touch
+ *   the DOM, not the document; cramming a thousands-of-lines language pack into every
+ *   repaint isn't worth it.
+ * - The goal here is "code blocks aren't monochrome", not an IDE-grade syntax tree. A
+ *   tokenizer of a few dozen lines covering keywords / strings / comments / numbers for
+ *   common languages is enough, has zero dependencies, and can be asserted directly in
+ *   node unit tests.
  *
- * 输出的 span class 与 styles.css 里既有的 .cm/.kw/.st/.nu 对应。
+ * The emitted span classes correspond to the existing .cm/.kw/.st/.nu in styles.css.
  */
 
 export type TokenKind = "plain" | "comment" | "keyword" | "string" | "number";
@@ -18,7 +20,7 @@ export interface Token {
   text: string;
 }
 
-/** 常见语言关键字（够覆盖日常代码块，不追求完整）。 */
+/** Keywords for common languages (enough for everyday code blocks, not exhaustive). */
 const KEYWORDS = new Set(
   (
     "const let var function return if else for while do break continue class extends new " +
@@ -60,8 +62,9 @@ function isWordPart(ch: string): boolean {
 }
 
 /**
- * 把一段代码切成带类型的 token。逐字符扫描，保证所有字符都归属某个 token，
- * 不会丢内容——着色只改 DOM，源码仍是 PM 里的原文。
+ * Split a piece of code into typed tokens. Scans character by character, ensuring every
+ * character belongs to some token so no content is lost — highlighting only changes the
+ * DOM, the source remains the original text in PM.
  */
 export function tokenize(code: string, lang = ""): Token[] {
   const key = lang.trim().toLowerCase();
@@ -80,7 +83,7 @@ export function tokenize(code: string, lang = ""): Token[] {
   while (i < code.length) {
     const rest = code.slice(i);
 
-    // 块注释（可跨行）
+    // Block comment (may span lines)
     if (blockComment && rest.startsWith(blockComment[0])) {
       const end = code.indexOf(blockComment[1], i + blockComment[0].length);
       const stop = end === -1 ? code.length : end + blockComment[1].length;
@@ -88,7 +91,7 @@ export function tokenize(code: string, lang = ""): Token[] {
       i = stop;
       continue;
     }
-    // 行注释
+    // Line comment
     if (lineComment && rest.startsWith(lineComment)) {
       const nl = code.indexOf("\n", i);
       const stop = nl === -1 ? code.length : nl;
@@ -96,7 +99,7 @@ export function tokenize(code: string, lang = ""): Token[] {
       i = stop;
       continue;
     }
-    // 字符串：单引号 / 双引号 / 反引号，处理反斜杠转义
+    // Strings: single / double / backtick quotes, with backslash escaping handled
     const quote = code[i];
     if (quote === '"' || quote === "'" || quote === "`") {
       let j = i + 1;
@@ -115,7 +118,7 @@ export function tokenize(code: string, lang = ""): Token[] {
       i = j;
       continue;
     }
-    // 数字（含小数 / 十六进制 / 下划线）
+    // Numbers (including decimals / hex / underscores)
     if (/[0-9]/.test(code[i])) {
       let j = i + 1;
       while (j < code.length && /[0-9a-fA-FxX._]/.test(code[j])) j++;
@@ -123,7 +126,7 @@ export function tokenize(code: string, lang = ""): Token[] {
       i = j;
       continue;
     }
-    // 标识符 / 关键字
+    // Identifiers / keywords
     if (isWord(code[i])) {
       let j = i + 1;
       while (j < code.length && isWordPart(code[j])) j++;
@@ -138,7 +141,7 @@ export function tokenize(code: string, lang = ""): Token[] {
   return out;
 }
 
-/** 按 token 生成安全的 HTML 片段（只用于给已有文本节点套 span，不进 IR）。 */
+/** Build a safe HTML fragment from tokens (only used to wrap existing text nodes in spans; never enters the IR). */
 export function highlightHtml(code: string, lang: string): string {
   const cls: Record<TokenKind, string> = {
     plain: "",

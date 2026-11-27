@@ -1,15 +1,15 @@
 /**
- * 命令注册表 — 命令面板、快捷键、插件贡献点的共同底座。
+ * Command registry — the shared foundation for the command palette, keybindings, and plugin contributions.
  */
 
 export interface Command {
   id: string;
   title: string;
-  /** 快捷键，如 "Mod+Shift+P"（M0 只登记，绑定在 UI 层做） */
+  /** Keybinding, e.g. "Mod+Shift+P" (registered here in M0; bound in the UI layer) */
   keybinding?: string;
-  /** 命令是否在当前上下文可用 */
+  /** Whether the command is available in the current context */
   enabled?: () => boolean;
-  /** 返回 false 表示命令执行了但无可撤销内容等"无操作"情形 */
+  /** Returning false means the command ran but was a no-op (e.g. nothing to undo) */
   run: () => boolean | void | Promise<boolean | void>;
 }
 
@@ -58,5 +58,5 @@ export function createRegistry(): CommandRegistry {
   };
 }
 
-/** 全局注册表（M0 单实例）。 */
+/** Global registry (a single instance in M0). */
 export const commands = createRegistry();

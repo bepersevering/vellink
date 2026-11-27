@@ -1,27 +1,28 @@
 /**
- * 大纲与标题：从 IR 直接派生，不维护第二份状态。
+ * Outline and title: derived directly from the IR, no second copy of state.
  *
- * 文档标题 = 首个一级标题，退化为首个任意级标题，再退化为首个非空行。
- * 大纲条目只取顶层标题（列表/引用里的标题不进大纲），并附带源码偏移，
- * 供编辑器做「点击跳转」——跳转走 source map，因此两种视图都能定位。
+ * Document title = first H1, falling back to the first heading of any level, then to
+ * the first non-empty line. Outline entries take only top-level headings (headings inside
+ * lists/quotes are excluded) and carry source offsets, so the editor can implement
+ * "click to jump" — jumps go through the source map, so both views can locate the spot.
  */
 
 import type { BlockNode, InlineNode } from "./ir/types";
 import { parseMarkdown } from "./parser/markdown";
 
 export interface OutlineEntry {
-  /** 标题块 ID，跨增量解析稳定。 */
+  /** Heading block ID, stable across incremental parses. */
   id: string;
   label: string;
-  /** 归一化到 1–3 级，6 级标题在面板里按 3 级缩进显示。 */
+  /** Normalized to levels 1–3; H6 headings are indented as level 3 in the panel. */
   level: 1 | 2 | 3;
-  /** 标题行在源码中的起始偏移（UTF-16）。 */
+  /** Starting offset of the heading line in the source (UTF-16). */
   offset: number;
-  /** 真实标题深度，用于标题取值与调试。 */
+  /** True heading depth, used for title selection and debugging. */
   depth: number;
 }
 
-/** 拼接行内节点的纯文本（去掉强调/链接标记，保留可见文字）。 */
+/** Concatenate the plain text of inline nodes (drop emphasis/link markup, keep visible text). */
 export function inlineText(nodes: InlineNode[]): string {
   let out = "";
   for (const node of nodes) {
@@ -51,7 +52,7 @@ function headingLabel(block: BlockNode): string {
   return inlineText(block.children).replace(/\s+/g, " ").trim();
 }
 
-/** 顶层标题 → 大纲条目，按出现顺序。 */
+/** Top-level headings → outline entries, in order of appearance. */
 export function buildOutline(source: string): OutlineEntry[] {
   const { ir } = parseMarkdown({ source });
   const entries: OutlineEntry[] = [];
@@ -70,7 +71,7 @@ export function buildOutline(source: string): OutlineEntry[] {
   return entries;
 }
 
-/** 文档标题：一级标题 → 任意标题 → 首个非空行 → fallback。 */
+/** Document title: H1 → any heading → first non-empty line → fallback. */
 export function docTitle(source: string, fallback = "Untitled"): string {
   const headings = buildOutline(source);
   const h1 = headings.find((entry) => entry.depth === 1);

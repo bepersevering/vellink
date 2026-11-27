@@ -1,13 +1,14 @@
 /**
- * 脚注识别（纯函数）。
+ * Footnote recognition (pure functions).
  *
- * Lezer 不认识 `[^1]` 与 `[^1]: 内容`。策略同数学公式：在源码层识别，
- * 行内引用切成 atom，文末定义行截成 footnote 块。两者靠 label 配对。
+ * Lezer doesn't recognize `[^1]` or `[^1]: content`. Same strategy as math formulas: recognize at the
+ * source level, inline references become atoms, end-of-document definition lines become footnote blocks.
+ * The two pair up by label.
  *
- * 规则：
- * - 定义必须在行首（允许缩进 ≤3），格式 `[^label]: 内容`；
- * - 引用是行内 `[^label]`，不含冒号；
- * - label 只允许字母数字、中文、`-` `_`，避免与链接语法混淆。
+ * Rules:
+ * - Definitions must start at the beginning of a line (indentation ≤3 allowed), format `[^label]: content`;
+ * - References are inline `[^label]`, without a colon;
+ * - Labels allow only letters, digits, Chinese characters, `-` and `_`, to avoid confusion with link syntax.
  */
 
 export interface FootnoteRef {
@@ -20,7 +21,7 @@ export interface FootnoteDef {
   start: number;
   end: number;
   label: string;
-  /** 冒号后的内容（不含行尾换行）。 */
+  /** Content after the colon (excluding the trailing newline). */
   text: string;
 }
 
@@ -31,14 +32,14 @@ export interface Footnotes {
 
 const LABEL = "[\\w\\u4e00-\\u9fff-]+";
 
-/** 扫全文找出脚注引用与定义。 */
+/** Scan the whole text for footnote references and definitions. */
 export function findFootnotes(source: string): Footnotes {
   const refs: FootnoteRef[] = [];
   const defs: FootnoteDef[] = [];
   const re = new RegExp(`\\[\\^(${LABEL})\\](:?)`, "g");
   let m: RegExpExecArray | null;
 
-  // 先标出围栏代码块的行范围，避免把里面的 [^1] 当脚注
+  // First mark line ranges of fenced code blocks to avoid treating [^1] inside them as footnotes
   const fenced = new Array<boolean>(source.length).fill(false);
   let inFence = false;
   let lineStart = 0;
@@ -58,12 +59,12 @@ export function findFootnotes(source: string): Footnotes {
   while ((m = re.exec(source)) !== null) {
     const start = m.index;
     if (fenced[start]) continue;
-    // 转义的 \[ 不算
+    // An escaped \[ doesn't count
     if (source[start - 1] === "\\") continue;
 
     const end = start + m[0].length;
     if (m[2] === ":") {
-      // 定义必须在行首（最多 3 个空格）
+      // A definition must start at the beginning of a line (at most 3 spaces)
       const bol = source.lastIndexOf("\n", start - 1) + 1;
       if (source.slice(bol, start).trim() !== "") continue;
       const lineEnd = source.indexOf("\n", end);
@@ -76,7 +77,7 @@ export function findFootnotes(source: string): Footnotes {
   return { refs, defs };
 }
 
-/** 把一段文本按脚注引用切成文本 / 引用片段（绝对偏移）。 */
+/** Split a span of text into text / ref chunks by footnote references (absolute offsets). */
 export type FootnoteChunk =
   | { kind: "text"; start: number; end: number; value: string }
   | { kind: "ref"; start: number; end: number; label: string };

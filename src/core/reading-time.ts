@@ -1,8 +1,8 @@
 /**
- * 阅读时长估算（纯函数）。
+ * Reading-time estimation (pure function).
  *
- * 中文按 400 字/分钟，英文按 200 词/分钟；混排时取两者之和。
- * 少于 1 分钟按 1 分钟显示——「0 分钟」对一篇刚写的稿子没有意义。
+ * CJK at 400 chars/min, English at 200 words/min; mixed text adds the two.
+ * Anything under a minute displays as 1 minute — "0 min" is meaningless for a freshly written draft.
  */
 
 export function readingMinutes(text: string): number {

@@ -1,9 +1,10 @@
 /**
- * VectorStore 抽象 + 内存余弦相似度实现。
+ * VectorStore abstraction plus an in-memory cosine-similarity implementation.
  *
- * sqlite-vec / 远端向量库后续实现同一接口即可替换；
- * 内置 embedding 是确定性的字符 n-gram 哈希（无需 API Key），
- * 保证离线也能召回正确段落。需要语义级召回时可注入外部 embedder。
+ * sqlite-vec / remote vector stores can replace it by implementing the same interface;
+ * the built-in embedding is a deterministic character n-gram hash (no API key needed),
+ * so the right passages are recalled even offline. Inject an external embedder when
+ * semantic-level recall is required.
  */
 
 export interface VectorRecord {
@@ -32,7 +33,7 @@ export type Embedder = (text: string) => number[] | Promise<number[]>;
 
 const DIMENSIONS = 256;
 
-/** 字符 unigram + bigram 哈希：中英文混合都能召回，纯本地确定性。 */
+/** Character unigram + bigram hashes: recalls mixed CJK/English text, fully local and deterministic. */
 export function hashEmbed(text: string, dimensions = DIMENSIONS): number[] {
   const vector = new Array<number>(dimensions).fill(0);
   const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
@@ -69,7 +70,7 @@ export class MemoryVectorStore implements VectorStore {
   async upsert(records: VectorRecord[]): Promise<void> {
     for (const record of records) {
       if (record.vector.length !== this.dimensions)
-        throw new Error(`向量维度不匹配: 期望 ${this.dimensions}，实际 ${record.vector.length}`);
+        throw new Error(`Vector dimension mismatch: expected ${this.dimensions}, got ${record.vector.length}`);
       this.records.set(record.id, record);
     }
   }
@@ -95,7 +96,7 @@ export class MemoryVectorStore implements VectorStore {
   }
 }
 
-/** 把 chunks 灌入 store 的便捷函数；embedder 默认用内置哈希。 */
+/** Convenience helper that indexes chunks into a store; uses the built-in hash embedder by default. */
 export async function indexChunks(
   store: VectorStore,
   chunks: Array<{ id: string; text: string; headings?: string[]; start?: number; end?: number }>,
@@ -106,7 +107,7 @@ export async function indexChunks(
   const records: VectorRecord[] = [];
   for (const chunk of chunks) {
     const vector = await embedder(`${chunk.headings?.join(" ") ?? ""} ${chunk.text}`);
-    if (vector.length !== dimensions) throw new Error("嵌入器返回的维度不一致");
+    if (vector.length !== dimensions) throw new Error("embedder returned inconsistent dimensions");
     records.push({
       id: chunk.id,
       vector,

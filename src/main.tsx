@@ -2,19 +2,20 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { isDesktop } from "./core/desktop/bridge";
-// KaTeX 的 htmlAndMathml 输出靠它的 CSS 把 MathML 层藏起来（只给读屏器），
-// 不引入的话屏幕会把 HTML 层和 MathML 注解叠在一起显示成两遍公式。
+// KaTeX's htmlAndMathml output relies on its CSS to hide the MathML layer (for screen readers only);
+// without it, the HTML layer and the MathML annotation stack up and render the formula twice.
 import "katex/dist/katex.min.css";
 import "./styles.css";
 
 /**
- * 桌面端的窗口按钮由系统提供，应用不该再画一份。
+ * On desktop the window controls are provided by the OS, so the app shouldn't draw a second set.
  *
- * 在首帧之前打标记，CSS 才能一次性隐藏自己画的那三个点；
- * 放到组件里加就会先闪一帧「两套按钮」。
+ * Set the flag before the first frame so CSS can hide our own three dots in one pass;
+ * adding it inside a component would flash one frame with "two sets of buttons".
  *
- * 分 mac / other 两种：macOS 用 overlay 标题栏，原生按钮压在应用标题栏左侧，
- * 需要留出同样的空档；Windows / Linux 的按钮在右边，左侧干脆不留空。
+ * Two cases: mac / other. macOS uses an overlay title bar, with the native buttons sitting
+ * over the left of the app title bar, so reserve the same amount of space; on Windows / Linux
+ * the buttons are on the right, so leave no space on the left.
  */
 if (isDesktop()) {
   document.body.dataset.desktop = /Mac/i.test(navigator.userAgent) ? "mac" : "other";

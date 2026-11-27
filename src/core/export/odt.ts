@@ -1,9 +1,10 @@
 /**
- * DocumentIR → ODT（OpenDocument Text）。
+ * DocumentIR → ODT (OpenDocument Text).
  *
- * 和 EPUB 一样复用 ZIP 写出器。ODT 的正文在 content.xml 里用
- * office:text / text:h / text:p / text:list / table:table 表达，
- * 复用 IR 遍历而不是绕回 HTML——保证与 DOCX 导出同一套语义映射。
+ * Like EPUB, reuses the ZIP writer. ODT body content is expressed in content.xml using
+ * office:text / text:h / text:p / text:list / table:table,
+ * reusing the IR traversal rather than routing back through HTML — ensuring the same
+ * semantic mapping as DOCX export.
  */
 
 import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
@@ -93,7 +94,7 @@ function blocks(nodes: readonly BlockNode[]): string {
         break;
       }
       case "mathBlock":
-        out += `<text:p>[公式] ${esc(node.value)}</text:p>`;
+        out += `<text:p>[Formula] ${esc(node.value)}</text:p>`;
         break;
       case "thematicBreak":
         out += "<text:p>────────</text:p>";
@@ -123,7 +124,7 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8"?>
 <style:style xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" style:name="Quote" style:family="paragraph"/>
 </office:styles></office:document-styles>`;
 
-/** 生成 ODT 二进制。 */
+/** Generate the ODT binary. */
 export async function renderOdt(ir: DocumentIR | readonly BlockNode[]): Promise<Uint8Array> {
   const nodes: readonly BlockNode[] = "children" in ir ? ir.children : ir;
   const content = `<?xml version="1.0" encoding="UTF-8"?>

@@ -1,9 +1,10 @@
 /**
- * WYSIWYG 里的 Markdown 符号自动配对。
+ * Markdown symbol auto-pairing in the WYSIWYG view.
  *
- * 源码视图用 CodeMirror 的 closeBrackets 处理 ( [ { " ' 等；PM 这边文档里
- * 没有这些标记字符（它们表现为节点/mark），所以只对「选中文本后输入 * _ `」
- * 做包裹——这是写作里最高频的场景。单个字符的成对输入交给用户按 ⌘B/⌘I。
+ * The source view uses CodeMirror's closeBrackets for ( [ { " ' etc.; in the PM document those
+ * marker characters don't exist (they're nodes/marks), so we only wrap a selection when the
+ * user types * _ ` — the most common writing case. Paired single-character input is left to
+ * the user via ⌘B/⌘I.
  */
 
 import { Plugin } from "prosemirror-state";
@@ -20,7 +21,7 @@ export function createAutoPairPlugin(): Plugin {
   return new Plugin({
     props: {
       handleTextInput(view, from, to, text) {
-        if (to <= from) return false; // 没有选区：交给正常输入
+        if (to <= from) return false; // No selection: let normal input handle it
         const mark = PAIR[text];
         if (!mark) return false;
         const type =

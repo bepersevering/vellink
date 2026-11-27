@@ -2,5 +2,5 @@
 
 declare module "*.css";
 
-/** 构建期注入的应用版本号（vite.config.ts 的 define）。 */
+/** App version injected at build time (via define in vite.config.ts). */
 declare const __APP_VERSION__: string | undefined;

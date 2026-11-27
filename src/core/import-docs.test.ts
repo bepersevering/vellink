@@ -7,8 +7,8 @@ import {
 } from "./import-docs";
 import { Workspace } from "./workspace";
 
-describe("导入 Markdown 的纯函数", () => {
-  it("只收 .md / .markdown，且拒绝伪装扩展名", () => {
+describe("Pure functions for importing Markdown", () => {
+  it("accepts only .md / .markdown and rejects disguised extensions", () => {
     expect(isMarkdownFileName("note.md")).toBe(true);
     expect(isMarkdownFileName("note.markdown")).toBe(true);
     expect(isMarkdownFileName("NOTE.MD")).toBe(true);
@@ -19,68 +19,68 @@ describe("导入 Markdown 的纯函数", () => {
     expect(isMarkdownFileName("md")).toBe(false);
   });
 
-  it("文件名派生标题：去扩展名、去控制字符、空名回退", () => {
-    expect(titleFromFileName("我的笔记.md", "未命名")).toBe("我的笔记");
-    expect(titleFromFileName("dir/a b.markdown", "未命名")).toBe("a b");
-    expect(titleFromFileName("  .md", "未命名")).toBe("未命名");
-    expect(titleFromFileName("a\u0001b.md", "未命名")).toBe("a b");
+  it("derives a title from the file name: strip extension and control characters, fall back when empty", () => {
+    expect(titleFromFileName("My Notes.md", "Untitled")).toBe("My Notes");
+    expect(titleFromFileName("dir/a b.markdown", "Untitled")).toBe("a b");
+    expect(titleFromFileName("  .md", "Untitled")).toBe("Untitled");
+    expect(titleFromFileName("a\u0001b.md", "Untitled")).toBe("a b");
   });
 
-  it("归一 BOM 与 CRLF / 孤立 CR", () => {
-    expect(normalizeImportedText("\ufeff# 标题\r\n\r\n正文\r一行")).toBe(
-      "# 标题\n\n正文\n一行",
+  it("normalizes BOM and CRLF / isolated CR", () => {
+    expect(normalizeImportedText("\ufeff# Title\r\n\r\nBody\rLine")).toBe(
+      "# Title\n\nBody\nLine",
     );
     expect(normalizeImportedText("plain\ntext")).toBe("plain\ntext");
   });
 
-  it("标题来自正文 H1，同批重名和已有重名都加后缀", () => {
+  it("takes the title from the body H1, adding a suffix for duplicates within the batch and already existing", () => {
     const plan = planImports(
       [
         { name: "a.md", text: "# Alpha\n\n1" },
         { name: "a.md", text: "# Alpha\n\n2" },
         { name: "notes.txt", text: "skip" },
         { name: "a.markdown", text: "# Alpha\n\n3" },
-        { name: "no-heading.md", text: "正文没有标题" },
+        { name: "no-heading.md", text: "No heading in body" },
       ],
       ["Alpha"],
-      "未命名",
+      "Untitled",
     );
     expect(plan.items.map((item) => item.title)).toEqual([
       "Alpha 2",
       "Alpha 3",
       "Alpha 4",
-      "正文没有标题",
+      "No heading in body",
     ]);
     expect(plan.items.map((item) => item.text)).toEqual([
       "# Alpha\n\n1",
       "# Alpha\n\n2",
       "# Alpha\n\n3",
-      "正文没有标题",
+      "No heading in body",
     ]);
     expect(plan.skipped).toEqual([{ name: "notes.txt", reason: "extension" }]);
   });
 
-  it("调用方可提供 id；不提供时留空由默认生成器决定", () => {
+  it("lets the caller provide ids; when omitted, leaves them empty for the default generator", () => {
     const withIds = planImports(
       [{ name: "x.md", text: "" }],
       [],
-      "未命名",
+      "Untitled",
       () => "/workspace/x.md",
     );
     expect(withIds.items[0].id).toBe("/workspace/x.md");
 
-    const withoutIds = planImports([{ name: "x.md", text: "" }], [], "未命名");
+    const withoutIds = planImports([{ name: "x.md", text: "" }], [], "Untitled");
     expect(withoutIds.items[0].id).toBeUndefined();
   });
 
-  it("id 撞车时加后缀，避免两篇文档指向同一文件", () => {
+  it("adds a suffix on id collisions so two documents don't point to the same file", () => {
     const plan = planImports(
       [
         { name: "a.md", text: "1" },
         { name: "b.md", text: "2" },
       ],
       [],
-      "未命名",
+      "Untitled",
       () => "/workspace/same.md",
     );
     expect(plan.items[0].id).toBe("/workspace/same.md");
@@ -89,25 +89,25 @@ describe("导入 Markdown 的纯函数", () => {
 });
 
 describe("Workspace.importDocs", () => {
-  it("加入的文档保留原始源码，不套新建文档的标题模板", () => {
+  it("keeps the original source of imported docs and doesn't apply the new-doc title template", () => {
     const workspace = new Workspace([], { now: () => 1000 });
     const added = workspace.importDocs([
-      { title: "导入篇", source: "# 自己的标题\n\n正文", saved: true },
+      { title: "Imported", source: "# My Own Title\n\nBody", saved: true },
     ]);
     expect(added).toHaveLength(1);
-    expect(workspace.get(added[0].id)?.source).toBe("# 自己的标题\n\n正文");
+    expect(workspace.get(added[0].id)?.source).toBe("# My Own Title\n\nBody");
     expect(workspace.summaries()[0].dirty).toBe(false);
     expect(workspace.activeId).toBe(added[0].id);
   });
 
-  it("saved:false 的文档标脏，交给自动保存落盘", () => {
+  it("marks saved:false docs dirty and leaves them to autosave to flush", () => {
     const workspace = new Workspace([], { now: () => 1000 });
-    const added = workspace.importDocs([{ title: "A", source: "正文" }]);
+    const added = workspace.importDocs([{ title: "A", source: "Body" }]);
     expect(workspace.summaries()[0].dirty).toBe(true);
     expect(workspace.get(added[0].id)?.savedSource).toBe("");
   });
 
-  it("批量导入一次通知，标题互不冲突", () => {
+  it("notifies once for a batch import and keeps titles from colliding", () => {
     const workspace = new Workspace([], { now: () => 1000 });
     let notifications = 0;
     workspace.subscribe(() => (notifications += 1));
@@ -124,7 +124,7 @@ describe("Workspace.importDocs", () => {
     ]);
   });
 
-  it("空列表不改状态也不通知", () => {
+  it("leaves state unchanged and sends no notification for an empty list", () => {
     const workspace = new Workspace([], { now: () => 1000 });
     let notifications = 0;
     workspace.subscribe(() => (notifications += 1));

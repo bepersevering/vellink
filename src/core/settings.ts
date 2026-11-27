@@ -1,37 +1,37 @@
 /**
- * 用户偏好：字号、行宽、主题、自动保存间隔。
+ * User preferences: font size, line width, theme, autosave interval.
  *
- * 只有四个字段，但每个字段都有一条「不能让它把界面搞坏」的边界：
- * - 字号 13–22px：再小看不清，再大一行放不下几个字；
- * - 行宽 560–960px：低于 560 中文一行只剩十来个字，高于 960 又回到满屏长行；
- * - 自动保存 300–3000ms：低于 300 等于每敲一个字写一次盘。
+ * Only four fields, but each has a boundary that "must not break the UI":
+ * - Font size 13–22px: smaller is unreadable, larger fits too few characters per line;
+ * - Line width 560–960px: below 560 a Chinese line holds only about ten characters, above 960 you're back to full-screen long lines;
+ * - Autosave 300–3000ms: below 300 means writing to disk on every keystroke.
  *
- * 所以存储里的值一律不可信：`normalizeSettings` 会把越界、类型不对、甚至
- * 被手改坏的值夹回合法区间，读出来永远是一个能用的 Settings。
+ * So values in storage are never trusted: `normalizeSettings` clamps out-of-range, wrong-typed, and even
+ * hand-corrupted values back into the valid range, so what you read is always a usable Settings.
  */
 
 export type ThemeMode = "light" | "dark" | "system";
 
 export interface Settings {
-  /** 正文字号，px。 */
+  /** Body font size, in px. */
   fontSize: number;
-  /** 正文栏宽，px。 */
+  /** Body column width, in px. */
   lineWidth: number;
-  /** 主题：固定浅色 / 固定深色 / 跟随系统。 */
+  /** Theme: fixed light / fixed dark / follow system. */
   theme: ThemeMode;
-  /** 自动保存防抖间隔，ms。 */
+  /** Autosave debounce interval, in ms. */
   autosaveMs: number;
-  /** 打字机模式：当前行始终保持在窗口垂直中央。 */
+  /** Typewriter mode: keep the current line vertically centered in the window. */
   typewriter: boolean;
-  /** 聚焦段落：当前段落清晰，其余淡化。 */
+  /** Focus paragraph: current paragraph stays clear, the rest fade out. */
   focusLines: boolean;
-  /** 用户自定义 CSS（已去掉外链），注入编辑器。 */
+  /** User-defined CSS (external links stripped), injected into the editor. */
   customCss: string;
-  /** 粘贴图片的最长边上限，0 表示不压缩。 */
+  /** Max edge length for pasted images; 0 means no compression. */
   maxImageEdge: number;
-  /** 标题自动编号（仅渲染层，不写进 Markdown）。 */
+  /** Automatic heading numbers (render layer only, not written into Markdown). */
   headingNumbers: boolean;
-  /** 导出 HTML 时相对图片路径的根目录，空表示不改写。 */
+  /** Root directory for relative image paths when exporting HTML; empty means no rewriting. */
   imageBase: string;
 }
 
@@ -44,23 +44,23 @@ export const LIMITS = {
 export const DEFAULT_SETTINGS: Settings = {
   fontSize: LIMITS.fontSize.default,
   lineWidth: LIMITS.lineWidth.default,
-  // 默认跟随系统：写作软件不该在深色桌面上开出一块刺眼的白板
+  // Follow the system by default: a writing app shouldn't show a glaring white board on a dark desktop
   theme: "system",
   autosaveMs: LIMITS.autosaveMs.default,
   typewriter: false,
   focusLines: false,
   customCss: "",
-  // 默认压到 2048：足够看清文字截图，又能把 4K 图压到零头大小
+  // Default compression to 2048: clear enough for text screenshots, yet shrinks 4K images to a fraction of their size
   maxImageEdge: 2048,
   headingNumbers: false,
   imageBase: "",
 };
 
 const STORAGE_KEY = "vellink-settings:v1";
-/** 设置面板出现之前，主题单独存过一份；迁移时优先尊重用户原来的选择。 */
+/** Before the settings panel existed, the theme was stored separately; migration respects the user's original choice. */
 const LEGACY_THEME_KEY = "vellink-theme";
 
-/** 取一个可以安全落到 storage 的 Storage；隐私模式下访问会抛异常。 */
+/** Get a Storage safe to write to; access throws in private mode. */
 function safeStorage(storage?: Storage | null): Storage | null {
   if (storage !== undefined) return storage;
   try {
@@ -75,7 +75,7 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-/** 任意输入 → 合法设置。所有入口（读盘、导入、测试）都走这里。 */
+/** Any input → valid settings. All entry points (load, import, tests) go through here. */
 export function normalizeSettings(raw: unknown): Settings {
   const input =
     raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -113,10 +113,10 @@ export function normalizeSettings(raw: unknown): Settings {
 }
 
 /**
- * 读设置。
+ * Load settings.
  *
- * 没有存过设置的老用户，把 `vellink-theme` 里明确选过的浅色/深色迁移成
- * 同一个显式选择——不能因为「默认跟随系统」就把他们的界面改成另一个样子。
+ * For long-time users who never saved settings, migrate an explicitly chosen light/dark theme from
+ * `vellink-theme` into the same explicit choice — don't change their UI just because "the default is follow system".
  */
 export function loadSettings(storage?: Storage | null): Settings {
   const store = safeStorage(storage);
@@ -129,7 +129,7 @@ export function loadSettings(storage?: Storage | null): Settings {
       return { ...DEFAULT_SETTINGS, theme: legacy };
     }
   } catch {
-    /* 坏数据当没存过 */
+    /* Bad data is treated as nothing stored */
   }
   return { ...DEFAULT_SETTINGS };
 }
@@ -140,15 +140,16 @@ export function saveSettings(settings: Settings, storage?: Storage | null): void
   try {
     store.setItem(STORAGE_KEY, JSON.stringify(normalizeSettings(settings)));
   } catch {
-    /* 存不下就只记在内存里，不影响本次使用 */
+    /* If it can't be saved, keep it in memory only; this session is unaffected */
   }
 }
 
 /**
- * 把设置落成 CSS 变量。
+ * Apply settings as CSS variables.
  *
- * 用变量而不是改内联样式：`--doc-font` / `--doc-width` 在样式表里有多处引用
- * （正文、标题、源码视图、导出预览），写一次全局生效，不用挨个节点改。
+ * Use variables rather than inline styles: `--doc-font` / `--doc-width` are referenced in multiple places
+ * in the stylesheet (body, headings, source view, export preview), so writing once takes effect globally
+ * without touching each node.
  */
 export function applySettings(
   settings: Settings,
@@ -161,13 +162,13 @@ export function applySettings(
   root.style.setProperty("--doc-width", `${settings.lineWidth}px`);
 }
 
-/** 主题模式 + 系统偏好 → 真正生效的那一个。 */
+/** Theme mode + system preference → the one actually in effect. */
 export function resolveTheme(mode: ThemeMode, systemDark: boolean): "light" | "dark" {
   if (mode === "system") return systemDark ? "dark" : "light";
   return mode;
 }
 
-/** 是否等于默认值（「恢复默认」按钮用它判断要不要禁用）。 */
+/** Whether it equals defaults (used by the 'Reset to defaults' button to decide whether to disable). */
 export function isDefaultSettings(settings: Settings): boolean {
   return (
     settings.fontSize === DEFAULT_SETTINGS.fontSize &&
@@ -177,7 +178,7 @@ export function isDefaultSettings(settings: Settings): boolean {
   );
 }
 
-/** 毫秒 → 秒的显示值，保留一位小数（300ms → "0.3"）。 */
+/** Milliseconds → seconds for display, one decimal place (300ms → "0.3"). */
 export function secondsOf(ms: number): string {
   return (ms / 1000).toFixed(1);
 }

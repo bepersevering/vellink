@@ -26,8 +26,8 @@ function backend(): WorkspaceBackend & { saves: string[] } {
   };
 }
 
-describe("Autosave 的间隔", () => {
-  it("连续输入只在停手 delay 之后写一次", async () => {
+describe("Autosave delay", () => {
+  it("writes once after typing stops for the delay, not on every keystroke", async () => {
     vi.useFakeTimers();
     try {
       const store = backend();
@@ -45,14 +45,14 @@ describe("Autosave 的间隔", () => {
     }
   });
 
-  it("改间隔时，已经在等的那次立刻按新间隔重排", async () => {
+  it("reschedules an already-pending save immediately when the delay changes", async () => {
     vi.useFakeTimers();
     try {
       const store = backend();
       const autosave = new Autosave(store, {}, 2000);
       autosave.schedule(doc("x"));
       await vi.advanceTimersByTimeAsync(500);
-      // 用户把「自动保存」从 2 秒调到 0.3 秒：不该再等剩下的 1.5 秒
+      // The user changes autosave from 2s to 0.3s: don't wait out the remaining 1.5s
       autosave.setDelay(300);
       await vi.advanceTimersByTimeAsync(300);
       expect(store.saves).toEqual(["x"]);
@@ -62,7 +62,7 @@ describe("Autosave 的间隔", () => {
     }
   });
 
-  it("setDelay 接受非法输入时不动原间隔", async () => {
+  it("leaves the delay unchanged when setDelay receives invalid input", async () => {
     vi.useFakeTimers();
     try {
       const store = backend();

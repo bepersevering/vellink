@@ -1,4 +1,4 @@
-/** 六类贡献点的统一注册表：命令、菜单、视图、块渲染器、语法、Provider。 */
+/** Unified registry for the six contribution kinds: commands, menus, views, block renderers, syntax and providers. */
 
 export const CONTRIBUTION_KINDS = [
   "commands",
@@ -33,8 +33,8 @@ export class ContributionRegistry {
       this.buckets.set(kind, bucket);
     }
     const existing = bucket.get(id);
-    // 同一插件可覆盖自己先前注册的声明（如 manifest descriptor → 运行时服务实例）；
-    // 不同插件撞 id 仍然拒绝，保证命名空间隔离。
+    // A plugin may override its own earlier declaration (e.g. manifest descriptor → runtime service instance);
+    // id collisions between different plugins are still rejected to keep namespaces isolated.
     if (existing && existing.pluginId !== pluginId)
       throw new Error(`Contribution already registered: ${kind}/${id}`);
     bucket.set(id, { pluginId, kind, id, value });
@@ -51,7 +51,7 @@ export class ContributionRegistry {
     return this.buckets.get(kind)?.get(id) as Contribution<T> | undefined;
   }
 
-  /** 插件卸载时按 owner 清理，避免残留贡献点。 */
+  /** Clean up by owner when a plugin unloads, so no contributions are left behind. */
   removePlugin(pluginId: string): void {
     for (const bucket of this.buckets.values()) {
       for (const [id, entry] of bucket) {

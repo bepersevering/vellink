@@ -1,4 +1,4 @@
-/* Vellink UI 样式 — 从 ui-prototype.html 完整移植，作为设计基准 */
+/* Vellink UI styles — fully ported from ui-prototype.html as the design baseline */
 :root {
   --bg: #ffffff;
   --bg-sub: #f7f7f5;
@@ -20,7 +20,7 @@
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-doc: Georgia, "Songti SC", "Noto Serif SC", serif;
   --font-mono: "SF Mono", Menlo, Consolas, monospace;
-  /* 写作区排版：由设置面板在 <html> 上覆盖（core/settings.ts 的 applySettings） */
+  /* Writing area typography: overridden on <html> by the settings panel (applySettings in core/settings.ts) */
   --doc-font: 16px;
   --doc-width: 720px;
 }
@@ -66,9 +66,10 @@ body {
   gap: 8px;
   align-items: center;
 }
-/* 桌面端不画假的窗口按钮：真实窗口里系统已经画了一份（浏览器预览才需要）。
-   macOS 用 overlay 标题栏，原生按钮压在这块位置上，所以保留同样的空档；
-   Windows / Linux 的按钮在右上角，左侧不留空。 */
+/* Don't draw fake window buttons on the desktop: a real window already has them (only the
+   browser preview needs them). macOS uses an overlay title bar with native buttons sitting in
+   this area, so we keep the same gap; on Windows / Linux the buttons are at the top right, so no
+   space is needed on the left. */
 body[data-desktop="mac"] .win-dots {
   width: 52px;
 }
@@ -297,7 +298,7 @@ svg {
   max-width: var(--doc-width);
   margin: 0 auto;
   padding: 64px 56px 120px;
-  /* 标题用 em 跟随字号设置，正文由 .doc-body 自己声明 */
+  /* Headings use em to follow the font-size setting; body text is declared by .doc-body itself */
   font-size: var(--doc-font);
 }
 .kicker {
@@ -402,7 +403,7 @@ svg {
 .doc-body pre .nu {
   color: #b8860b;
 }
-/* 聚焦段落：有 :focus-within 的段落保持清晰，其余淡化 */
+/* Focused paragraph: the one with :focus-within stays clear, the rest fade out */
 .doc-body.focus-lines > :not(:focus-within) {
   opacity: 0.42;
   transition: opacity 160ms ease;
@@ -412,7 +413,7 @@ svg {
   transition: opacity 160ms ease;
 }
 
-/* 标题自动编号：CSS counter 只改显示，不进 Markdown 源码 */
+/* Automatic heading numbering: CSS counters only affect display, not the Markdown source */
 body.number-headings .doc-body { counter-reset: h1 0 h2 0 h3 0 h4 0 h5 0 h6 0; }
 body.number-headings .doc-body h1 { counter-increment: h1; counter-reset: h2 0; }
 body.number-headings .doc-body h2 { counter-increment: h2; counter-reset: h3 0; }
@@ -462,7 +463,7 @@ body.number-headings .doc-body h6::before { content: ""; }
   border-left: 2px solid var(--border);
   margin: 6px 0;
 }
-/* 聚焦段落：有 :focus-within 的段落保持清晰，其余淡化 */
+/* Focused paragraph: the one with :focus-within stays clear, the rest fade out */
 .doc-body.focus-lines > :not(:focus-within) {
   opacity: 0.42;
   transition: opacity 160ms ease;
@@ -472,7 +473,7 @@ body.number-headings .doc-body h6::before { content: ""; }
   transition: opacity 160ms ease;
 }
 
-/* 标题自动编号：CSS counter 只改显示，不进 Markdown 源码 */
+/* Automatic heading numbering: CSS counters only affect display, not the Markdown source */
 body.number-headings .doc-body { counter-reset: h1 0 h2 0 h3 0 h4 0 h5 0 h6 0; }
 body.number-headings .doc-body h1 { counter-increment: h1; counter-reset: h2 0; }
 body.number-headings .doc-body h2 { counter-increment: h2; counter-reset: h3 0; }
@@ -549,7 +550,7 @@ body.number-headings .doc-body h6::before { content: ""; }
   max-width: 100%;
   height: auto;
   border-radius: 6px;
-  /* 图片在正文里是行内 atom：上下留一点，别贴着文字基线 */
+  /* Images are inline atoms in the body: leave a little vertical space, don't hug the text baseline */
   vertical-align: middle;
   margin: 4px 0;
 }
@@ -571,7 +572,7 @@ body.number-headings .doc-body h6::before { content: ""; }
   font-weight: 500;
   color: var(--text-sub);
 }
-/* 真实编辑器挂载点：ProseMirror 接管 .pm-host 的 DOM */
+/* Real editor mount point: ProseMirror takes over the .pm-host DOM */
 .pm-host {
   outline: none;
   min-height: 320px;
@@ -1028,7 +1029,7 @@ body[data-t="dark"] .plugin-ico.i3 {
   background: #352f45;
 }
 
-/* M4 官方插件配置面板 */
+/* M4 official plugin settings panel */
 .service-panel {
   padding: 4px 2px 16px;
 }
@@ -1130,9 +1131,10 @@ body[data-t="dark"] .service-block {
   background: #262629;
 }
 
-/* ---------- 工作区：真实文档列表 / 标题 / 状态 ---------- */
-/* 文档 H1 在 ProseMirror 里（.doc-body 内部），字号必须跟 --doc-font 缩放，
-   写成 em 才会随设置面板一起变；写死 34px 会让「字号」只对正文生效。 */
+/* ---------- Workspace: real document list / title / status ---------- */
+/* The document H1 lives inside ProseMirror (within .doc-body), so its size must scale with
+   --doc-font. Using em makes it follow the settings panel; hardcoding 34px would make the
+   "font size" setting affect only body text. */
 .doc-body h1 {
   font-family: var(--font-doc);
   font-size: 2.125em;
@@ -1220,13 +1222,13 @@ button.outline-item {
   color: var(--red);
 }
 
-/* ProseMirror 默认没有引入官方 style，补掉浏览器焦点环（双击/聚焦时不应有蓝框） */
+/* ProseMirror doesn't include the official stylesheet by default; remove the browser focus ring (no blue outline on double-click/focus) */
 .ProseMirror:focus,
 .ProseMirror:focus-visible {
   outline: none;
 }
 
-/* ---------- 桌面端工作区目录条 ---------- */
+/* ---------- Desktop workspace directory bar ---------- */
 .workspace-bar {
   flex: none;
   display: flex;
@@ -1615,7 +1617,7 @@ button.outline-item {
   cursor: default;
 }
 
-/* 命中高亮：两个视图共用同一套类名 */
+/* Match highlights: both views share the same class names */
 .find-hit {
   background: #fbe79a;
   border-radius: 2px;
@@ -1839,7 +1841,7 @@ body[data-t="dark"] .find-hit-on {
   padding: 13px 0;
   border-top: 1px solid var(--border);
 }
-/* 第一行紧贴标题，不要顶出一条多余的分隔线 */
+/* The first row hugs the heading; don't push out an extra separator line */
 .set-row:first-of-type {
   border-top: none;
   padding-top: 2px;
@@ -1866,7 +1868,7 @@ body[data-t="dark"] .find-hit-on {
   width: 100%;
   height: 18px;
   cursor: pointer;
-  /* 只染轨道与滑块，不重造一个 range：各平台原生控件的手感更好 */
+  /* Only tint the track and thumb; don't rebuild a range — native controls feel better on every platform */
   accent-color: var(--accent);
 }
 .set-hint {
@@ -1908,7 +1910,7 @@ body[data-t="dark"] .find-hit-on {
 .set-seg-btn {
   flex: 1;
   height: 28px;
-  /* 未选中项用 border-strong：纯 --border 在白色对话框上几乎看不见边界 */
+  /* Unselected items use border-strong: plain --border is nearly invisible on a white dialog */
   border: 1px solid var(--border-strong);
   border-radius: 7px;
   background: var(--bg);
@@ -1930,8 +1932,8 @@ body[data-t="dark"] .find-hit-on {
   margin-top: 14px;
 }
 
-/* ---------- print sheet (PDF 走系统打印) ---------- */
-/* 屏幕上完全不占位：只在 @media print 里接管整页 */
+/* ---------- print sheet (PDF goes through system printing) ---------- */
+/* Takes up no space on screen: it only takes over the page inside @media print */
 .print-sheet {
   display: none;
 }
@@ -1947,7 +1949,7 @@ body[data-t="dark"] .find-hit-on {
     height: auto !important;
     min-width: 0 !important;
   }
-  /* 应用外壳一律不上纸；<style> 除外（它就是打印面板自己的样式表） */
+  /* Never print the app shell; except <style> (that's the print panel's own stylesheet) */
   .app.has-print-sheet > *:not(.print-sheet):not(style) {
     display: none !important;
   }

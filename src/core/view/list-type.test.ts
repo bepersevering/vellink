@@ -14,8 +14,8 @@ function withCaret(doc: ReturnType<typeof listDoc>, pos: number) {
   return EditorState.create({ doc, selection: TextSelection.create(doc, pos) });
 }
 
-describe("列表类型识别", () => {
-  it("区分无序 / 有序 / 任务", () => {
+describe("list type detection", () => {
+  it("distinguishes bullet / ordered / task lists", () => {
     expect(listKind(listDoc("- 甲\n- 乙\n").firstChild!)).toBe("bullet");
     expect(listKind(listDoc("1. 甲\n2. 乙\n").firstChild!)).toBe("ordered");
     expect(listKind(listDoc("- [x] 甲\n- [ ] 乙\n").firstChild!)).toBe("task");

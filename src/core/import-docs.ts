@@ -1,22 +1,23 @@
 /**
- * 导入 Markdown 文件的纯函数部分。
+ * Pure functions for importing Markdown files.
  *
- * 一次选多个文件是常态，标题和磁盘路径都可能撞车：这里的计划器一次性把
- * 所有冲突算清，UI 只管照计划写盘和建文档，不边写边查（那会漏掉同批里
- * 尚未落盘的后一个文件）。
+ * Selecting multiple files at once is common, and both titles and disk paths can collide: the
+ * planner resolves all conflicts up front so the UI just writes files and creates docs according
+ * to the plan, rather than checking as it goes (which would miss later files in the same batch
+ * that haven't been written yet).
  */
 
 import { docTitle } from "./outline";
 
-/** 导入入口接受的扩展名，与 Rust `is_markdown` 保持一致。 */
+/** Extensions accepted by the import entry point; keep in sync with Rust's `is_markdown`. */
 const MARKDOWN_EXT = /\.(?:md|markdown)$/i;
 
 export interface ImportSource {
-  /** 磁盘绝对路径（桌面端）或浏览器里的展示名。 */
+  /** Absolute path on disk (desktop) or display name in the browser. */
   name: string;
-  /** 可选的真实路径：桌面端用它读内容；浏览器端没有。 */
+  /** Optional real path: used by the desktop backend to read content; absent in the browser. */
   path?: string;
-  /** 原始文本，可能带 BOM / CRLF。 */
+  /** Raw text, possibly with a BOM / CRLF line endings. */
   text: string;
 }
 
@@ -24,27 +25,27 @@ export interface ImportPlanItem {
   sourceName: string;
   path?: string;
   title: string;
-  /** 归一后的源码：无 BOM、LF 换行。 */
+  /** Normalized source: no BOM, LF line endings. */
   text: string;
-  /** 目标文档 id；文件后端是工作区内绝对路径，浏览器端 undefined 走默认生成器。 */
+  /** Target document id; an absolute path inside the workspace for the file backend, undefined in the browser to use the default generator. */
   id: string | undefined;
 }
 
 export interface ImportPlan {
   items: ImportPlanItem[];
-  /** 被跳过的文件（扩展名不符、读失败等）与原因。 */
+  /** Files skipped (bad extension, read failure, etc.) and the reasons. */
   skipped: { name: string; reason: string }[];
 }
 
-/** 只认 .md / .markdown，路径分隔符后再取扩展名，挡住 `note.md.exe`。 */
+/** Accepts only .md / .markdown, checking the extension after the last path separator, so `note.md.exe` is rejected. */
 export function isMarkdownFileName(name: string): boolean {
   const base = name.split(/[\\/]/).pop() ?? name;
   if (!MARKDOWN_EXT.test(base)) return false;
-  // `foo.md` 通过，`foo.md.exe` / `foo.md ` 不行
+  // `foo.md` passes; `foo.md.exe` / `foo.md ` do not
   return base.length === base.trimEnd().length;
 }
 
-/** 文件名 → 文档标题：去扩展名、去控制字符，空则回退。 */
+/** Filename → document title: strip the extension and control characters, fall back if empty. */
 export function titleFromFileName(name: string, fallback: string): string {
   const base = name.split(/[\\/]/).pop() ?? name;
   const title = base
@@ -55,17 +56,19 @@ export function titleFromFileName(name: string, fallback: string): string {
   return title || fallback;
 }
 
-/** 与 Rust `normalize_text` 一致：去 BOM、CRLF / 孤立 CR 归一成 LF。 */
+/** Matches Rust's `normalize_text`: strip the BOM and normalize CRLF / lone CR to LF. */
 export function normalizeImportedText(text: string): string {
   const withoutBom = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   return withoutBom.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 /**
- * 生成导入计划：标题、id 都在「已有文档 + 本批先前的文档」里去重。
+ * Build an import plan: titles and ids are deduplicated against "existing documents + earlier
+ * documents in this batch".
  *
- * `idFor(title, index)` 由调用方提供：文件后端返回工作区内不冲突的
- * 绝对路径，浏览器后端返回 undefined（走默认 id 生成器）。
+ * `idFor(title, index)` is provided by the caller: the file backend returns a non-conflicting
+ * absolute path inside the workspace, the browser backend returns undefined (use the default id
+ * generator).
  */
 export function planImports(
   sources: ImportSource[],
@@ -84,16 +87,16 @@ export function planImports(
       return;
     }
     const text = normalizeImportedText(source.text);
-    // 和工作区保持一致：标题由正文首个 H1 派生，文件名只决定磁盘路径。
-    // 否则用户第一次编辑这篇文档时，标题会突然从文件名跳成 H1。
+    // Stay consistent with the workspace: the title comes from the first H1 in the body; the filename only decides the disk path.
+    // Otherwise the title would suddenly jump from the filename to the H1 on the user's first edit.
     const base = docTitle(text, titleFromFileName(source.name, fallbackTitle));
     let title = base;
     let suffix = 2;
     while (takenTitles.has(title)) title = `${base} ${suffix++}`;
     takenTitles.add(title);
 
-    // 文件后端给的路径理论上已去重，但同批两次 newPath 之间仍可能撞车，
-    // 这里再挡一道；浏览器端 id 交给默认生成器，不参与去重。
+    // Paths from the file backend should already be unique, but two newPath calls in the same batch can still collide,
+    // so we add one more guard; in the browser the id goes to the default generator and is not deduplicated.
     let id = idFor?.(title, index);
     if (id !== undefined) {
       if (takenIds.has(id)) id = `${id}.${index}.md`;

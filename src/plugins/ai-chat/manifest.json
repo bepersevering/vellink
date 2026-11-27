@@ -1,8 +1,8 @@
 {
   "id": "ai-chat",
-  "name": "AI 知识库问答",
+  "name": "AI Knowledge Base Q&A",
   "version": "0.1.0",
-  "description": "按标题语义切块建立本地索引，提问时召回相关段落并调用 OpenAI 兼容模型，回答可写回文档。",
+  "description": "Builds a local index by semantically chunking documents by heading; on a question it recalls relevant passages, calls an OpenAI-compatible model, and can write the answer back into the document.",
   "author": "Vellink",
   "license": "MIT",
   "entry": "index.ts",
@@ -11,8 +11,8 @@
   "permissions": ["storage", "credentials", "network", "ai", "documents:read", "documents:write"],
   "contributes": {
     "commands": [
-      { "command": "ai-chat.configure", "title": "AI · 配置模型与 Key" },
-      { "command": "ai-chat.reindex", "title": "AI · 重建文档索引" }
+      { "command": "ai-chat.configure", "title": "AI · Configure model and API key" },
+      { "command": "ai-chat.reindex", "title": "AI · Rebuild document index" }
     ],
     "providers": [{ "kind": "ai", "id": "ai-chat.provider" }]
   }

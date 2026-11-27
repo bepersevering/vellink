@@ -1,22 +1,22 @@
 /**
- * 标题改名 → 文件重命名。
+ * Title rename → file rename.
  *
- * 文件名默认由首个一级标题派生，改标题就应当跟着改名，否则文件夹里会一直是
- * `Untitled.md` 这种和内容无关的名字。
+ * Filenames come from the first H1 by default, so changing the title should rename the file too;
+ * otherwise the folder keeps names like `Untitled.md` that have nothing to do with the content.
  *
- * 三个必须处理的现实问题：
- * 1. **标题是逐字符变的**：输入 `# 笔记` 会依次得到 `笔`、`笔记`…，所以观察
- *    到变化后要防抖，停手才动磁盘。
- * 2. **改名要先落盘**：内存里有未保存改动时先写回旧路径，否则磁盘上可能还没有
- *    这个文件（新建文档），`rename` 会直接失败。
- * 3. **id 就是路径**：改名后必须让 Workspace 换 id 并保留撤销栈，见
- *    `Workspace.rekey`。
+ * Three real-world issues that must be handled:
+ * 1. **Titles change character by character**: typing `# Note` yields `N`, `No`, `Not`... in turn, so
+ *    changes must be debounced and the disk touched only after typing stops.
+ * 2. **Rename must flush to disk first**: if there are unsaved in-memory changes, write back to the old path
+ *    first; otherwise the file may not exist on disk yet (new document) and `rename` fails outright.
+ * 3. **The id is the path**: after renaming, Workspace must swap the id while preserving the undo stack, see
+ *    `Workspace.rekey`.
  */
 
 import type { Workspace, WorkspaceDoc } from "./workspace";
 import type { FileWorkspaceBackend } from "./workspace-fs";
 
-/** 只用到 Autosave 的这三个方法，测试里可以传精简替身。 */
+/** Only these three Autosave methods are used; tests can pass a minimal stub. */
 export interface RenameAutosave {
   schedule(doc: WorkspaceDoc): void;
   flush(id?: string): Promise<void>;
@@ -28,11 +28,11 @@ export interface TitleRenamerDeps {
   workspace: Workspace;
   autosave: RenameAutosave;
   /**
-   * 即将动磁盘时调用（还没 rename）。
+   * Called just before touching the disk (before the actual rename).
    *
-   * 调用方用它做两件事：把这两条路径标记成「自己改的」，以及让进行中的
-   * 外部变更扫描作废——否则扫描会看到「旧路径还在、新路径没有」，把刚改名的
-   * 文档当成被外部删掉。
+   * Callers use it for two things: marking both paths as "ours", and invalidating any in-progress
+   * external change scan — otherwise the scan would see "old path still there, new path missing" and
+   * mistake the just-renamed document for one deleted externally.
    */
   beforeRename?: (from: string, to: string) => void;
   onError?: (error: unknown, from: string, to: string) => void;
@@ -56,12 +56,12 @@ export class TitleRenamer {
   ) {}
 
   /**
-   * 观察当前文档。
+   * Observe the current document.
    *
-   * - 第一次见到某个 uid 只记基线：启动时磁盘上的文件叫什么就是什么，
-   *   不能因为标题和文件名不一致就把用户的文件批量改名。
-   * - `local` 表示这次标题变化来自编辑器。外部工具改了 H1 只更新基线，
-   *   不擅自重命名用户的文件——那个文件名可能是别的工具正在用的。
+   * - On first sight of a uid, only record the baseline: whatever the file is called on disk at startup
+   *   stands; don't batch-rename the user's files just because a title differs from its filename.
+   * - `local` means the title change came from the editor. If an external tool changed the H1, only update
+   *   the baseline; don't rename the user's file ourselves — that filename may be in use by another tool.
    */
   observe(id: string, uid: string, title: string, local = true): void {
     const base = this.baseline.get(uid);
@@ -71,12 +71,12 @@ export class TitleRenamer {
     }
 
     if (base === title) {
-      // 标题改回原样：放弃排队中的改名
+      // Title changed back to the original: discard the queued rename
       this.dropPending(uid);
       return;
     }
 
-    // 已经为这个标题排着队：保持原计划（落盘后 dirty 变 false 不该取消它）
+    // Already queued for this title: keep the plan (dirty becoming false after a flush shouldn't cancel it)
     if (this.pending && this.pending.uid === uid && this.pending.title === title) return;
 
     if (!local) {
@@ -90,14 +90,14 @@ export class TitleRenamer {
     this.timer = setTimeout(() => void this.fire(), this.delay);
   }
 
-  /** 放弃待执行的改名（文档被删、正在换目录等）。 */
+  /** Discard the pending rename (document deleted, changing directory, etc.). */
   cancel(id?: string): void {
     if (id && this.pending && this.pending.id !== id) return;
     this.clearTimer();
     this.pending = null;
   }
 
-  /** 立刻执行待执行的改名（保存 / 换目录前调，避免丢在防抖窗口里）。 */
+  /** Execute the pending rename immediately (call before save / directory change so it isn't lost in the debounce window). */
   async flush(): Promise<void> {
     this.clearTimer();
     await this.fire();
@@ -114,7 +114,7 @@ export class TitleRenamer {
     this.timer = null;
   }
 
-  /** 清掉排队中的改名；传 uid 时只清那篇文档的。 */
+  /** Clear the queued rename; when a uid is passed, clear only that document's. */
   private dropPending(uid?: string): void {
     if (uid && this.pending && this.pending.uid !== uid) return;
     this.clearTimer();
@@ -125,7 +125,7 @@ export class TitleRenamer {
     const job = this.pending;
     this.pending = null;
     if (!job) return;
-    // 正在改上一个：放回去，等它结束后再跑，不并发改同一篇
+    // A previous rename is in progress: put the job back and retry after it finishes, don't rename the same doc concurrently
     if (this.running) {
       this.pending = job;
       return;
@@ -138,12 +138,12 @@ export class TitleRenamer {
     try {
       const target = await this.deps.files.pathForTitle(job.title, job.id);
       if (target === job.id) {
-        // 文件名已经就是这个标题了（例如大小写或标点归一后相同）
+        // The filename is already this title (e.g. identical after case or punctuation normalization)
         this.baseline.set(job.uid, job.title);
         return;
       }
-      // 先落盘再改名：新建文档还没写过盘，磁盘上没有源文件可移动。
-      // 必须显式 schedule —— 只 flush 的话，若这时恰好没有待写任务就是空操作。
+      // Flush to disk before renaming: a new document hasn't been written yet, so there's no source file on disk to move.
+      // Must call schedule explicitly — flush alone is a no-op if nothing is pending right now.
       if (doc.source !== doc.savedSource) {
         this.deps.autosave.schedule(doc);
         await this.deps.autosave.flush(job.id);
@@ -157,7 +157,7 @@ export class TitleRenamer {
       if (moved && moved.source !== moved.savedSource) this.deps.autosave.schedule(moved);
       this.baseline.set(job.uid, job.title);
     } catch (error) {
-      // 记成基线：否则每次输入都会重试同一个失败，弹一屏 toast
+      // Record as baseline: otherwise every keystroke retries the same failure and floods the screen with toasts
       this.baseline.set(job.uid, job.title);
       this.deps.onError?.(error, job.id, job.title);
     } finally {

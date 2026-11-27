@@ -1,20 +1,22 @@
 /**
- * 扩展语法的纯函数：frontmatter / TOC 占位符 / 标题锚点。
+ * Pure helpers for extended syntax: frontmatter / TOC placeholders / heading anchors.
  *
- * 这些语法 Lezer 都不认识（或只认识一半），但都能在源码层精确识别，
- * 所以用后处理切片而不是改语法树——和数学公式同一策略，不动增量 source map。
+ * Lezer doesn't recognize (or only half-recognizes) these constructs, but they can be detected
+ * precisely at the source-text level, so we post-process slices instead of touching the syntax
+ * tree — the same strategy as for math, leaving the incremental source map untouched.
  */
 
 export interface Frontmatter {
   start: number;
   end: number;
-  /** YAML 原文（不含两侧 --- 行）。 */
+  /** Raw YAML text (excluding the surrounding --- lines). */
   yaml: string;
 }
 
 /**
- * 识别文档开头的 YAML frontmatter：必须以 `---` 独占首行（允许 BOM），
- * 以另一行 `---` 或 `...` 结束。中间的 `---` 只在行首才算。
+ * Detect YAML frontmatter at the start of a document: `---` must occupy the first line on its own
+ * (a BOM is allowed), and it ends with another `---` or `...` line. Interior `---` only counts at
+ * the start of a line.
  */
 export function findFrontmatter(source: string): Frontmatter | null {
   let at = source.charCodeAt(0) === 0xfeff ? 1 : 0;
@@ -40,7 +42,7 @@ export function findFrontmatter(source: string): Frontmatter | null {
   return null;
 }
 
-/** 一行 `[TOC]`（允许前后空白）的位置。 */
+/** Positions of lines containing only `[TOC]` (surrounding whitespace allowed). */
 export function findTocPlaceholders(source: string): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = [];
   let cursor = 0;
@@ -55,7 +57,7 @@ export function findTocPlaceholders(source: string): { start: number; end: numbe
   return out;
 }
 
-/** 把标题文字转成锚点 id：小写、非字母数字压成 `-`，中文保留。 */
+/** Convert heading text to an anchor id: lowercase, non-alphanumerics collapsed to `-`, CJK preserved. */
 export function headingAnchor(text: string): string {
   return text
     .trim()
@@ -66,13 +68,13 @@ export function headingAnchor(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/** 解析 `[文字](#锚点)` 形式的站内链接；不是锚点则返回 null。 */
+/** Parse an in-app link of the form `[text](#anchor)`; return null if it isn't an anchor. */
 export function anchorTarget(url: string): string | null {
   const m = /^#(.*)$/.exec(url.trim());
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-/** 从 Markdown 源码提取标题列表（含层级与锚点），供 TOC 展开。 */
+/** Extract the heading list (with levels and anchors) from Markdown source for TOC expansion. */
 export function tocEntries(source: string): { depth: number; text: string; anchor: string }[] {
   const out: { depth: number; text: string; anchor: string }[] = [];
   let cursor = 0;

@@ -1,9 +1,9 @@
 /**
- * 导出 HTML 时把相对图片路径解析到用户配置的根目录（纯函数）。
+ * Resolve relative image paths against a user-configured base when exporting HTML (pure function).
  *
- * 静态博客常把图片放在 /images/ 下，而笔记里写的是 ./shot.png；
- * 配置 base 后导出 HTML 里的 src 变成 /images/shot.png。
- * 只拼相对路径，http(s)/data/# 原样保留。
+ * Static blogs often keep images under /images/ while a note writes ./shot.png;
+ * once base is configured, the exported HTML src becomes /images/shot.png.
+ * Only relative paths are joined; http(s)/data/# paths are left as-is.
  */
 
 export function resolveImageBase(src: string, base: string): string {

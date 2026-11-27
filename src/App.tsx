@@ -71,12 +71,12 @@ import { SettingsDialog } from "./ui/SettingsDialog";
 import { IconSprite } from "./ui/Icon";
 import { commands as commandItems, type PluginInfo, type CommandItem } from "./ui/data";
 
-/** Tauri 命令的错误是字符串；本地异常走 message。 */
+/** Tauri command errors are strings; local exceptions use their message. */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** 路径里的文件名（文件后端下 id 就是绝对路径）。 */
+/** File name from a path (with the file backend, the id is an absolute path). */
 function baseName(path: string): string {
   const index = path.lastIndexOf("/");
   return index >= 0 ? path.slice(index + 1) : path;
@@ -95,14 +95,14 @@ export default function App() {
   });
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
-  /** 系统是否深色：只在设置选了「跟随系统」时参与决定。 */
+  /** Whether the OS is in dark mode: only consulted when the theme follows the system. */
   const [systemDark, setSystemDark] = useState(
     () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
   const theme = resolveTheme(settings.theme, systemDark);
   /**
-   * 只跑一次的启动 effect（工作区初始化）需要读最新设置。
-   * 用 ref 而不是把 settings 放进依赖：那会让整个工作区被重新初始化一遍。
+   * The one-time startup effect (workspace setup) needs the latest settings.
+   * Use a ref instead of putting settings in the deps: that would reinitialize the whole workspace.
    */
   const settingsRef = useRef(settings);
   const [leftOpen, setLeftOpen] = useState(false);
@@ -112,7 +112,7 @@ export default function App() {
   const [pluginErrors, setPluginErrors] = useState<string[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState("");
-  /** 导出面板与它打开那一刻的选区（选区一变就失效，所以开面板时快照）。 */
+  /** Export dialog and a snapshot of the selection when it opened (the selection can change, so snapshot it on open). */
   const [exportOpen, setExportOpen] = useState(false);
   const [exportSelection, setExportSelection] = useState<{
     from: number;
@@ -120,16 +120,16 @@ export default function App() {
   } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
-  /** 待打印的正文：PDF 由系统打印面板渲染，不自己编码。 */
+  /** Document body queued for printing: PDFs are rendered by the system print dialog, not encoded here. */
   const [printSheet, setPrintSheet] = useState<{
     html: string;
     title: string;
   } | null>(null);
 
-  /** 自动更新：启动后静默查一次，右下角版本号可手动查。 */
+  /** Auto-update: check silently on startup; the version in the bottom-right allows a manual check. */
   const updater = useUpdater();
 
-  // 工作区状态
+  // Workspace state
   const [ready, setReady] = useState(false);
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -137,7 +137,7 @@ export default function App() {
   const [outline, setOutline] = useState<OutlineEntry[]>([]);
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  /** 文档存在哪：本地文件夹 or 浏览器 localStorage。 */
+  /** Where documents live: a local folder or browser localStorage. */
   const [storage, setStorage] = useState<{
     kind: "files" | "browser";
     root: string | null;
@@ -154,15 +154,16 @@ export default function App() {
   const [runtimeReady, setRuntimeReady] = useState<PluginRuntime | null>(null);
   const activeIdRef = useRef<string | null>(null);
   activeIdRef.current = activeId;
-  /** 标题跟随文件名：改完标题静一会儿就把磁盘文件也改名。 */
+  /** File names follow titles: once a title edit settles, rename the file on disk. */
   const renamerRef = useRef<TitleRenamer | null>(null);
-  /** 外部变更检测器，由下面的监听 effect 装配。 */
+  /** External-change detector, wired up by the watcher effect below. */
   const detectorRef = useRef<FileChangeDetector | null>(null);
   /**
-   * 本地结构性改动（重命名、删除）的计数器。
+   * Counter for local structural changes (renames, deletions).
    *
-   * 扫描是异步的：如果扫描途中文件被改名，它拿到的快照就会「旧路径在、新路径
-   * 不在」，照此执行会把刚改名的文档当成被外部删除。计数器一变就丢弃这一轮。
+   * Scans are async: if a file is renamed mid-scan, the snapshot shows the old path
+   * present and the new one missing, which would misclassify the renamed document as
+   * externally deleted. Any change to this counter discards the current round.
    */
   const mutationRef = useRef(0);
   const [liveWatch, setLiveWatch] = useState(false);
@@ -175,14 +176,14 @@ export default function App() {
 
   const handleStats = useCallback((next: DocStats) => setStats(next), []);
 
-  /* ------------------------------ 工作区启动 ------------------------------ */
+  /* ------------------------------ Workspace startup ------------------------------ */
 
   useEffect(() => {
     let cancelled = false;
     let unsubscribe = () => undefined as void;
 
     void (async () => {
-      // 桌面端读写本地文件夹，浏览器退回 localStorage；后端三方法一致
+      // Desktop reads/writes a local folder; the browser falls back to localStorage; all backends expose the same methods
       const env = await resolveWorkspaceEnv();
       if (cancelled) return;
 
@@ -198,7 +199,7 @@ export default function App() {
           onSaved: (id, source) => {
             workspaceRef.current?.markSaved(id, source);
             setSavedAt(Date.now());
-            // 自己写盘也会触发监听事件：标记一下，别把它当成外部改动再读一遍
+            // Our own writes also fire watch events: mark them so we don't reread them as external changes
             detectorRef.current?.markOwn(id);
           },
           onError: (error: unknown) =>
@@ -208,7 +209,7 @@ export default function App() {
                 : t("toast.saveFailed"),
             ),
         },
-        // 用 ref 读：这个 effect 只跑一次，直接闭包 settings 会拿到首帧旧值
+        // Read through the ref: this effect runs once, so closing over settings would capture a stale first-frame value
         settingsRef.current.autosaveMs,
       );
       autosaveRef.current = autosave;
@@ -216,7 +217,7 @@ export default function App() {
       const stored = await env.backend.load();
       if (cancelled) return;
 
-      // 空目录：首次使用给两篇种子，否则只放一篇空白起步（不反复播种）
+      // Empty folder: seed two documents on first use, otherwise start with a single blank doc (no repeated seeding)
       let initial = stored ?? [];
       if (initial.length === 0) {
         const now = Date.now();
@@ -236,7 +237,7 @@ export default function App() {
       const workspace = new Workspace(initial);
       workspaceRef.current = workspace;
 
-      // 文件后端专属：标题变化即重命名对应文件
+      // File backend only: rename the corresponding file when the title changes
       if (env.files) {
         renamerRef.current = new TitleRenamer({
           files: env.files,
@@ -269,7 +270,7 @@ export default function App() {
     };
   }, [showToast]);
 
-  // 当前文档 → 撤销权威实例
+  // Active document → authoritative undo instance
   useEffect(() => {
     if (!ready || !activeId) {
       activeStoreRef.current = null;
@@ -281,7 +282,7 @@ export default function App() {
     setActive(store ? { id: activeId, store } : null);
   }, [ready, activeId]);
 
-  // 有未保存改动就排队（防抖在 Autosave 内部）
+  // Queue anything with unsaved changes (debouncing happens inside Autosave)
   useEffect(() => {
     const workspace = workspaceRef.current;
     const autosave = autosaveRef.current;
@@ -293,7 +294,7 @@ export default function App() {
     }
   }, [docs]);
 
-  // 磁盘变化：文件系统事件为主，30 秒轮询只是兜底（网络盘 / 事件丢失时）
+  // Disk changes: filesystem events first; 30-second polling is a fallback (network drives / lost events)
   useEffect(() => {
     const files = filesRef.current;
     if (!ready || storage.kind !== "files" || !files) return;
@@ -309,7 +310,7 @@ export default function App() {
       try {
         const entries = await files.listMeta();
         if (stopped) return;
-        // 扫描期间本地改过名 / 删过文件：这一份快照已经不可信
+        // Files were renamed / deleted locally during the scan: this snapshot is no longer trustworthy
         if (generation !== mutationRef.current) {
           schedule();
           return;
@@ -318,7 +319,7 @@ export default function App() {
         const changed: ExternalFile[] = [];
         for (const candidate of candidates) {
           const doc = workspaceRef.current?.get(candidate.path);
-          // 内存里有未保存改动：以内存为准，等用户自己保存
+          // Unsaved in-memory changes win: keep them and let the user save explicitly
           if (doc && doc.source !== doc.savedSource) continue;
           changed.push({
             id: candidate.path,
@@ -333,14 +334,14 @@ export default function App() {
         const result = workspaceRef.current?.syncExternal(changed, present);
         if (result && result.updated.length > 0) showToast(t("toast.externalUpdated"));
       } catch {
-        // 目录被拔掉 / 权限变化：这一轮先跳过，下一轮再试
+        // Folder unplugged / permissions changed: skip this round, retry next time
       }
     };
 
     const schedule = () => {
       if (stopped) return;
       if (debounce) window.clearTimeout(debounce);
-      // 一次保存会连发好几条事件，合并成一个窗口再扫
+      // One save fires several events; coalesce them into a single scan window
       debounce = window.setTimeout(() => {
         debounce = null;
         void scan();
@@ -349,7 +350,7 @@ export default function App() {
 
     let unlisten = () => undefined as void;
     void (async () => {
-      // 先记一份基线，启动时不该把整库文档当外部改动重读一遍
+      // Record a baseline first: on startup we shouldn't reread the whole library as external changes
       const initial = await files.listMeta().catch(() => []);
       if (stopped) return;
       detector.rebaseline(initial);
@@ -363,15 +364,15 @@ export default function App() {
         await desktopFs.watch(files.root);
         if (!stopped) setLiveWatch(true);
       } catch (error) {
-        // 监听不可用就只靠轮询，功能不残
-        console.warn("[vellink] 目录监听不可用，退回轮询", error);
+        // If watching is unavailable, fall back to polling so the feature still works
+        console.warn("[vellink] folder watching unavailable, falling back to polling", error);
       }
     })();
 
     const onVisible = () => {
       if (document.visibilityState === "visible") schedule();
     };
-    // 合盖 / 切回来时 FSEvents 可能漏事件，重新扫一次
+    // FSEvents may drop events while the lid is closed or after switching back; scan again
     document.addEventListener("visibilitychange", onVisible);
     const timer = window.setInterval(() => void scan(), 30_000);
 
@@ -385,20 +386,20 @@ export default function App() {
     };
   }, [ready, storage.kind, showToast]);
 
-  // 标题变了就让文件名跟上（文件后端专属，防抖在 TitleRenamer 内部）
+  // Follow title changes with file renames (file backend only; debouncing is inside TitleRenamer)
   useEffect(() => {
     const renamer = renamerRef.current;
     if (!renamer || !activeId) return;
     const summary = docs.find((doc) => doc.id === activeId);
     if (!summary) return;
-    // 只有本地编辑才改名：外部工具改了 H1 不动它的文件名
+    // Only local edits trigger a rename: an external tool changing H1 leaves the file name alone
     renamer.observe(summary.id, summary.uid, summary.title, summary.dirty);
   }, [docs, activeId]);
 
-  // 大纲跟随当前文档，输入时防抖，避免每个字符都全量解析
+  // Outline follows the active document, debounced while typing to avoid a full parse per keystroke
   const activeSource = useMemo(
     () => (activeId ? (workspaceRef.current?.get(activeId)?.source ?? "") : ""),
-    // docs 每次变更即代表正文变化（source 不在摘要里，借 updatedAt 触发）
+    // Every docs change implies a body change (source isn't in summaries; updatedAt triggers it)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeId, docs],
   );
@@ -408,7 +409,7 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [activeSource]);
 
-  /* ------------------------------ 插件 ------------------------------ */
+  /* ------------------------------ Plugins ------------------------------ */
 
   useEffect(() => {
     let disposed = false;
@@ -417,8 +418,8 @@ export default function App() {
       notify: showToast,
       credentialStore: createLocalCredentialStore(),
     }).then(({ runtime, errors }) => {
-      // runtime 是应用级单例：StrictMode 的第一次 cleanup 不可销毁它，
-      // 否则第二次挂载会拿到已 dispose 的实例。
+      // The runtime is an app-level singleton: don't dispose it in StrictMode's first cleanup,
+      // or the second mount would get an already-disposed instance.
       if (disposed) return;
       runtimeRef.current = runtime;
       setRuntimeReady(runtime);
@@ -450,7 +451,7 @@ export default function App() {
         tone: (["i1", "i2", "i3"] as const)[index % 3],
         enabled: plugin.enabled,
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- locale 切换时重新解析文案
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-resolve copy when the locale changes
     [pluginSummaries, locale],
   );
 
@@ -467,11 +468,11 @@ export default function App() {
         })),
       ),
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- locale 切换时重新解析文案
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-resolve copy when the locale changes
     [pluginSummaries, locale],
   );
 
-/** 用 canvas 等比缩小大图；GIF 不动（会丢动画），失败时回退原字节。 */
+/** Scale large images down proportionally with canvas; leave GIFs untouched (would lose animation); fall back to original bytes on failure. */
 async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
   const original = new Uint8Array(await file.arrayBuffer());
   if (!maxEdge || file.type === "image/gif") return original;
@@ -499,19 +500,19 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
   }
 }
 
-  /* ------------------------------ 文档操作 ------------------------------ */
+  /* ------------------------------ Document actions ------------------------------ */
 
   const createDoc = useCallback(async () => {
     const workspace = workspaceRef.current;
     if (!workspace) return;
     const title = t("doc.untitled");
-    // 文件后端：先定下磁盘路径（避开目录里已有同名文件），再建文档
+    // File backend: reserve a disk path (avoiding existing names) before creating the document
     const id = filesRef.current ? await filesRef.current.newPath(title) : undefined;
     workspace.create(title, id);
     showToast(t("toast.docCreated"));
   }, [showToast]);
 
-  /** 插入一张空表格：走 insertMarkdown 的块模式，当前行不被拆坏。 */
+  /** Insert an empty table via insertMarkdown's block mode so the current line isn't split. */
   const insertTable = useCallback((rows: number, cols: number) => {
     editorRef.current?.insertMarkdown(buildTable(rows, cols), { block: true });
     setTableOpen(false);
@@ -519,11 +520,12 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
   }, [showToast]);
 
   /**
-   * 导入 Markdown 文件。
+   * Import Markdown files.
    *
-   * 桌面端先把每篇写进当前工作区目录（拿 newPath 避开重名），再作为「已保存」
-   * 的文档加入工作区；浏览器端没有真实文件，交给自动保存写 localStorage。
-   * 选进来的文件已经自带完整 Markdown，不再套 newDocumentSource 的标题模板。
+   * On desktop, write each file into the current workspace folder (via newPath to avoid
+   * name clashes), then add it to the workspace as already saved. In the browser there
+   * are no real files, so autosave persists to localStorage. Picked files already contain
+   * full Markdown, so don't wrap them in the newDocumentSource title template.
    */
   const importDocs = useCallback(async () => {
     const workspace = workspaceRef.current;
@@ -538,14 +540,14 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         t("doc.untitled"),
       );
       const files = filesRef.current;
-      // 写盘会触发监听；本批来源是用户主动导入，作废可能正在跑的陈旧扫描
+      // Writing triggers the watcher; this batch is a user-initiated import, so invalidate any stale scan in flight
       if (files) mutationRef.current += 1;
       const entries: { title: string; source: string; id?: string; saved?: boolean }[] = [];
 
       for (const item of plan.items) {
         if (files) {
-          // 相对路径图片：从源文件所在目录搬到工作区的 .vellink-assets/，
-          // 再把引用改写成新路径。浏览器端没有源目录，跳过这一步。
+          // Relative-path images: copy them from the source folder into the workspace's
+          // .vellink-assets/ and rewrite references. The browser has no source folder, so skip.
           let text = item.text;
           const refs = findRelativeImages(text);
           if (refs.length && item.path && files.root) {
@@ -593,7 +595,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     }
   }, [showToast]);
 
-  /** 导入图片搬运的异步包装：逐个解析目标路径，再一次性重写源码。 */
+  /** Async wrapper for imported image migration: resolve all target paths, then rewrite the source once. */
   const rewriteImagePathsAsync = useCallback(
     async (
       source: string,
@@ -610,13 +612,13 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     [],
   );
 
-  /** 浏览器端拖拽重排文档；桌面端顺序由磁盘决定，不提供此能力。 */
+  /** Drag-to-reorder in the browser; on desktop the disk dictates order, so this isn't offered. */
   const reorderDocs = useCallback((ids: string[]) => {
     workspaceRef.current?.reorder(ids);
     void backendRef.current?.reorder?.(ids);
   }, []);
 
-  /** 切换工作区目录：写盘后整页重载，工作区按新目录重建。 */
+  /** Switch the workspace folder: persist, reload the page, and rebuild everything for the new folder. */
   const switchFolder = useCallback(async () => {
     if (!isDesktop()) {
       showToast(t("toast.desktopOnly"));
@@ -625,7 +627,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     try {
       const picked = await pickFolder();
       if (!picked) return;
-      // 换目录前把「待改的名」和没落盘的改动都写掉，避免丢在防抖窗口里
+      // Before switching, flush pending renames and unsaved edits so nothing is lost in a debounce window
       await renamerRef.current?.flush();
       await autosaveRef.current?.flush();
       persistRoot(picked);
@@ -635,7 +637,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     }
   }, [showToast]);
 
-  /** 在系统文件管理器里定位当前工作区目录。 */
+  /** Reveal the current workspace folder in the system file manager. */
   const revealFolder = useCallback(async () => {
     const root = filesRef.current?.root;
     if (!root) return;
@@ -655,15 +657,15 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         showToast(t("toast.cannotDeleteLast"));
         return;
       }
-      // 先撤掉待改的名与待写任务，再等飞行中的那次写完，最后才动文件：
-      // 否则防抖计时器或进行中的写入会把刚删掉的文件又写回来
+      // Cancel pending renames and writes, wait for any in-flight write, then touch the file:
+      // otherwise a debounce timer or ongoing write could recreate the just-deleted file.
       renamerRef.current?.cancel(id);
       autosave?.cancel(id);
       await autosave?.settled(id);
       mutationRef.current += 1;
       void backendRef.current?.remove(id);
 
-      // 桌面端：删完后回收没有任何文档引用的图片（进回收站，不是直接删）
+      // Desktop: after deletion, trash images no document references (move to trash, don't delete outright)
       const files = filesRef.current;
       if (files?.root) {
         void (async () => {
@@ -678,7 +680,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
               await desktopAssets.trash(files.root, name, `${files.root}/.vellink-trash/assets`);
             }
           } catch {
-            // 清理失败不该影响「文档已删除」这个主结果
+            // Cleanup failure shouldn't override the primary result: the document was deleted
           }
         })();
       }
@@ -696,14 +698,14 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     if (!doc) return;
     autosave.schedule(doc);
     await autosave.flush(id);
-    // ⌘S 顺带落实待改的文件名：用户手动保存时，文件名也该当场对齐
+    // ⌘S also flushes pending renames: a manual save should align the file name immediately
     await renamerRef.current?.flush();
     showToast(t("toast.savedNow"));
   }, [showToast]);
 
-  /* ------------------------------ 图片资产 ------------------------------ */
+  /* ------------------------------ Image assets ------------------------------ */
 
-  /** 粘贴 / 拖入的图片：桌面端落到工作区目录，浏览器里退回 data URI。 */
+  /** Pasted/dropped images: write to the workspace folder on desktop, fall back to data URIs in the browser. */
   const handleImages = useCallback(
     async (files: File[]) => {
       for (const file of files) {
@@ -734,10 +736,10 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     [showToast],
   );
 
-  /** 导出 HTML / PDF 前把本地图片读回来内嵌；Markdown 保留相对路径。 */
+  /** Inline local images before HTML/PDF export; Markdown keeps relative paths. */
   const inlineImagesForExport = useCallback(async (source: string) => {
     const root = filesRef.current?.root;
-    // 浏览器里粘进来的本来就是 data URI，没有本地路径要解析
+    // Images pasted in the browser are already data URIs; there's no local path to resolve
     if (!isDesktop() || !root) return source;
     return inlineLocalImages(source, async (path) => {
       if (!isAssetPath(path)) return null;
@@ -749,16 +751,16 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         const bytes = await desktopAssets.read(root, name);
         return dataUriOf(Uint8Array.from(bytes), mime);
       } catch {
-        // 图片被外部删了：保留原路径，至少别把正文弄丢
+        // Image deleted externally: keep the original path rather than losing the document body
         return null;
       }
     });
   }, []);
 
-  /* ------------------------------ 导出 ------------------------------ */
+  /* ------------------------------ Export ------------------------------ */
 
   const openExport = useCallback(() => {
-    // 打开那一刻快照选区：面板是模态的，之后不会有变化的可能
+    // Snapshot the selection when opening: the dialog is modal, so it can't change afterwards
     setExportSelection(editorRef.current?.selectionRange() ?? null);
     setExportOpen(true);
   }, []);
@@ -774,10 +776,11 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
       }
       setExporting(true);
       try {
-        // 导出的是「眼前的正文」：还没落盘的改动也照导，不等自动保存
+        // Export what's on screen: include unsaved edits instead of waiting for autosave.
         //
-        // 选区在这一层先切好再内嵌图片：内嵌会把相对路径换成很长的 data URI，
-        // 此后源码偏移全变了，不能再让 buildExport 按原区间切一刀。
+        // Narrow the selection before inlining images: inlining replaces relative paths with
+        // long data URIs, which shifts all source offsets, so buildExport can't slice by the
+        // original range afterwards.
         const requested = scope === "selection" ? clampRange(doc.source, exportSelection) : null;
         const picked = requested ? doc.source.slice(requested.from, requested.to) : null;
         const selected = picked && picked.trim() ? picked : null;
@@ -797,11 +800,11 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         });
 
         if (format === "pdf") {
-          // 先关面板再挂打印快照：面板本身不该出现在纸上
+          // Close the dialog before mounting the print snapshot: the dialog shouldn't appear on paper
           setExportOpen(false);
           setPrintSheet({
             html: String(payload.contents),
-            // 打印对话框的默认文件名取自 document.title
+            // The print dialog's default filename comes from document.title
             title: payload.fileName.replace(/\.pdf$/i, ""),
           });
           return;
@@ -823,10 +826,11 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
   );
 
   /**
-   * PDF：正文挂进打印面板 → 两帧后调起系统打印。
+   * PDF: mount the body into the print sheet, then open the system print dialog two frames later.
    *
-   * 两帧不是玄学：第一帧 React 才把 DOM 提交上去，第二帧样式表与字体替换
-   * 完成；少等一帧，打印面板可能拿到还没排版的空白页。
+   * The two frames are intentional: the first lets React commit the DOM, the second lets
+   * stylesheets and font substitution settle. Skipping one may hand the print dialog a blank,
+   * unlaid-out page.
    */
   useEffect(() => {
     const sheet = printSheet;
@@ -851,7 +855,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         });
       });
     });
-    // 少数平台不派发 afterprint：兜底清掉，别让打印面板一直挂在外层
+    // Some platforms never dispatch afterprint: clean up as a fallback so the sheet doesn't linger
     const timer = window.setTimeout(clear, 120_000);
 
     return () => {
@@ -873,7 +877,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     editorRef.current?.seek(offset);
   }, []);
 
-  /** 全库搜索命中：切到那篇文档并定位到源码偏移。 */
+  /** Library-wide search hit: switch to that document and jump to the source offset. */
   const pendingSeekRef = useRef<{ id: string; offset: number; length: number } | null>(null);
   const seekTokenRef = useRef(0);
 
@@ -888,7 +892,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     workspace.setActive(id);
   }, []);
 
-  // 切文档会让编辑器整体重建：等它挂上新的 store 再定位，别赌单次 rAF
+  // Switching documents rebuilds the editor: wait until it mounts the new store before seeking; don't rely on a single rAF
   useEffect(() => {
     const pending = pendingSeekRef.current;
     if (!pending || pending.id !== activeId) return;
@@ -905,13 +909,13 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     return () => window.clearTimeout(timer);
   }, [activeId]);
 
-  /** 命令面板的全库搜索数据源。 */
+  /** Data source for the command palette's library-wide search. */
   const searchNotes = useCallback(
     (query: string): CommandItem[] => {
       const workspace = workspaceRef.current;
       if (!workspace) return [];
       return workspace.search(query, { limit: 6 }).map((hit) => {
-        // 末尾两段是偏移和长度；路径本身可能带冒号，所以从后往前切
+        // The last two segments are offset and length; paths may contain colons, so split from the end
         const action = `note:${hit.id}:${hit.offset}:${hit.length}`;
         return {
           id: action,
@@ -923,21 +927,22 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         };
       });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 切语言时分组名要跟着变
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- group names must follow locale changes
     [locale],
   );
 
-  /* ------------------------------ 设置 · 主题与快捷键 ------------------------------ */
+  /* ------------------------------ Settings · theme and shortcuts ------------------------------ */
 
   /**
-   * 设置改动立即生效、立即保存。
+   * Settings take effect and are saved immediately.
    *
-   * 写 CSS 变量 + 调 Autosave.setDelay 都放在这里：设置面板只负责改 state，
-   * 副作用集中在一处，避免「面板里改了字号，导出预览没跟着变」这类偏差。
+   * Writing CSS variables and calling Autosave.setDelay both live here: the settings dialog
+   * only updates state. Keeping side effects in one place avoids drift such as changing the
+   * font size in the dialog while the export preview stays unchanged.
    */
   useLayoutEffect(() => {
     settingsRef.current = settings;
-    // 布局阶段写 CSS 变量：晚一帧的话，存的字号是 20px 的用户会先看到一眼 16px
+    // Write CSS variables during the layout phase: a frame later, a user with a saved 20px font would briefly see 16px
     applySettings(settings);
     applyCustomCss(document, settings.customCss);
     document.body.classList.toggle("number-headings", settings.headingNumbers);
@@ -946,7 +951,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
   }, [settings]);
 
   useEffect(() => {
-    // 跟随系统时，系统外观一变就跟着变；固定浅/深色时这个监听不起作用
+    // When following the system, track appearance changes; with a fixed light/dark theme this listener does nothing
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!media) return;
     const sync = () => setSystemDark(media.matches);
@@ -1012,7 +1017,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         e.preventDefault();
         setTableOpen(true);
       } else if (key === ",") {
-        // 平台惯例：设置就是 ⌘,（Preferences）
+        // Platform convention: ⌘, opens Preferences
         e.preventDefault();
         setSettingsOpen((v) => !v);
       } else if (key === "u") {
@@ -1054,9 +1059,9 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
   };
 
   const runCommand = (cmd: CommandItem) => {
-    /** 命令 label/group 存的是 i18n key；插件命令的标题原样透传。 */
+    /** Command labels/groups hold i18n keys; plugin command titles are passed through verbatim. */
     const label = cmd.label.includes(".") && !cmd.label.includes(" ") ? t(cmd.label) : cmd.label;
-    // 全库搜索命中：id 里最后一段是偏移（路径本身可能带冒号）
+    // Library search hit: the last segment of the id is the offset (paths may contain colons)
     if (cmd.action.startsWith("note:")) {
       const rest = cmd.action.slice("note:".length);
       const lengthAt = rest.lastIndexOf(":");
@@ -1132,7 +1137,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
     }
   };
 
-  /* ------------------------------ 渲染 ------------------------------ */
+  /* ------------------------------ Render ------------------------------ */
 
   const activeSummary = activeId ? docs.find((doc) => doc.id === activeId) : undefined;
   const activeDoc = activeId ? workspaceRef.current?.get(activeId) : undefined;
@@ -1156,7 +1161,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
         docName={docTitle}
         onModeChange={changeMode}
         onThemeToggle={() => {
-          // 点一下太阳/月亮 = 明确选择浅色或深色；不再跟随系统（这也是用户的意图）
+          // Clicking the sun/moon = an explicit light/dark choice; stop following the system (which is the user's intent)
           const next: Theme = theme === "dark" ? "light" : "dark";
           setSettings((prev) => ({ ...prev, theme: next }));
           showToast(next === "dark" ? t("toast.darkTheme") : t("toast.lightTheme"));
@@ -1264,7 +1269,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
       />
       {printSheet && (
         <>
-          {/* 打印面板的样式与应用互不影响：所有选择器都挂在 .print-sheet 下 */}
+          {/* Print sheet styles are isolated from the app: every selector is scoped under .print-sheet */}
           <style>{docCss(".print-sheet", { dark: false })}</style>
           <div
             className="print-sheet"

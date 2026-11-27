@@ -2,64 +2,64 @@ import { describe, expect, it } from "vitest";
 import { buildOutline, docTitle } from "./outline";
 
 describe("buildOutline", () => {
-  it("抽出顶层标题、层级与源码偏移", () => {
-    const source = ["# 一", "", "## 二", "", "### 三", "", "正文"].join("\n");
+  it("extracts top-level headings, levels and source offsets", () => {
+    const source = ["# One", "", "## Two", "", "### Three", "", "Body"].join("\n");
     const outline = buildOutline(source);
 
     expect(outline.map((item) => [item.level, item.depth, item.label])).toEqual([
-      [1, 1, "一"],
-      [2, 2, "二"],
-      [3, 3, "三"],
+      [1, 1, "One"],
+      [2, 2, "Two"],
+      [3, 3, "Three"],
     ]);
     expect(source.slice(outline[1].offset, outline[1].offset + 2)).toBe("##");
   });
 
-  it("4–6 级标题在面板里归一化到 3 级", () => {
-    const outline = buildOutline("#### 四级\n\n##### 五级");
+  it("normalizes level 4–6 headings to level 3 in the panel", () => {
+    const outline = buildOutline("#### Level Four\n\n##### Level Five");
     expect(outline.map((item) => item.level)).toEqual([3, 3]);
     expect(outline.map((item) => item.depth)).toEqual([4, 5]);
   });
 
-  it("忽略代码块、引用与列表里的标题", () => {
+  it("ignores headings inside code blocks, blockquotes and lists", () => {
     const source = [
-      "# 真标题",
+      "# Real Title",
       "",
       "```md",
-      "# 代码里的井号",
+      "# Hash in code",
       "```",
       "",
-      "> # 引用里的标题",
+      "> # Heading in a quote",
       "",
-      "- ## 列表里的标题",
+      "- ## Heading in a list",
     ].join("\n");
 
-    expect(buildOutline(source).map((item) => item.label)).toEqual(["真标题"]);
+    expect(buildOutline(source).map((item) => item.label)).toEqual(["Real Title"]);
   });
 
-  it("标题里的强调与链接只保留可见文字", () => {
-    const outline = buildOutline("## 关于 **重点** 与 [链接](https://example.com)");
-    expect(outline[0].label).toBe("关于 重点 与 链接");
+  it("keeps only visible text from emphasis and links in headings", () => {
+    const outline = buildOutline("## About **Key Point** and [Link](https://example.com)");
+    expect(outline[0].label).toBe("About Key Point and Link");
   });
 
-  it("空标题不产生条目", () => {
-    expect(buildOutline("##\n\n正文")).toHaveLength(0);
+  it("produces no entry for an empty heading", () => {
+    expect(buildOutline("##\n\nBody")).toHaveLength(0);
   });
 });
 
 describe("docTitle", () => {
-  it("优先取一级标题，而不是第一个出现的标题", () => {
-    expect(docTitle("## 小节\n\n# 真标题")).toBe("真标题");
+  it("prefers the H1 rather than the first heading encountered", () => {
+    expect(docTitle("## Section\n\n# Real Title")).toBe("Real Title");
   });
 
-  it("没有一级标题时退化为第一个标题", () => {
-    expect(docTitle("## 小节\n\n正文")).toBe("小节");
+  it("falls back to the first heading when there is no H1", () => {
+    expect(docTitle("## Section\n\nBody")).toBe("Section");
   });
 
-  it("没有标题时退化为首个非空行", () => {
-    expect(docTitle("\n\n  第一行文字\n\n第二行")).toBe("第一行文字");
+  it("falls back to the first non-empty line when there is no heading", () => {
+    expect(docTitle("\n\n  First line of text\n\nSecond line")).toBe("First line of text");
   });
 
-  it("完全空文档使用兜底名", () => {
-    expect(docTitle("   \n\n", "未命名")).toBe("未命名");
+  it("uses the fallback name for a completely empty document", () => {
+    expect(docTitle("   \n\n", "Untitled")).toBe("Untitled");
   });
 });

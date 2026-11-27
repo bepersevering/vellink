@@ -1,14 +1,17 @@
 /**
- * 同步引擎 — 本地优先 + ETag 条件写入。
+ * Sync engine — local-first with ETag conditional writes.
  *
- * 策略（够用且可解释，非 CRDT）：
- * - 本地写：立即落本地 VFS，并进 outbox（带读取时的远端 ETag 作为 base）。
- * - 联网 sync：base 与远端 ETag 相同 → 上传；远端不存在 → 新建；
- *   ETag 不同且远端内容 == 本地内容 → 视为已同步；否则写 `.conflict-<timestamp>.md` 副本，
- *   本地版本保留，远端不动，绝不静默覆盖。
- * - 无 outbox 的已跟踪文件：远端 ETag 变化 → 拉回本地。
+ * Strategy (deliberately simple and explainable, not a CRDT):
+ * - Local write: immediately persist to the local VFS and enqueue in the outbox, using the
+ *   remote ETag observed at read time as the base.
+ * - Online sync: base equals the remote ETag → upload; remote missing → create;
+ *   ETag differs but remote content equals local → treat as already synced; otherwise write a
+ *   `.conflict-<timestamp>.md` copy, keep the local version, leave the remote untouched — never
+ *   overwrite silently.
+ * - Tracked file with no outbox entry: remote ETag changed → pull it down.
  *
- * Yjs / sqlite-vec 等 CRDT 与向量索引在 M4 以接口占位，后续可替换本引擎而不改插件 API。
+ * CRDTs and vector indexes such as Yjs / sqlite-vec are interface placeholders in M4; this
+ * engine can be replaced later without changing the plugin API.
  */
 
 import {
@@ -21,9 +24,9 @@ import {
 
 export interface SyncEntry {
   path: VfsPath;
-  /** 上次成功同步时看到的远端 ETag */
+  /** Remote ETag seen at the last successful sync */
   baseEtag?: string;
-  /** 上次成功同步的内容哈希（用于判断远端改动是否只是回声） */
+  /** Content hash from the last successful sync (to detect whether a remote change is just an echo) */
   baseHash: string;
 }
 
@@ -38,7 +41,7 @@ export interface SyncReport {
   pending: number;
 }
 
-/** FNV-1a 32 位，用于内容指纹，不追求密码学强度。 */
+/** 32-bit FNV-1a for content fingerprints; cryptographic strength is not required. */
 export function hashContent(content: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < content.length; i++) {
@@ -62,16 +65,16 @@ export class SyncEngine {
     private readonly remote: VfsProvider,
   ) {}
 
-  /** 断网编辑入口：本地立即写入，远端等联网后再推。 */
+  /** Offline edit entry point: write locally now, push to the remote once back online. */
   async queue(path: VfsPath, content: string): Promise<void> {
     const clean = normalizePath(path);
     const before = this.tracked.get(clean);
-    // 本地 VFS 是单写者，远端 ETag 只用于 PUT 的 If-Match，不能当本地条件写凭据。
+    // The local VFS is single-writer; the remote ETag is only for PUT If-Match, not a local conditional-write credential.
     await this.local.write(clean, content);
     this.outbox.set(clean, { content, ...(before?.baseEtag ? { baseEtag: before.baseEtag } : {}) });
   }
 
-  /** 记住远端基线；首次连接后由调用方对每个文件调用。 */
+  /** Remember the remote baseline; the caller invokes this per file after the first connection. */
   track(path: VfsPath, etag: string | undefined, content: string): void {
     this.tracked.set(normalizePath(path), {
       path: normalizePath(path),
@@ -97,7 +100,7 @@ export class SyncEngine {
         remoteEtag = (await this.remote.stat(path)).etag;
       } catch (error) {
         if (!(error instanceof VfsError) || error.status !== 404) {
-          actions.push({ type: "noop", path, reason: "远端暂不可达，保留待发" });
+          actions.push({ type: "noop", path, reason: "remote temporarily unreachable; keeping pending" });
           continue;
         }
       }
@@ -116,7 +119,7 @@ export class SyncEngine {
         if (hashContent(remote.content) === hashContent(item.content)) {
           this.track(path, remoteEtag, item.content);
           this.outbox.delete(path);
-          actions.push({ type: "noop", path, reason: "远端内容与本地一致" });
+          actions.push({ type: "noop", path, reason: "remote content matches local" });
           continue;
         }
         const conflictPath = this.conflictPath(path);

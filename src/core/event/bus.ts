@@ -1,8 +1,9 @@
 import type { Transaction } from "../transaction/types";
 
 /**
- * 事件总线 — 插件与内核之间的唯一通信通道。
- * M0 只做同步内存版；后续可换 Worker/Comlink 而调用方无感。
+ * Event bus — the only communication channel between plugins and the core.
+ * M0 is a synchronous in-memory version; it can later be swapped for Worker/Comlink
+ * without callers noticing.
  */
 
 export interface DocumentChangedEvent {
@@ -61,5 +62,5 @@ export class EventBus {
   }
 }
 
-/** 全局单例：M0 阶段一个应用一个总线。 */
+/** Global singleton: one bus per app in M0. */
 export const bus = new EventBus();

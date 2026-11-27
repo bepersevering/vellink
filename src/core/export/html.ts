@@ -1,12 +1,14 @@
 /**
- * DocumentIR → HTML。
+ * DocumentIR → HTML.
  *
- * 为什么不拿现成的 markdown→HTML 转换器：
- * 1. IR 是唯一真源，导出必须与编辑器里看到的完全一致，不能另起一条解析链；
- * 2. 导出的文件要能直接发给别人——单文件、样式内联、零外部依赖。
+ * Why not use an off-the-shelf markdown→HTML converter:
+ * 1. The IR is the single source of truth; export must match exactly what the editor shows,
+ *    without a second parsing pipeline;
+ * 2. Exported files are meant to be sent to others — a single file, inlined styles, zero external dependencies.
  *
- * 样式刻意照抄 `.doc-body` 的字号/行距/间距（衬线正文、1.9 行高、20px 段距），
- * 这样「导出后打开」与「编辑器里」是同一份排版，不是另一个版本的文档。
+ * The styles deliberately mirror `.doc-body` font size / line height / spacing (serif body,
+ * 1.9 line height, 20px paragraph gaps), so "opened after export" and "in the editor" share
+ * the same layout rather than being two versions of the document.
  */
 
 import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
@@ -16,7 +18,7 @@ import { headingAnchor } from "../ext-syntax";
 import { sanitizeCss } from "../custom-css";
 import { resolveImageBase } from "./image-base";
 
-/** 公式渲染：MathML 输出是纯标记、零字体依赖，导出的单文件才能真正自包含。 */
+/** Math rendering: MathML output is pure markup with no font dependencies, so the exported single file is truly self-contained. */
 function mathHtml(value: string, displayMode: boolean): string {
   try {
     return katex.renderToString(value, {
@@ -26,7 +28,7 @@ function mathHtml(value: string, displayMode: boolean): string {
       strict: "ignore",
     });
   } catch {
-    // 极端非法输入降级为可读源码，绝不因为公式把整篇导出搞崩
+    // Fall back to readable source for extreme invalid input; never let a formula break the whole export
     return `<code>${escapeHtml(value)}</code>`;
   }
 }
@@ -37,7 +39,7 @@ const FONT_UI =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
 const FONT_MONO = '"SF Mono", ui-monospace, Menlo, Consolas, monospace';
 
-/** HTML 文本转义。属性值同样走这里（双引号已被转义，可直接放进 " " 里）。 */
+/** HTML text escaping. Attribute values go through here too (double quotes are escaped, safe inside " "). */
 export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -49,26 +51,27 @@ export function escapeHtml(text: string): string {
 /* ------------------------------ URL ------------------------------ */
 
 /**
- * 导出文件是发出去给别人双击打开的，链接点一下就执行脚本这件事必须堵住。
+ * Exported files are opened by double-clicking, so links that execute scripts on click must be blocked.
  *
- * 转义挡不住 `javascript:alert(1)`——里面既没有引号也没有尖括号，能原样进
- * 进 href。所以按协议白名单来：只放行 http(s)/mailto/tel/file，以及相对
- * 路径与锚点（没有协议头的都是站内相对引用，安全）。其余一律降到 `#`。
+ * Escaping can't stop `javascript:alert(1)` — it has neither quotes nor angle brackets, so it
+ * passes straight into href. Use a protocol allowlist instead: only http(s)/mailto/tel/file,
+ * plus relative paths and anchors (no scheme means an in-document relative reference, hence safe).
+ * Everything else is downgraded to `#`.
  */
 export function safeUrl(raw: string): string {
   const url = raw.trim();
   if (!url) return "#";
-  // 没有 "scheme:" 前缀 → 相对路径、锚点、`www.x.com` 之类，原样保留
+  // No "scheme:" prefix → relative path, anchor, `www.x.com`, etc.: keep as-is
   if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
   return /^(?:https?|mailto|tel|file):/i.test(url) ? url : "#";
 }
 
-/** 图片额外容忍内联的 data:image/*（贴进来的截图常常就是这种）。 */
+/** Images additionally allow inline data:image/* (pasted screenshots are often in this form). */
 function safeImageUrl(raw: string): string {
   return /^data:image\//i.test(raw.trim()) ? raw.trim() : safeUrl(raw);
 }
 
-/* ------------------------------ 行内 ------------------------------ */
+/* ------------------------------ Inline ------------------------------ */
 
 function renderInline(nodes: readonly InlineNode[], imageBase = ""): string {
   let out = "";
@@ -79,8 +82,9 @@ function renderInline(nodes: readonly InlineNode[], imageBase = ""): string {
 function renderInlineNode(node: InlineNode, imageBase = ""): string {
   switch (node.type) {
     case "text": {
-      // 段内换行在编辑器里就是空格（HTML 也会折叠）；整段只有换行的文本节点
-      // 是 markdown 的硬换行（"  \n"），必须还原成 <br>，否则两行会粘成一行
+      // A newline inside a paragraph is just a space in the editor (HTML collapses it too); a
+      // text node consisting only of newlines is a Markdown hard break ("  \n") and must become
+      // <br>, otherwise the two lines merge into one
       if (node.value.trim() === "" && node.value.includes("\n")) return "<br>";
       return escapeHtml(node.value);
     }
@@ -95,8 +99,8 @@ function renderInlineNode(node: InlineNode, imageBase = ""): string {
       return `<a href="${escapeHtml(safeUrl(node.url))}"${title} rel="noopener">${renderInline(node.children, imageBase)}</a>`;
     }
     case "wikiLink":
-      // 双链指向的是工作区里的另一篇笔记，导出后未必在身边：
-      // 保留可读文本 + 一条下划线，不生成会 404 的链接
+      // A wiki link points to another note in the workspace, which may not travel with the
+      // export: keep the readable text plus an underline, don't emit a link that would 404
       return `<span class="wl">${escapeHtml(node.target)}</span>`;
     case "image": {
       const title = node.title ? ` title="${escapeHtml(node.title)}"` : "";
@@ -115,7 +119,7 @@ function renderInlineNode(node: InlineNode, imageBase = ""): string {
   }
 }
 
-/* ------------------------------ 块级 ------------------------------ */
+/* ------------------------------ Blocks ------------------------------ */
 
 function renderBlocks(
   nodes: readonly BlockNode[],
@@ -132,7 +136,7 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
   switch (node.type) {
     case "paragraph": {
       const inner = renderInline(node.children, imageBase);
-      // 空段落就是编辑器里的一行留白：给个 <br> 才不会被浏览器折没
+      // An empty paragraph is a blank line in the editor: use <br> so the browser doesn't collapse it away
       return inner ? `<p>${inner}</p>` : "<p><br></p>";
     }
     case "heading": {
@@ -141,21 +145,22 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
       return `<h${level} id="${escapeHtml(anchor)}">${renderInline(node.children, imageBase)}</h${level}>`;
     }
     case "code": {
-      // Mermaid 是图表源码，导出里保留可读源码（浏览器里 WYSIWYG 已渲染成图）；
-      // 内联 SVG 需要异步渲染，与当前同步导出链冲突，见功能差距清单 A2.9。
+      // Mermaid is diagram source; keep readable source in the export (the WYSIWYG view already
+      // renders it as an image). Inline SVG needs async rendering, which conflicts with the
+      // current synchronous export pipeline — see gap list A2.9.
       if ((node.lang ?? "").toLowerCase() === "mermaid") {
         return `<pre class="mermaid-source"><code>${escapeHtml(node.value)}</code></pre>`;
       }
       const lang = node.lang ? ` class="language-${escapeHtml(node.lang)}"` : "";
-      // 着色只套 span，不改语义；highlightHtml 已做所有文本转义
-      // 无语言标记也用通用关键字表着色，代码块不必是单色
+      // Highlighting only adds spans, without changing semantics; highlightHtml already escapes all text
+      // Even without a language tag, use the generic keyword set so code blocks aren't monochrome
       const body = highlightHtml(node.value, node.lang ?? "");
       return `<pre><code${lang}>${body}</code></pre>`;
     }
     case "mathBlock":
       return `<div class="math-block">${mathHtml(node.value, true)}</div>`;
     case "frontmatter": {
-      // 属性卡：逐行 `key: value` 渲染成定义列表，不解析复杂 YAML 结构
+      // Frontmatter card: render each `key: value` line as a definition list; don't parse complex YAML
       const rows = node.value
         .split("\n")
         .map((line) => line.trim())
@@ -170,7 +175,7 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
       return `<dl class="frontmatter">${rows}</dl>`;
     }
     case "footnoteDef":
-      return ""; // 定义统一收集到文末脚注区
+      return ""; // Definitions are collected into the footnotes section at the end
     case "toc": {
       if (!toc.length) return "";
       const items = toc
@@ -194,7 +199,7 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
             task === undefined
               ? ""
               : `<input type="checkbox" disabled${task ? " checked" : ""}> `;
-          // 单项单段：不要包一层 <p>，否则列表项之间凭空多出段距
+          // Single paragraph per item: don't wrap in <p>, or list items gain phantom paragraph spacing
           const compact =
             item.children.length === 1 && item.children[0].type === "paragraph"
               ? renderInline(item.children[0].children, imageBase)
@@ -239,13 +244,13 @@ function renderBlock(node: BlockNode, toc: { depth: number; text: string; anchor
   }
 }
 
-/** 只渲染正文片段（打印面板直接塞进 DOM，不需要 <html> 外壳）。 */
+/** Render just the body fragment (the print sheet injects it straight into the DOM; no <html> shell needed). */
 export function renderBody(
   ir: DocumentIR | readonly BlockNode[],
   imageBase = "",
 ): string {
   const blocks: readonly BlockNode[] = "children" in ir ? ir.children : ir;
-  // [TOC] 要展开整篇的标题，先扫一遍；heading 节点加锚点供站内链接跳转
+  // [TOC] needs every heading in the document: scan first, then add anchors to heading nodes for in-page links
   const toc = blocks
     .filter((b): b is Extract<BlockNode, { type: "heading" }> => b.type === "heading")
     .map((h) => ({ depth: h.depth, text: inlinePlain(h.children), anchor: headingAnchor(inlinePlain(h.children)) }));
@@ -263,7 +268,7 @@ export function renderBody(
   return `${body}\n<section class="footnotes"><ol>${items}</ol></section>`;
 }
 
-/** 行内节点的纯文本（用于标题锚点与 TOC 文字）。 */
+/** Plain text of inline nodes (used for heading anchors and TOC labels). */
 function inlinePlain(nodes: readonly InlineNode[]): string {
   let out = "";
   for (const node of nodes) {
@@ -274,13 +279,14 @@ function inlinePlain(nodes: readonly InlineNode[]): string {
   return out;
 }
 
-/* ------------------------------ 样式 ------------------------------ */
+/* ------------------------------ Styles ------------------------------ */
 
 /**
- * 导出样式表。
+ * Export stylesheet.
  *
- * `root` 是根选择器：独立文件用 `body`，应用内的打印面板用 `.print-sheet`——
- * 同一份排版规则，两处生效，不会出现「导出的样子」和「打印的样子」不一致。
+ * `root` is the root selector: `body` for a standalone file, `.print-sheet` for the in-app
+ * print panel — the same layout rules apply in both places, so "exported look" and
+ * "printed look" never diverge.
  */
 export function docCss(root: string, options: { dark?: boolean } = {}): string {
   const dark = options.dark !== false;
@@ -431,7 +437,7 @@ ${
     : ""
 }@media print {
   @page { margin: 18mm 16mm; }
-  /* 打印机只有白纸：屏幕上的深色偏好一律不带到纸上 */
+  /* Printouts are white paper only: never carry the screen's dark preference onto paper */
   __R__ {
     max-width: none;
     padding: 0;
@@ -455,23 +461,23 @@ ${
 }`.replaceAll("__R__", root);
 }
 
-/* ------------------------------ 完整文档 ------------------------------ */
+/* ------------------------------ Full document ------------------------------ */
 
 export interface HtmlDocumentOptions {
-  /** <title> 与文件名用的标题。 */
+  /** Title used for <title> and the file name. */
   title: string;
-  /** <html lang>，默认 zh-CN。 */
+  /** <html lang>; defaults to zh-CN. */
   lang?: string;
-  /** 是否带上跟随系统深浅色的样式（独立文件要，打印面板不要）。 */
+  /** Whether to include OS dark/light styles (yes for standalone files, no for the print panel). */
   dark?: boolean;
-  /** 用户自定义 CSS，经过清洗后内联在文档末尾。 */
+  /** User custom CSS, sanitized and inlined at the end of the document. */
   extraCss?: string;
-  /** 相对图片路径的根目录，用于静态博客场景。 */
+  /** Root for relative image paths, for static-blog scenarios. */
   imageBase?: string;
 }
 
 /**
- * 生成可直接发给别人的独立 HTML：无外链、无脚本、无远程字体。
+ * Generate a standalone HTML file you can send directly to someone: no external links, no scripts, no remote fonts.
  */
 export function renderHtmlDocument(
   ir: DocumentIR,
@@ -489,7 +495,7 @@ export function renderHtmlDocument(
 <style>
 ${docCss("body", { dark: options.dark !== false })}
 ${options.extraCss ? `
-/* 用户自定义样式 */
+/* User custom styles */
 ${sanitizeCss(options.extraCss)}` : ""}
 </style>
 </head>

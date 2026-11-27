@@ -7,31 +7,31 @@ function convert(html: string) {
   return htmlToMarkdown(html, document as unknown as Document);
 }
 
-describe("网页复制 → Markdown", () => {
-  it("标题、段落、粗斜体、行内代码、链接", () => {
+describe("web copy → Markdown", () => {
+  it("headings, paragraphs, bold/italic, inline code, links", () => {
     const { markdown } = convert(
-      "<h1>标题</h1><p>这是 <strong>粗体</strong> 和 <em>斜体</em>，还有 <code>x = 1</code>。" +
-        '<p>看 <a href="https://example.com">这里</a></p>',
+      "<h1>Title</h1><p>This is <strong>bold</strong> and <em>italic</em>, plus <code>x = 1</code>." +
+        '<p>See <a href="https://example.com">this link</a></p>',
     );
-    expect(markdown).toContain("# 标题");
-    expect(markdown).toContain("**粗体**");
-    expect(markdown).toContain("*斜体*");
+    expect(markdown).toContain("# Title");
+    expect(markdown).toContain("**bold**");
+    expect(markdown).toContain("*italic*");
     expect(markdown).toContain("`x = 1`");
-    expect(markdown).toContain("[这里](https://example.com)");
+    expect(markdown).toContain("[this link](https://example.com)");
   });
 
-  it("列表（有序 / 无序）", () => {
+  it("lists (ordered / unordered)", () => {
     const { markdown } = convert(
-      "<ul><li>甲</li><li>乙<ul><li>嵌套</li></ul></li></ul>" +
-        "<ol><li>第一</li><li>第二</li></ol>",
+      "<ul><li>first</li><li>second<ul><li>nested</li></ul></li></ul>" +
+        "<ol><li>one</li><li>two</li></ol>",
     );
-    expect(markdown).toContain("- 甲");
-    expect(markdown).toContain("- 乙");
-    expect(markdown).toContain("1. 第一");
-    expect(markdown).toContain("2. 第二");
+    expect(markdown).toContain("- first");
+    expect(markdown).toContain("- second");
+    expect(markdown).toContain("1. one");
+    expect(markdown).toContain("2. two");
   });
 
-  it("代码块保留语言与原文", () => {
+  it("code blocks keep their language and verbatim content", () => {
     const { markdown } = convert(
       '<pre><code class="language-js">const x = 1;\nif (x) return;</code></pre>',
     );
@@ -40,48 +40,48 @@ describe("网页复制 → Markdown", () => {
     expect(markdown).toContain("```");
   });
 
-  it("引用与表格", () => {
+  it("blockquotes and tables", () => {
     const { markdown } = convert(
-      "<blockquote><p>引用文字</p></blockquote>" +
+      "<blockquote><p>quoted text</p></blockquote>" +
         "<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>",
     );
-    expect(markdown).toContain("> 引用文字");
+    expect(markdown).toContain("> quoted text");
     expect(markdown).toContain("| A | B |");
     expect(markdown).toContain("| 1 | 2 |");
   });
 
-  it("图片收集 URL，data URI 与 javascript 链接被丢弃", () => {
+  it("collects image URLs; data URIs and javascript links are dropped", () => {
     const { markdown, images } = convert(
-      '<p><img src="https://example.com/a.png" alt="图"></p>' +
+      '<p><img src="https://example.com/a.png" alt="image"></p>' +
         '<img src="data:image/png;base64,AAA">' +
-        '<a href="javascript:alert(1)">危险</a>',
+        '<a href="javascript:alert(1)">danger</a>',
     );
     expect(images).toEqual(["https://example.com/a.png"]);
-    expect(markdown).toContain("![图](https://example.com/a.png)");
+    expect(markdown).toContain("![image](https://example.com/a.png)");
     expect(markdown).not.toContain("data:image");
-    expect(markdown).toContain("危险");
+    expect(markdown).toContain("danger");
     expect(markdown).not.toContain("javascript:");
   });
 
-  it("script / style 内容不进正文", () => {
+  it("keeps script / style content out of the body", () => {
     const { markdown } = convert(
-      "<style>.a{color:red}</style><script>alert(1)</script><p>正文</p>",
+      "<style>.a{color:red}</style><script>alert(1)</script><p>body text</p>",
     );
-    expect(markdown).toBe("正文");
+    expect(markdown).toBe("body text");
   });
 
-  it("Markdown 特殊字符被转义，不会被误认成语法", () => {
-    const { markdown } = convert("<p>价格 * 5 [括号] 反斜杠\\ 结束</p>");
+  it("escapes Markdown special characters so they aren't mistaken for syntax", () => {
+    const { markdown } = convert("<p>price * 5 [brackets] backslash\\ end</p>");
     expect(markdown).toContain("\\*");
-    expect(markdown).toContain("\\[括号\\]");
+    expect(markdown).toContain("\\[brackets\\]");
   });
 
-  it("连续空行被压缩", () => {
+  it("collapses consecutive blank lines", () => {
     const { markdown } = convert("<p>A</p><p></p><p></p><p>B</p>");
     expect(markdown).toBe("A\n\nB");
   });
 
-  it("空 HTML 返回空串", () => {
+  it("returns an empty string for empty HTML", () => {
     expect(convert("").markdown).toBe("");
     expect(convert("<div></div>").markdown).toBe("");
   });

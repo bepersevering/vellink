@@ -18,8 +18,8 @@ function para(id: string, text: string): ParagraphNode {
   };
 }
 
-describe("事务引擎", () => {
-  it("insert 后文档包含新节点，版本递增", () => {
+describe("transaction engine", () => {
+  it("insert adds the new node and increments the version", () => {
     const doc = emptyDocument();
     const node = para("p1", "hello");
     const result = commit(doc, [{ type: "insert", at: 0, nodes: [node] }]);
@@ -27,10 +27,10 @@ describe("事务引擎", () => {
     expect(result.document.children).toHaveLength(1);
     expect(result.document.children[0].id).toBe("p1");
     expect(result.document.version).toBe(1);
-    expect(doc.children).toHaveLength(0); // 原文档不可变
+    expect(doc.children).toHaveLength(0); // the original document is immutable
   });
 
-  it("insert → undo 后恢复原状且内容相同", () => {
+  it("insert → undo restores the original state", () => {
     const doc = emptyDocument();
     const node = para("p1", "hello");
     const { document: after, transaction } = commit(doc, [
@@ -39,11 +39,11 @@ describe("事务引擎", () => {
     const restored = undo(after, transaction);
 
     expect(restored.children).toEqual([]);
-    // 内容与初始一致（id 结构层面）
+    // content matches the initial state (at the id structure level)
     expect(restored.version).toBe(2);
   });
 
-  it("delete → undo 后删掉的节点原样恢复", () => {
+  it("delete → undo restores the deleted nodes unchanged", () => {
     const a = para("a", "A");
     const b = para("b", "B");
     const doc = { ...emptyDocument(), children: [a, b] as BlockNode[] };
@@ -57,7 +57,7 @@ describe("事务引擎", () => {
     expect(restored.children.map((n) => n.id)).toEqual(["a", "b"]);
   });
 
-  it("多个 op 的事务，undo 一次性全部还原", () => {
+  it("a transaction with multiple ops is fully reverted by a single undo", () => {
     const a = para("a", "A");
     const doc = emptyDocument();
     const { document: after, transaction } = commit(doc, [
@@ -70,7 +70,7 @@ describe("事务引擎", () => {
     expect(restored.children).toHaveLength(0);
   });
 
-  it("replace 的 inverse 能还原被替换节点", () => {
+  it("replace's inverse restores the replaced node", () => {
     const a = para("a", "A");
     const b = para("b", "B");
     const doc = { ...emptyDocument(), children: [a] as BlockNode[] };

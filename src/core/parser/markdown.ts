@@ -424,6 +424,23 @@ function mapBlock(node: SyntaxNode, source: string, ids: IdAllocator): BlockNode
     }
   }
 
+  // Lezer only emits LinkReference for `[^label]: text` when the body starts with
+  // non-ASCII text; with an ASCII body it produces a Paragraph containing a Link.
+  // Recognise that shape here so English footnote definitions are not lost.
+  if (name === "Paragraph") {
+    const raw = textOf(node, source);
+    const m = /^\[\^([\w\u4e00-\u9fff-]+)\]:\s*(.*)$/.exec(raw);
+    if (m) {
+      return {
+        type: "footnoteDef",
+        id: ids.next(fingerprint("footnoteDef", m[1] + m[2])),
+        span,
+        label: m[1],
+        text: m[2].trim(),
+      };
+    }
+  }
+
   // 独占一行的 [TOC]：Lezer 当普通段落，截住换成目录占位节点。
   if (name === "Paragraph" && /^\s*\[TOC\]\s*$/i.test(textOf(node, source))) {
     return {

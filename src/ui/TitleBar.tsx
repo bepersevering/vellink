@@ -32,8 +32,8 @@ export function TitleBar({
   onOpenSettings,
 }: Props) {
   return (
-    // data-tauri-drag-region：macOS 用 overlay 标题栏（没有系统标题栏条），
-    // 这块区域必须自己声明为可拖动，否则窗口拖不动
+    // data-tauri-drag-region: macOS uses an overlay title bar (no system title bar strip),
+    // so this area must declare itself draggable or the window won't move
     <header className="titlebar" data-tauri-drag-region>
       <div className="win-dots" aria-hidden="true" data-tauri-drag-region>
         <span className="dot r" />

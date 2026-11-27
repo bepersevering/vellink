@@ -1,9 +1,10 @@
 /**
- * WYSIWYG 里的 Mermaid 渲染。
+ * Mermaid rendering in the WYSIWYG view.
  *
- * mermaid 包只在遇到图表时才动态 import（主包不被拖大），渲染结果塞进
- * PM 的 atom 占位 div —— PM 不管理 atom 内部 DOM，所以不会被 DOMObserver
- * 当成外部改动。渲染过的节点靠 data-mermaid-state 跳过，幂等。
+ * The mermaid package is imported dynamically only when a diagram is encountered (so the main
+ * bundle stays small); the result is inserted into a PM atom placeholder div — PM doesn't manage
+ * DOM inside atoms, so DOMObserver won't treat it as an external change. Rendered nodes are
+ * skipped via data-mermaid-state, making this idempotent.
  */
 
 const PENDING = "pending";
@@ -12,7 +13,7 @@ const FAILED = "failed";
 
 let rendering = false;
 
-/** 在容器里渲染所有未处理的 mermaid 占位节点。 */
+/** Render all unprocessed Mermaid placeholders in a container. */
 export async function renderMermaid(host: HTMLElement): Promise<void> {
   if (rendering) return;
   const nodes = Array.from(
@@ -38,13 +39,13 @@ export async function renderMermaid(host: HTMLElement): Promise<void> {
         el.innerHTML = svg;
         el.setAttribute("data-mermaid-state", READY);
       } catch (error) {
-        el.textContent = `图表语法错误：${error instanceof Error ? error.message : String(error)}`;
+        el.textContent = `Diagram syntax error: ${error instanceof Error ? error.message : String(error)}`;
         el.classList.add("mermaid-error");
         el.setAttribute("data-mermaid-state", FAILED);
       }
     }
   } catch {
-    // mermaid 加载失败：降级为源码文本，不阻塞写作
+    // Failed to load mermaid: fall back to source text, never block writing
     for (const el of nodes) {
       el.textContent = el.getAttribute("data-mermaid") ?? "";
       el.setAttribute("data-mermaid-state", FAILED);

@@ -1,22 +1,22 @@
 /**
- * M1 增量解析性能基准（同时作为可复现的测试记录）。
- * 运行：npm test 时在 stdout 输出全量 vs 增量对比数据。
+ * M1 incremental parsing performance benchmark (also serves as a reproducible test record).
+ * Running `npm test` prints full vs incremental comparison data to stdout.
  */
 import { describe, it } from "vitest";
 import { parseMarkdown, type Change } from "./markdown";
 
 function makeDoc(paragraphs: number): string {
-  const parts: string[] = ["# 基准文档\n\n"];
+  const parts: string[] = ["# Benchmark Document\n\n"];
   for (let i = 0; i < paragraphs; i++) {
     parts.push(
-      `## 第 ${i} 节\n\n这是第 ${i} 段正文，包含 **粗体**、*斜体*、\`代码\` 和 [链接](https://example.com/${i})。内容足够长以模拟真实文档。\n\n`,
+      `## Section ${i}\n\nThis is paragraph ${i} of body text, containing **bold**, *italic*, \`code\` and [a link](https://example.com/${i}). Long enough to simulate a real document.\n\n`,
     );
   }
   return parts.join("");
 }
 
 function medianMs(fn: () => void, rounds = 20): number {
-  for (let i = 0; i < 3; i++) fn(); // 预热
+  for (let i = 0; i < 3; i++) fn(); // warm up
   const times: number[] = [];
   for (let i = 0; i < rounds; i++) {
     const t = performance.now();
@@ -27,9 +27,9 @@ function medianMs(fn: () => void, rounds = 20): number {
   return times[Math.floor(times.length / 2)];
 }
 
-describe("M1 增量解析性能基准", () => {
-  it("全量 vs 增量（文档中段插入 1 字）", () => {
-    console.log("\n=== Vellink M1 增量解析基准 ===");
+describe("M1 incremental parsing performance benchmark", () => {
+  it("full vs incremental (insert one character in the middle of the document)", () => {
+    console.log("\n=== Vellink M1 Incremental Parsing Benchmark ===");
     for (const n of [50, 200, 500]) {
       const source = makeDoc(n);
       const editAt = Math.floor(source.length / 2);
@@ -48,11 +48,11 @@ describe("M1 增量解析性能基准", () => {
       });
 
       console.log(
-        `${String(n).padStart(3)} 节/${String(source.length).padStart(6)} 字符: ` +
-          `全量 ${full.toFixed(2).padStart(7)}ms → 增量 ${incr.toFixed(2).padStart(7)}ms ` +
+        `${String(n).padStart(3)} sections/${String(source.length).padStart(6)} chars: ` +
+          `full ${full.toFixed(2).padStart(7)}ms → incremental ${incr.toFixed(2).padStart(7)}ms ` +
           `= ${(full / incr).toFixed(1)}x`,
       );
     }
-    // 纯性能基准：CI 并行负载下给足时间，避免与功能测试混淆
+    // Pure performance benchmark: allow ample time under CI parallel load to avoid confusion with functional tests
   }, 15000);
 });

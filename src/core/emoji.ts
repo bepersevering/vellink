@@ -1,7 +1,8 @@
 /**
- * Emoji 短码表与补全匹配（纯函数，零依赖）。
+ * Emoji shortcode table and completion matching (pure functions, zero dependencies).
  *
- * 只收常用短码，够覆盖日常写作；不追 GitHub 全表（上千条）以免拖大前端包。
+ * Only common shortcodes are included, enough for everyday writing; not the full GitHub set
+ * (thousands of entries) to avoid bloating the frontend bundle.
  */
 
 export const EMOJI: Record<string, string> = {
@@ -47,14 +48,14 @@ export const EMOJI: Record<string, string> = {
 };
 
 export interface EmojiMatch {
-  /** 短码在文本里的起止偏移（含冒号）。 */
+  /** Start and end offsets of the shortcode in the text (including colons). */
   from: number;
   to: number;
   shortcode: string;
   emoji: string;
 }
 
-/** 找出文本中所有 `:code:` 形式的 Emoji（最短 1 字符，跳过空白）。 */
+/** Find all Emoji in `:code:` form in the text (minimum 1 character, skipping whitespace). */
 export function findEmojiShortcodes(text: string): EmojiMatch[] {
   const out: EmojiMatch[] = [];
   const re = /:([a-z0-9_\u4e00-\u9fff]+):/gi;
@@ -72,7 +73,7 @@ export function findEmojiShortcodes(text: string): EmojiMatch[] {
   return out;
 }
 
-/** 前缀匹配短码，供补全下拉候选使用。 */
+/** Prefix-match shortcodes for completion dropdown candidates. */
 export function emojiCandidates(prefix: string, limit = 10): { label: string; value: string }[] {
   const q = prefix.toLowerCase();
   if (!q) return [];

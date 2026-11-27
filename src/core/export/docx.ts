@@ -1,9 +1,9 @@
 /**
- * DocumentIR → DOCX（OOXML）。
+ * DocumentIR → DOCX (OOXML).
  *
- * 只写 Word 打开必需的最小结构： [Content_Types].xml / _rels/.rels /
- * word/document.xml / word/_rels/document.xml.rels / word/styles.xml。
- * 图片作为独立 media 条目写入，document.xml 里用 rId 引用。
+ * Only writes the minimal structure Word needs to open the file: [Content_Types].xml / _rels/.rels /
+ * word/document.xml / word/_rels/document.xml.rels / word/styles.xml.
+ * Images are written as separate media entries and referenced by rId in document.xml.
  */
 
 import type { BlockNode, DocumentIR, InlineNode } from "../ir/types";
@@ -119,7 +119,7 @@ function blocks(nodes: readonly BlockNode[], ctx: Ctx): string {
         break;
       }
       case "mathBlock":
-        out += paragraph(`[公式] ${node.value}`);
+        out += paragraph(`[Formula] ${node.value}`);
         break;
       case "frontmatter":
       case "toc":
@@ -161,7 +161,7 @@ ${[1, 2, 3, 4, 5, 6]
   .join("\n")}
 </w:styles>`;
 
-/** 生成 DOCX 二进制。 */
+/** Generate the DOCX binary. */
 export async function renderDocx(ir: DocumentIR | readonly BlockNode[]): Promise<Uint8Array> {
   const nodes: readonly BlockNode[] = "children" in ir ? ir.children : ir;
   const ctx: Ctx = { images: [] };

@@ -9,26 +9,26 @@ const minimal = () => ({
 });
 
 describe("validateManifest", () => {
-  it("接受最小 manifest 并规范化可选字段", () => {
+  it("accepts a minimal manifest and normalizes optional fields", () => {
     const manifest = validateManifest(minimal());
     expect(manifest).toEqual(minimal());
     expect(manifest.activationEvents).toBeUndefined();
     expect(manifest.contributes).toBeUndefined();
   });
 
-  it("拒绝非法 id / version / name", () => {
+  it("rejects invalid id / version / name", () => {
     expect(() => validateManifest({ ...minimal(), id: "Demo" })).toThrow(PluginManifestError);
-    expect(() => validateManifest({ ...minimal(), id: "a" })).toThrow(/长度/);
-    expect(() => validateManifest({ ...minimal(), version: "1.0" })).toThrow(/语义化/);
-    expect(() => validateManifest({ ...minimal(), name: "  " })).toThrow(/非空/);
+    expect(() => validateManifest({ ...minimal(), id: "a" })).toThrow(/length 2-64/);
+    expect(() => validateManifest({ ...minimal(), version: "1.0" })).toThrow(/semantic version/);
+    expect(() => validateManifest({ ...minimal(), name: "  " })).toThrow(/non-empty/);
   });
 
-  it("拒绝路径穿越、绝对路径与远程入口", () => {
+  it("rejects path traversal, absolute paths and remote entries", () => {
     for (const entry of ["../evil/index.ts", "/tmp/a.js", "https://evil.test/a.js", ""])
       expect(() => validateManifest({ ...minimal(), entry })).toThrow(PluginManifestError);
   });
 
-  it("校验 activationEvents 与 permissions 白名单", () => {
+  it("validates activationEvents and permissions allowlists", () => {
     expect(
       validateManifest({
         ...minimal(),
@@ -38,23 +38,23 @@ describe("validateManifest", () => {
     ).toEqual(["storage", "documents:read"]);
     expect(() =>
       validateManifest({ ...minimal(), activationEvents: ["onClick:anything"] }),
-    ).toThrow(/激活事件/);
-    expect(() => validateManifest({ ...minimal(), permissions: ["root"] })).toThrow(/未知权限/);
+    ).toThrow(/unrecognized activation event/);
+    expect(() => validateManifest({ ...minimal(), permissions: ["root"] })).toThrow(/unknown permission/);
   });
 
-  it("强制命令、视图、语法、Provider 使用插件命名空间", () => {
+  it("requires commands, views, syntax and providers to use the plugin namespace", () => {
     expect(() =>
       validateManifest({
         ...minimal(),
         contributes: { commands: [{ command: "other.ping", title: "Ping" }] },
       }),
-    ).toThrow(/命名空间/);
+    ).toThrow(/plugin namespace/);
     expect(
       validateManifest({
         ...minimal(),
         contributes: {
           commands: [{ command: "demo.ping", title: "Ping", keybinding: "Mod+K" }],
-          views: [{ id: "demo.panel", title: "面板", location: "rightDrawer" }],
+          views: [{ id: "demo.panel", title: "Panel", location: "rightDrawer" }],
           syntax: [{ id: "demo.lang", extensions: [".demo"] }],
           providers: [{ kind: "ai", id: "demo.ai" }],
         },
@@ -62,7 +62,7 @@ describe("validateManifest", () => {
     ).toBe("demo.panel");
   });
 
-  it("拒绝未知菜单位置、视图位置与 Provider 类型", () => {
+  it("rejects unknown menu locations, view locations and provider kinds", () => {
     expect(() =>
       validateManifest({
         ...minimal(),
@@ -80,18 +80,18 @@ describe("validateManifest", () => {
         ...minimal(),
         contributes: { providers: [{ kind: "magic", id: "demo.magic" }] },
       }),
-    ).toThrow(/Provider/);
+    ).toThrow(/unknown provider type/);
   });
 
-  it("校验 engines 范围语法", () => {
+  it("validates engines range syntax", () => {
     expect(() =>
       validateManifest({ ...minimal(), engines: { vellink: "totally-wrong" } }),
-    ).toThrow(/版本范围/);
+    ).toThrow(/unrecognized version range/);
   });
 });
 
 describe("satisfiesVersion", () => {
-  it("支持 ^ / ~ / >= / 精确版本与 AND 组合", () => {
+  it("supports ^ / ~ / >= / exact versions and AND ranges", () => {
     expect(satisfiesVersion("0.1.3", "^0.1.0")).toBe(true);
     expect(satisfiesVersion("0.2.0", "^0.1.0")).toBe(false);
     expect(satisfiesVersion("1.4.0", "^1.2.3")).toBe(true);

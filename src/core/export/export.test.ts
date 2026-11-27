@@ -3,20 +3,20 @@ import { buildExport, clampRange, fileNameFor } from "./index";
 import { docCss, escapeHtml, safeUrl, renderHtmlDocument } from "./html";
 import { parseMarkdown } from "../parser/markdown";
 
-const SAMPLE = `# 标题
+const SAMPLE = `# Title
 
-第一段有 **粗体** 与 \`行内代码\`，还有一个 [链接](https://example.com "说明")。
+The first paragraph has **bold** and \`inline code\`, plus a [link](https://example.com "hint").
 
-## 小标题
+## Subtitle
 
-- 甲
-- [x] 乙
+- Alpha
+- [x] Beta
 
-| 左 | 右 |
+| Left | Right |
 |:--|--:|
 | 1 | 2 |
 
-> 引用
+> Quote
 
 \`\`\`js
 const a = 1 < 2;
@@ -27,94 +27,94 @@ const a = 1 < 2;
 
 function htmlOf(source: string): string {
   const { ir } = parseMarkdown({ source });
-  return renderHtmlDocument(ir, { title: "标题" });
+  return renderHtmlDocument(ir, { title: "Title" });
 }
 
-describe("导出文件名", () => {
-  it("标题里的非法字符换成连字符，正文文字保留", () => {
+describe("Export file names", () => {
+  it("replaces illegal characters in the title with hyphens and keeps regular text", () => {
     expect(fileNameFor('a/b:c*?"<>|d', "md")).toBe("a-b-c-d.md");
-    expect(fileNameFor("周报 2026-11", "html")).toBe("周报 2026-11.html");
+    expect(fileNameFor("Report 2026-11", "html")).toBe("Report 2026-11.html");
   });
 
-  it("没有标题时给一个稳定的兜底名", () => {
+  it("uses a stable fallback when there is no title", () => {
     expect(fileNameFor("", "md")).toBe("untitled.md");
     expect(fileNameFor("   ", "pdf")).toBe("untitled.pdf");
   });
 
-  it("首尾的点与空格去掉（Windows 不允许以点结尾）", () => {
-    expect(fileNameFor("  ..周报.. ", "md")).toBe("周报.md");
+  it("strips leading/trailing dots and spaces (Windows disallows names ending in a dot)", () => {
+    expect(fileNameFor("  ..Report.. ", "md")).toBe("Report.md");
   });
 
-  it("超长标题截断，仍保留扩展名", () => {
-    const name = fileNameFor("长".repeat(200), "md");
+  it("truncates overly long titles while keeping the extension", () => {
+    const name = fileNameFor("Long".repeat(200), "md");
     expect(name.endsWith(".md")).toBe(true);
     expect(name.length).toBeLessThanOrEqual(83);
   });
 });
 
-describe("导出范围", () => {
-  it("区间夹到源码范围内，反着给也能纠正", async () => {
+describe("Export range", () => {
+  it("clamps the range to the source and corrects reversed bounds", async () => {
     expect(clampRange("abcdef", { from: 4, to: 2 })).toEqual({ from: 2, to: 4 });
     expect(clampRange("abcdef", { from: -5, to: 99 })).toEqual({ from: 0, to: 6 });
   });
 
-  it("空区间视为没选区", async () => {
+  it("treats an empty range as no selection", async () => {
     expect(clampRange("abcdef", { from: 3, to: 3 })).toBeNull();
     expect(clampRange("abcdef", null)).toBeNull();
   });
 
-  it("选区导出带后缀，不会和整篇导出撞名", async () => {
-    const base = { title: "周报", source: "# 周报\n\n第一段\n" } as const;
+  it("gives selection exports a suffix so they don't collide with full exports", async () => {
+    const base = { title: "Report", source: "# Report\n\nFirst part\n" } as const;
     const all = await buildExport({ ...base, format: "markdown" });
     const part = await buildExport({
       ...base,
       format: "markdown",
       range: { from: 5, to: 8 },
-      selectionSuffix: " · 摘录",
+      selectionSuffix: " · Excerpt",
     });
-    expect(all.fileName).toBe("周报.md");
-    expect(part.fileName).toBe("周报 · 摘录.md");
+    expect(all.fileName).toBe("Report.md");
+    expect(part.fileName).toBe("Report · Excerpt.md");
   });
 
-  it("选区落在空白上退回整篇时，也不带后缀（它导的确实是整篇）", async () => {
+  it("drops the suffix when the selection falls on whitespace and falls back to the whole doc", async () => {
     const payload = await buildExport({
       format: "markdown",
-      title: "周报",
-      source: "# 周报\n\n\n\n正文\n",
-      range: { from: 4, to: 6 },
-      selectionSuffix: " · 摘录",
+      title: "Report",
+      source: "# Report\n\n\n\nBody\n",
+      range: { from: 8, to: 11 },
+      selectionSuffix: " · Excerpt",
     });
-    expect(payload.fileName).toBe("周报.md");
+    expect(payload.fileName).toBe("Report.md");
   });
 });
 
-describe("Markdown 导出", () => {
-  it("整篇原样导出，末尾规范化成单个换行", async () => {
+describe("Markdown export", () => {
+  it("exports the whole source verbatim, normalizing the trailing newline to one", async () => {
     const payload = await buildExport({
       format: "markdown",
-      title: "标题",
+      title: "Title",
       source: "# a\n\nb\n\n\n",
     });
     expect(payload.contents).toBe("# a\n\nb\n");
-    expect(payload.fileName).toBe("标题.md");
+    expect(payload.fileName).toBe("Title.md");
     expect(payload.mime).toContain("text/markdown");
   });
 
-  it("选区只导那一段，不做重新序列化", async () => {
+  it("exports only the selected part without re-serializing it", async () => {
     const payload = await buildExport({
       format: "markdown",
-      title: "标题",
-      source: "# a\n\n第一段\n\n第二段\n",
-      range: { from: 5, to: 8 },
+      title: "Title",
+      source: "# a\n\nFirst\n\nSecond\n",
+      range: { from: 5, to: 10 },
     });
-    expect(payload.contents).toBe("第一段\n");
+    expect(payload.contents).toBe("First\n");
   });
 
-  it("选区落在空白上时退回整篇，而不是给个空文件", async () => {
+  it("falls back to the whole doc when the selection is only whitespace, rather than giving an empty file", async () => {
     const source = "# a\n\n\n\nb\n";
     const payload = await buildExport({
       format: "markdown",
-      title: "标题",
+      title: "Title",
       source,
       range: { from: 4, to: 6 },
     });
@@ -122,145 +122,145 @@ describe("Markdown 导出", () => {
   });
 });
 
-describe("HTML 导出", () => {
-  it("是完整的独立文档：doctype、charset、内联样式", () => {
+describe("HTML export", () => {
+  it("is a complete standalone document: doctype, charset, inline styles", () => {
     const html = htmlOf(SAMPLE);
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).toContain('<meta charset="utf-8">');
-    expect(html).toContain("<title>标题</title>");
+    expect(html).toContain("<title>Title</title>");
     expect(html).toContain("<style>");
-    // 不引任何外部资源
+    // No external resources
     expect(html).not.toContain("<script");
     expect(html).not.toContain("http-equiv");
   });
 
-  it("标题、粗体、行内代码、链接都成标签", () => {
+  it("turns headings, bold, inline code and links into tags", () => {
     const html = htmlOf(SAMPLE);
-    expect(html).toContain('<h1 id="标题">标题</h1>');
-    expect(html).toContain('<h2 id="小标题">小标题</h2>');
-    expect(html).toContain("<strong>粗体</strong>");
-    expect(html).toContain("<code>行内代码</code>");
-    expect(html).toContain('<a href="https://example.com" title="说明" rel="noopener">链接</a>');
+    expect(html).toContain('<h1 id="title">Title</h1>');
+    expect(html).toContain('<h2 id="subtitle">Subtitle</h2>');
+    expect(html).toContain("<strong>bold</strong>");
+    expect(html).toContain("<code>inline code</code>");
+    expect(html).toContain('<a href="https://example.com" title="hint" rel="noopener">link</a>');
   });
 
-  it("代码块被转义且着色，不会把 < 当成标签", () => {
+  it("escapes and highlights code blocks without treating < as a tag", () => {
     const html = htmlOf(SAMPLE);
-    // 着色只套 span，所有文本仍走 HTML 转义
+    // Highlighting only adds spans; all text still goes through HTML escaping
     expect(html).toContain('class="language-js"');
     expect(html).toContain('<span class="kw">const</span> a = <span class="nu">1</span> &lt; <span class="nu">2</span>;');
     expect(html).not.toContain("< 2;");
   });
 
-  it("任务列表带禁用复选框，普通列表项不塞 <p>", () => {
+  it("gives task lists disabled checkboxes and doesn't wrap plain list items in <p>", () => {
     const html = htmlOf(SAMPLE);
-    expect(html).toContain('<li class="task"><input type="checkbox" disabled checked> 乙</li>');
-    expect(html).toContain("<li>甲</li>");
+    expect(html).toContain('<li class="task"><input type="checkbox" disabled checked> Beta</li>');
+    expect(html).toContain("<li>Alpha</li>");
   });
 
-  it("表格首行进 thead，对齐方式落到单元格上", () => {
+  it("puts the table header row in thead and applies alignment to cells", () => {
     const html = htmlOf(SAMPLE);
-    expect(html).toContain('<thead><tr><th style="text-align:left">左</th><th style="text-align:right">右</th></tr></thead>');
+    expect(html).toContain('<thead><tr><th style="text-align:left">Left</th><th style="text-align:right">Right</th></tr></thead>');
     expect(html).toContain('<tbody><tr><td style="text-align:left">1</td><td style="text-align:right">2</td></tr></tbody>');
   });
 
-  it("引用与分隔线", () => {
+  it("renders blockquotes and horizontal rules", () => {
     const html = htmlOf(SAMPLE);
     expect(html).toContain("<blockquote>");
     expect(html).toContain("<hr>");
   });
 
-  it("双链导出成可读文本而不是会 404 的链接", () => {
-    const html = htmlOf("看看 [[另一篇笔记]]\n");
-    expect(html).toContain('<span class="wl">另一篇笔记</span>');
+  it("exports wiki links as readable text rather than links that would 404", () => {
+    const html = htmlOf("See [[Another Note]]\n");
+    expect(html).toContain('<span class="wl">Another Note</span>');
     expect(html).not.toContain("<a");
   });
 
-  it("硬换行还原成 <br>，段内软换行仍是空格", () => {
-    const html = htmlOf("第一行  \n第二行\n\n软\n换行\n");
-    expect(html).toContain("第一行<br>第二行");
-    // 软换行交给 HTML 折叠，不生成 <br>
+  it("restores hard breaks as <br> while keeping soft line breaks as spaces", () => {
+    const html = htmlOf("Line one  \nLine two\n\nsoft\nbreak\n");
+    expect(html).toContain("Line one<br>Line two");
+    // Soft breaks are left to HTML collapsing and don't produce <br>
     expect(html.match(/<br>/g)?.length).toBe(1);
   });
 
-  it("正文里的尖括号与 & 一律转义", () => {
-    const html = htmlOf("判断 a < b && c > d 是否成立\n");
+  it("always escapes angle brackets and & in the body", () => {
+    const html = htmlOf("Check whether a < b && c > d holds\n");
     expect(html).toContain("a &lt; b &amp;&amp; c &gt; d");
     expect(escapeHtml('a & b "c"')).toBe("a &amp; b &quot;c&quot;");
   });
 
-  it("裸 HTML 块不在 IR 里：导出与编辑器一致地不显示它", async () => {
-    // IR 没有 HTML 节点，WYSIWYG 也从不渲染它；导出保持同一语义，
-    // 而不是偷偷把一段 markdown 当 HTML 塞进新文件
+  it("doesn't include raw HTML blocks in the IR: export hides them just as the editor does", async () => {
+    // The IR has no HTML node and WYSIWYG never renders it; export keeps the same
+    // semantics instead of silently injecting a piece of markdown as HTML into the new file
     const html = htmlOf("<div onclick=\"x()\">hi</div>\n");
     expect(html).not.toContain("<div");
     expect(html).not.toContain("onclick");
   });
 
-  it("选区导出走重新解析：段落仍然成段", async () => {
+  it("re-parses selection exports so paragraphs remain paragraphs", async () => {
     const payload = await buildExport({
       format: "html",
-      title: "标题",
-      source: "# a\n\n第一段\n\n第二段\n",
-      range: { from: 5, to: 8 },
+      title: "Title",
+      source: "# a\n\nFirst\n\nSecond\n",
+      range: { from: 5, to: 10 },
     });
-    expect(payload.contents).toContain("<p>第一段</p>");
-    expect(payload.contents).not.toContain("第二段");
+    expect(payload.contents).toContain("<p>First</p>");
+    expect(payload.contents).not.toContain("Second");
   });
 });
 
-describe("导出里的链接协议", () => {
-  it("放行 http(s)/mailto/tel/file 与相对路径", () => {
+describe("Link protocols in exports", () => {
+  it("allows http(s)/mailto/tel/file and relative paths", () => {
     expect(safeUrl("https://example.com/a?b=1")).toBe("https://example.com/a?b=1");
     expect(safeUrl("mailto:a@b.c")).toBe("mailto:a@b.c");
     expect(safeUrl("tel:+8610000")).toBe("tel:+8610000");
     expect(safeUrl("file:///tmp/a.md")).toBe("file:///tmp/a.md");
     expect(safeUrl("./images/a.png")).toBe("./images/a.png");
-    expect(safeUrl("#小节")).toBe("#小节");
+    expect(safeUrl("#section")).toBe("#section");
   });
 
-  it("javascript:/data:/vbscript: 一律降到 #，且不残留在文件里", () => {
+  it("downgrades javascript:/data:/vbscript: to # and leaves no residue in the file", () => {
     expect(safeUrl("javascript:alert(1)")).toBe("#");
     expect(safeUrl(" JavaScript:alert(1)")).toBe("#");
     expect(safeUrl("data:text/html,<script>x</script>")).toBe("#");
     expect(safeUrl("vbscript:msgbox")).toBe("#");
-    // 转义解决不了这个问题，所以必须在协议层拦
-    const html = htmlOf("[点我](javascript:alert(1))\n");
+    // Escaping can't solve this, so it must be blocked at the protocol level
+    const html = htmlOf("[Click me](javascript:alert(1))\n");
     expect(html).not.toContain("javascript:");
-    expect(html).toContain('<a href="#" rel="noopener">点我</a>');
+    expect(html).toContain('<a href="#" rel="noopener">Click me</a>');
   });
 
-  it("图片允许内联 data:image，但不允许 data:text/html", async () => {
-    const ok = htmlOf("![图](data:image/png;base64,iVBORw0KGgo=)\n");
+  it("allows inline data:image for images but not data:text/html", async () => {
+    const ok = htmlOf("![img](data:image/png;base64,iVBORw0KGgo=)\n");
     expect(ok).toContain('src="data:image/png;base64,iVBORw0KGgo="');
-    const bad = htmlOf("![图](data:text/html,<script>x</script>)\n");
+    const bad = htmlOf("![img](data:text/html,<script>x</script>)\n");
     expect(bad).not.toContain("data:text/html");
   });
 });
 
-describe("PDF 载荷", () => {
-  it("只给正文片段和字体排版，打印面板自己套样式", async () => {
-    const payload = await buildExport({ format: "pdf", title: "标题", source: SAMPLE });
+describe("PDF payload", () => {
+  it("provides only the body fragment and font styling; the print dialog applies its own styles", async () => {
+    const payload = await buildExport({ format: "pdf", title: "Title", source: SAMPLE });
     expect(payload.extension).toBe("pdf");
-    expect(payload.fileName).toBe("标题.pdf");
-    expect(payload.contents).toContain('<h1 id="标题">标题</h1>');
+    expect(payload.fileName).toBe("Title.pdf");
+    expect(payload.contents).toContain('<h1 id="title">Title</h1>');
     expect(payload.contents).not.toContain("<html");
     expect(payload.contents).not.toContain("<style");
   });
 });
 
-describe("排版样式", () => {
-  it("同一份样式可以挂到不同根节点上", () => {
+describe("Layout styles", () => {
+  it("attaches the same stylesheet to different root nodes", () => {
     const standalone = docCss("body");
     const sheet = docCss(".print-sheet", { dark: false });
     expect(standalone).toContain("body p { margin: 0 0 20px; }");
     expect(sheet).toContain(".print-sheet p { margin: 0 0 20px; }");
     expect(sheet).not.toContain("__R__");
-    // 打印面板不跟随深色偏好：那会把深色背景带上纸
+    // The print dialog doesn't follow the dark preference: that would put a dark background on paper
     expect(sheet).not.toContain("prefers-color-scheme");
     expect(standalone).toContain("prefers-color-scheme");
   });
 
-  it("打印规则里带 @page 与避免断行", () => {
+  it("includes @page and break-avoidance in the print rules", () => {
     const css = docCss("body");
     expect(css).toContain("@page");
     expect(css).toContain("page-break-inside: avoid");

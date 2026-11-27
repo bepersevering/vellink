@@ -1,14 +1,15 @@
 /**
- * 自定义 CSS 主题：把用户样式注入页面 / 从页面移除。
+ * Custom CSS theme: inject user styles into the page / remove them from the page.
  *
- * 只做最小沙箱：去掉 @import（防止偷偷拉外链）与 `url(http...)`（防止
- * 追踪请求），但允许 data URI 图片。不试图做完整 CSS 安全解析——样式表
- * 本身不能执行脚本，真正危险的是外链。
+ * Only a minimal sandbox: strip @import (to prevent silently pulling external
+ * resources) and `url(http...)` (to prevent tracking requests), but allow data URI
+ * images. No attempt at full CSS security parsing — stylesheets can't execute
+ * scripts; the real danger is external links.
  */
 
 const STYLE_ID = "vellink-user-css";
 
-/** 去掉会发起网络请求的规则，保留 data URI 与相对路径。 */
+/** Strip rules that would fire network requests, keeping data URIs and relative paths. */
 export function sanitizeCss(css: string): string {
   return css
     .replace(/@import\s+[^;]+;/gi, "")
@@ -16,7 +17,7 @@ export function sanitizeCss(css: string): string {
     .trim();
 }
 
-/** 注入或替换用户样式；空串移除。返回是否实际改动。 */
+/** Inject or replace user styles; an empty string removes them. Returns whether anything actually changed. */
 export function applyCustomCss(doc: Document, css: string): boolean {
   const clean = sanitizeCss(css);
   let style = doc.getElementById(STYLE_ID) as HTMLStyleElement | null;
@@ -38,7 +39,7 @@ export function applyCustomCss(doc: Document, css: string): boolean {
   return true;
 }
 
-/** 读当前注入的用户 CSS（设置面板回显用）。 */
+/** Read the currently injected user CSS (for the settings panel to display). */
 export function currentCustomCss(doc: Document): string {
   return (doc.getElementById(STYLE_ID) as HTMLStyleElement | null)?.textContent ?? "";
 }

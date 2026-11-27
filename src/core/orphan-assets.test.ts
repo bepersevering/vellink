@@ -1,29 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { findOrphanAssets, referencedAssets } from "./orphan-assets";
 
-describe("孤立图片识别", () => {
-  it("从源码收集 .vellink-assets 引用", () => {
+describe("orphan image detection", () => {
+  it("collects .vellink-assets references from source", () => {
     const refs = referencedAssets(
-      "![A](.vellink-assets/a.png) 与 ![B](.vellink-assets/b.jpg \"题\")",
+      "![A](.vellink-assets/a.png) and ![B](.vellink-assets/b.jpg \"title\")",
     );
     expect([...refs].sort()).toEqual(["a.png", "b.jpg"]);
   });
 
-  it("多文档里只要有一处引用就保留", () => {
+  it("keeps an asset referenced in any document", () => {
     const orphans = findOrphanAssets(
-      ["![A](.vellink-assets/a.png)", "普通正文"],
+      ["![A](.vellink-assets/a.png)", "plain body text"],
       ["a.png", "b.png", "c.jpg"],
     );
     expect(orphans).toEqual(["b.png", "c.jpg"]);
   });
 
-  it("没有文档时全部算孤立", () => {
+  it("treats all assets as orphans when there are no documents", () => {
     expect(findOrphanAssets([], ["a.png"])).toEqual(["a.png"]);
   });
 
-  it("外链与 data URI 不影响判断", () => {
+  it("external links and data URIs don't affect detection", () => {
     const orphans = findOrphanAssets(
-      ["![外](https://x.com/a.png) ![内](data:image/png;base64,AAA)"],
+      ["![external](https://x.com/a.png) ![inline](data:image/png;base64,AAA)"],
       ["local.png"],
     );
     expect(orphans).toEqual(["local.png"]);

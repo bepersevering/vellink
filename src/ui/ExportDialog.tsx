@@ -1,8 +1,8 @@
 /**
- * 导出面板。
+ * Export dialog.
  *
- * 只负责「选格式 + 选范围」，实际产出在 `core/export`：
- * UI 不碰文件系统、不拼 HTML，这样格式增多时这里不用改。
+ * Only handles "pick a format + pick a scope"; actual output lives in `core/export`:
+ * the UI never touches the filesystem or builds HTML, so new formats don't require changes here.
  */
 import { useEffect, useRef, useState } from "react";
 import type { ExportFormat } from "../core/export";
@@ -34,18 +34,18 @@ function initialFormat(): ExportFormat {
     const saved = localStorage.getItem(FORMAT_STORAGE_KEY);
     if (saved === "markdown" || saved === "html" || saved === "pdf" || saved === "docx" || saved === "epub" || saved === "odt" || saved === "latex" || saved === "mediawiki") return saved;
   } catch {
-    /* 隐私模式下 localStorage 可能不可用 */
+    /* localStorage may be unavailable in private mode */
   }
   return "html";
 }
 
 interface Props {
   open: boolean;
-  /** 当前文档标题，用作文件名预览。 */
+  /** Current document title, used as a filename preview. */
   title: string;
-  /** 选区（源码偏移）；没有选区时「选中」不可选。 */
+  /** Selection (source offsets); "Selection" is disabled when there is none. */
   selection: { from: number; to: number } | null;
-  /** 导出进行中：按钮禁用，避免连点开两个保存对话框。 */
+  /** Export in progress: disable the button to avoid opening two save dialogs with double clicks. */
   busy: boolean;
   onClose: () => void;
   onExport: (format: ExportFormat, scope: ExportScope) => void;
@@ -66,7 +66,7 @@ export function ExportDialog({
   const hasSelection = Boolean(selection && selection.to > selection.from);
   const selectedChars = hasSelection ? (selection?.to ?? 0) - (selection?.from ?? 0) : 0;
 
-  // 每次打开都回到「整篇」：上一次选了半段就导半段，是最糟的默认值
+  // Always reset to "whole document" on open: defaulting to the last partial selection is the worst choice
   useEffect(() => {
     if (!open) return;
     setScope("all");
@@ -93,7 +93,7 @@ export function ExportDialog({
     try {
       localStorage.setItem(FORMAT_STORAGE_KEY, next);
     } catch {
-      /* 存不下就只记在内存里 */
+      /* If it can't be saved, keep it in memory only */
     }
   };
 

@@ -1,14 +1,14 @@
 import type { BlockNode, DocumentIR } from "../ir/types";
 import type { Op, Transaction, TransactionResult } from "./types";
 
-/** 生成简单唯一 ID（M0 够用，后续换 nanoid）。 */
+/** Generate a simple unique ID (fine for M0; swap in nanoid later). */
 let counter = 0;
 export function nextId(prefix = "n"): string {
   counter += 1;
   return `${prefix}_${Date.now().toString(36)}_${counter.toString(36)}`;
 }
 
-/** 为单个 op 生成反向 op。 */
+/** Generate the inverse op for a single op. */
 function invert(op: Op, doc: DocumentIR): Op {
   switch (op.type) {
     case "insert":
@@ -37,7 +37,7 @@ function invert(op: Op, doc: DocumentIR): Op {
   }
 }
 
-/** 应用单个 op，返回新的 children 与 source（纯函数，不改入参）。 */
+/** Apply a single op, returning the new children and source (pure; doesn't mutate the input). */
 function applyOp(
   doc: DocumentIR,
   op: Op,
@@ -61,8 +61,8 @@ function applyOp(
 }
 
 /**
- * 提交事务：依次应用 ops，记录 inverse，版本 +1。
- * inverse 按 op 逆序存储，撤销时正序应用即可还原。
+ * Commit a transaction: apply ops in order, record their inverses, and bump the version by 1.
+ * Inverses are stored in reverse op order so undo can simply apply them forward.
  */
 export function commit(
   doc: DocumentIR,
@@ -92,7 +92,7 @@ export function commit(
   return { document: current, transaction: tx };
 }
 
-/** 撤销一个事务：应用其 inverse。 */
+/** Undo a transaction by applying its inverse ops. */
 export function undo(doc: DocumentIR, tx: Transaction): DocumentIR {
   let current = doc;
   for (const op of tx.inverse) {

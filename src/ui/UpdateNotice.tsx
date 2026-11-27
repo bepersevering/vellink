@@ -1,8 +1,9 @@
 /**
- * 更新提示卡片。
+ * Update notice card.
  *
- * 只在真的有事发生时出现：查到新版本、正在下载、装完等重启、手动检查的结果。
- * 写作界面里不做模态对话框——不打断正在写的句子。
+ * Only appears when something actually happens: a new version is found, a download is in
+ * progress, an install is waiting for restart, or a manual check returns a result.
+ * No modal dialog in the writing UI — we don't interrupt a sentence in progress.
  */
 import { formatBytes, progressPercent } from "../core/update-policy";
 import { t } from "../i18n";

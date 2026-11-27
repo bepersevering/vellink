@@ -1,37 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { findRelativeImages, rewriteImagePaths } from "./import-images";
 
-describe("导入时搬运图片", () => {
-  it("识别相对路径图片，忽略外链与 data URI", () => {
+describe("Migrating images on import", () => {
+  it("recognizes relative-path images, ignoring external links and data URIs", () => {
     const src = [
-      "![本地](./shot.png)",
-      "![带题](images/a.jpg \"标题\")",
-      "![外链](https://example.com/x.png)",
-      "![内嵌](data:image/png;base64,AAA)",
-      "![越界](../secret.png)",
+      "![local](./shot.png)",
+      "![titled](images/a.jpg \"title\")",
+      "![external](https://example.com/x.png)",
+      "![inline](data:image/png;base64,AAA)",
+      "![escaping](../secret.png)",
     ].join("\n");
     const refs = findRelativeImages(src);
     expect(refs.map((r) => r.path)).toEqual(["./shot.png", "images/a.jpg"]);
     expect(refs[0].fileName).toBe("shot.png");
-    expect(refs[1].title.trim()).toBe('"标题")');
+    expect(refs[1].title.trim()).toBe('"title")');
   });
 
-  it("重写路径并保留 alt 与 title", () => {
-    const src = "![图](./shot.png \"说明\") 后文";
+  it("rewrites paths while preserving alt and title", () => {
+    const src = "![image](./shot.png \"description\") tail";
     const refs = findRelativeImages(src);
     const out = rewriteImagePaths(src, refs, () => ".vellink-assets/shot-a1b2.png");
-    expect(out).toBe('![图](.vellink-assets/shot-a1b2.png "说明") 后文');
+    expect(out).toBe('![image](.vellink-assets/shot-a1b2.png "description") tail');
   });
 
-  it("读不到的图片保留原引用", () => {
-    const src = "![图](./missing.png)";
+  it("keeps the original reference for unreadable images", () => {
+    const src = "![image](./missing.png)";
     const out = rewriteImagePaths(src, findRelativeImages(src), () => null);
     expect(out).toBe(src);
   });
 
-  it("多处引用逐个替换，偏移不乱", () => {
-    const src = "![A](a.png) 中间 ![B](b.jpg)";
+  it("replaces multiple references one by one without breaking offsets", () => {
+    const src = "![A](a.png) middle ![B](b.jpg)";
     const out = rewriteImagePaths(src, findRelativeImages(src), (r) => `assets/${r.fileName}`);
-    expect(out).toBe("![A](assets/a.png) 中间 ![B](assets/b.jpg)");
+    expect(out).toBe("![A](assets/a.png) middle ![B](assets/b.jpg)");
   });
 });

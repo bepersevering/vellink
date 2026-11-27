@@ -1,10 +1,12 @@
 /**
- * 光标同步可行性核心验证：source offset ↔ PM pos 往返一致性。
+ * Core feasibility check for cursor sync: source offset ↔ PM pos round-trip consistency.
  *
- * 判定标准：
- * - 可见文本区（锚点覆盖的字符）：往返必须 100% 精确
- * - 标记字符区（#、**、反引号等）：允许吸附，但吸附必须稳定（往返两次结果相同）
- * - 任一可见字符往返出错 → 双视图同步不可用，按预案砍 WYSIWYG
+ * Acceptance criteria:
+ * - Visible text regions (characters covered by anchors): round-trip must be 100% exact
+ * - Marker character regions (#, **, backticks, etc.): snapping is allowed, but must be
+ *   stable (two round-trips give the same result)
+ * - Any visible character that fails to round-trip → dual-view sync is unusable, drop WYSIWYG
+ *   per the contingency plan
  */
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "../parser/markdown";
@@ -16,16 +18,16 @@ import {
   type PMView,
 } from "./mapping";
 
-const DOC = `# 标题一
+const DOC = `# Title One
 
-这是第一段，包含 **粗体**、*斜体*、\`行内代码\`、[链接](https://example.com) 和 [[双链]]。
+This is the first paragraph, with **bold**, *italic*, \`inline code\`, [link](https://example.com) and [[wiki link]].
 
-## 标题二
+## Title Two
 
-- 列表项一
-- [x] 已完成任务
+- List item one
+- [x] Completed task
 
-> 引用块
+> Quote block
 
 \`\`\`ts
 const x = 1;
@@ -36,7 +38,7 @@ const x = 1;
 | 1 | 2 |
 `;
 
-/** 锚点覆盖的源码字符集合（可见文本区）。 */
+/** Set of source characters covered by anchors (visible text regions). */
 function visibleOffsets(view: PMView): Set<number> {
   const set = new Set<number>();
   for (const a of view.anchors)
@@ -44,17 +46,17 @@ function visibleOffsets(view: PMView): Set<number> {
   return set;
 }
 
-describe("光标往返一致性", () => {
+describe("Cursor round-trip consistency", () => {
   const ir = parseMarkdown({ source: DOC }).ir;
   const view = buildPMView(ir);
 
-  it("文本锚点与源文本逐字对应", () => {
+  it("matches text anchors character by character with the source", () => {
     const errors = validateAnchors(view, DOC);
-    if (errors.length) console.log("锚点错误:\n" + errors.slice(0, 20).join("\n"));
+    if (errors.length) console.log("Anchor errors:\n" + errors.slice(0, 20).join("\n"));
     expect(errors).toEqual([]);
   });
 
-  it("可见文本区：每个字符 offset → pmPos → offset 精确往返", () => {
+  it("round-trips every visible character exactly: offset → pmPos → offset", () => {
     const visible = visibleOffsets(view);
     const errors: string[] = [];
     for (const offset of visible) {
@@ -67,12 +69,12 @@ describe("光标往返一致性", () => {
       }
     }
     if (errors.length)
-      console.log(`往返失败 ${errors.length}/${visible.size}:\n` + errors.slice(0, 20).join("\n"));
+      console.log(`Round-trip failed ${errors.length}/${visible.size}:\n` + errors.slice(0, 20).join("\n"));
     expect(errors).toEqual([]);
-    console.log(`可见文本字符 ${visible.size} 个，全部精确往返 ✓`);
+    console.log(`All ${visible.size} visible text characters round-trip exactly ✓`);
   });
 
-  it("标记字符区：吸附结果稳定（往返两次不变）", () => {
+  it("keeps snapping stable for marker characters (unchanged after two round-trips)", () => {
     const visible = visibleOffsets(view);
     const unstable: string[] = [];
     for (let offset = 0; offset < DOC.length; offset++) {
@@ -83,12 +85,12 @@ describe("光标往返一致性", () => {
       if (pm1 !== pm2) unstable.push(`offset ${offset}: pm ${pm1} → src ${back} → pm ${pm2}`);
     }
     if (unstable.length)
-      console.log(`吸附不稳定 ${unstable.length} 处:\n` + unstable.slice(0, 20).join("\n"));
+      console.log(`Unstable snapping at ${unstable.length} positions:\n` + unstable.slice(0, 20).join("\n"));
     expect(unstable).toEqual([]);
   });
 
-  it("行内标记边界：粗体/斜体/代码/链接内部光标不跳位", () => {
-    const probes = ["粗体", "斜体", "行内代码", "链接", "双链", "标题一", "const x"];
+  it("doesn't shift the cursor inside inline marks: bold / italic / code / link", () => {
+    const probes = ["bold", "italic", "inline code", "link", "wiki link", "Title One", "const x"];
     for (const word of probes) {
       const start = DOC.indexOf(word);
       expect(start).toBeGreaterThanOrEqual(0);
@@ -100,15 +102,15 @@ describe("光标往返一致性", () => {
     }
   });
 
-  it("块边界：各块首字符光标精确，标记字符稳定吸附", () => {
-    // 块首的可见文本字符必须精确往返
+  it("keeps the cursor exact at the first character of each block and snaps markers stably", () => {
+    // Visible text characters at block starts must round-trip exactly
     const visibleFirst = [
-      DOC.indexOf("标题一"),
-      DOC.indexOf("标题二"),
-      DOC.indexOf("列表项一"),
-      DOC.indexOf("引用块"),
+      DOC.indexOf("Title One"),
+      DOC.indexOf("Title Two"),
+      DOC.indexOf("List item one"),
+      DOC.indexOf("Quote block"),
       DOC.indexOf("const x"),
-      DOC.indexOf("| A | B") + 2, // 表格首单元格的 A
+      DOC.indexOf("| A | B") + 2, // The A in the table's first cell
     ];
     for (const offset of visibleFirst) {
       expect(offset).toBeGreaterThanOrEqual(0);
@@ -118,15 +120,15 @@ describe("光标往返一致性", () => {
       expect(pmToSource(view, pm)).toBe(offset);
     }
 
-    // 标记字符（如 ##、-、>）没有对应 PM 光标位，只要求吸附后落在合法范围
-    for (const marker of [DOC.indexOf("## 标题二"), DOC.indexOf("- 列表"), DOC.indexOf("> 引用")]) {
+    // Marker characters (e.g. ##, -, >) have no PM cursor position; just require snapping into a legal range
+    for (const marker of [DOC.indexOf("## Title Two"), DOC.indexOf("- List"), DOC.indexOf("> Quote")]) {
       const pm = sourceToPM(view, marker);
       expect(pm).toBeGreaterThanOrEqual(1);
       expect(pm).toBeLessThanOrEqual(view.doc.content.size);
     }
   });
 
-  it("PM 端所有文本位置都能映射回合法 source 范围", () => {
+  it("maps every text position on the PM side back into a legal source range", () => {
     for (let pos = 1; pos <= view.doc.content.size; pos++) {
       const src = pmToSource(view, pos);
       expect(src).toBeGreaterThanOrEqual(0);

@@ -1,20 +1,22 @@
 /**
- * WYSIWYG 里的公式渲染。
+ * Math rendering in the WYSIWYG view.
  *
- * schema 的 toDOM 只输出占位 `<span data-math>` / `<div data-math-block>`，
- * 这里在 PM 更新 DOM 之后把占位节点替换成 KaTeX 输出。这样做的原因：
- * 1. schema 保持纯数据，node 单测不需要 DOM；
- * 2. KaTeX 的 HTML 输出带大量内联节点，不适合塞进 PM 文档（会被序列化）；
- * 3. 源码视图看到的仍是原始 `$...$`，光标映射完全不受影响。
+ * The schema's toDOM only emits placeholders `<span data-math>` / `<div data-math-block>`;
+ * here we replace those placeholders with KaTeX output after PM updates the DOM. Reasons:
+ * 1. The schema stays pure data, so node unit tests need no DOM;
+ * 2. KaTeX's HTML output contains many inline nodes, which don't belong in a PM document
+ *    (they would be serialized);
+ * 3. The source view still shows the original `$...$`, so cursor mapping is unaffected.
  *
- * 用 htmlAndMathml：HTML 层给视觉排版，MathML 层给可访问性与复制粘贴。
+ * We use htmlAndMathml: the HTML layer handles visual layout, the MathML layer handles
+ * accessibility and copy/paste.
  */
 
 import katex from "katex";
 
 const RENDERED = "data-math-rendered";
 
-/** 在容器里渲染所有未处理的公式占位节点。幂等：渲染过的会被跳过。 */
+/** Render all unprocessed math placeholders in a container. Idempotent: already-rendered ones are skipped. */
 export function renderMath(host: HTMLElement): void {
   const inline = host.querySelectorAll<HTMLElement>("span[data-math]:not([" + RENDERED + "])");
   for (const el of Array.from(inline)) {

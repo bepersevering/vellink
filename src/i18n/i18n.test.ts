@@ -6,27 +6,27 @@ import { zhCN } from "./zh-CN";
 describe("i18n", () => {
   afterEach(() => setLocale("en"));
 
-  it("英文包与中文包键位完全一致", () => {
+  it("English and Chinese packs have identical keys", () => {
     const enKeys = Object.keys(en).sort();
     const zhKeys = Object.keys(zhCN).sort();
     expect(zhKeys).toEqual(enKeys);
   });
 
-  it("t() 解析当前语言并插值参数", () => {
+  it("t() resolves the active locale and interpolates params", () => {
     setLocale("en");
     expect(t("status.pluginsEnabled", { count: 3 })).toBe("3 plugins enabled");
     setLocale("zh-CN");
     expect(t("status.pluginsEnabled", { count: 3 })).toBe("3 个插件已启用");
   });
 
-  it("未知键原样返回，不抛错", () => {
+  it("returns unknown keys verbatim without throwing", () => {
     expect(t("no.such.key")).toBe("no.such.key");
   });
 
-  it("切换语言持久化并可往返", () => {
+  it("persists locale switches and round-trips correctly", () => {
     setLocale("zh-CN");
     expect(getLocale()).toBe("zh-CN");
-    // 测试环境可能是 node（无 localStorage）：有则验证持久化，无则跳过
+    // The test environment may be node (no localStorage): verify persistence when available, otherwise skip
     if (typeof localStorage !== "undefined") {
       expect(localStorage.getItem("vellink-locale")).toBe("zh-CN");
     }
@@ -37,9 +37,9 @@ describe("i18n", () => {
     }
   });
 
-  it("en 包缺失的键回退到 en 再回退到键名", () => {
+  it("falls back from a missing key to en and finally to the key name", () => {
     setLocale("zh-CN");
-    // 两个包键位一致，这里验证 t() 的回退链：直接查一个只存在于 en 的假想键
+    // Both packs share the same keys; this checks t()'s fallback chain with a hypothetical en-only key
     expect(t("status.saved")).toBe(zhCN["status.saved"]);
   });
 });

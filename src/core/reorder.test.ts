@@ -18,8 +18,8 @@ function storageStub(initial: Record<string, string> = {}): Storage {
   };
 }
 
-describe("工作区重排", () => {
-  it("按给定 ids 重排，store / 激活项不受影响", () => {
+describe("workspace reordering", () => {
+  it("reorders by the given ids without disturbing stores or the active item", () => {
     const w = new Workspace([doc("a"), doc("b"), doc("c")]);
     const store = w.store("a");
     w.setActive("b");
@@ -29,13 +29,13 @@ describe("工作区重排", () => {
     expect(w.activeId).toBe("b");
   });
 
-  it("缺失的 id 按原顺序补在末尾，重复 id 只出现一次", () => {
+  it("appends missing ids in their original order and keeps duplicates only once", () => {
     const w = new Workspace([doc("a"), doc("b"), doc("c")]);
     w.reorder(["c", "c", "a"]);
     expect(w.summaries().map((d) => d.id)).toEqual(["c", "a", "b"]);
   });
 
-  it("相同顺序不通知", () => {
+  it("doesn't notify when the order is unchanged", () => {
     const w = new Workspace([doc("a"), doc("b")]);
     let n = 0;
     w.subscribe(() => { n += 1; });
@@ -46,14 +46,14 @@ describe("工作区重排", () => {
   });
 });
 
-describe("顺序持久化", () => {
-  it("浏览器后端 reorder 后 load 保持新顺序", async () => {
+describe("order persistence", () => {
+  it("keeps the new order after reorder and load with the browser backend", async () => {
     const storage = storageStub();
     const backend = createLocalWorkspaceBackend(storage);
     await backend.save(doc("a"));
     await backend.save(doc("b"));
     await backend.save(doc("c"));
-    // 初始顺序只作基线，重排后的顺序才是本测试关心的
+    // The initial order is just a baseline; this test cares about the reordered result
     const before = (await backend.load())?.map((d) => d.id);
     expect(before?.sort()).toEqual(["a", "b", "c"]);
 
@@ -61,17 +61,17 @@ describe("顺序持久化", () => {
     expect((await backend.load())?.map((d) => d.id)).toEqual(["a", "c", "b"]);
   });
 
-  it("已存在文档再次 save 不把它顶到最前", async () => {
+  it("doesn't move an existing document to the front when it's saved again", async () => {
     const storage = storageStub();
     const backend = createLocalWorkspaceBackend(storage);
     await backend.save(doc("a"));
     await backend.save(doc("b"));
     await backend.reorder!(["a", "b"]);
-    await backend.save({ ...doc("b"), source: "# b 改\n" });
+    await backend.save({ ...doc("b"), source: "# b edited\n" });
     expect((await backend.load())?.map((d) => d.id)).toEqual(["a", "b"]);
   });
 
-  it("reorder 漏掉的 id 不丢", async () => {
+  it("doesn't lose ids omitted from reorder", async () => {
     const backend = createMemoryWorkspaceBackend([doc("a"), doc("b"), doc("c")]);
     await backend.reorder!(["c"]);
     expect((await backend.load())?.map((d) => d.id)).toEqual(["c", "a", "b"]);

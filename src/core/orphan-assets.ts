@@ -1,13 +1,13 @@
 /**
- * 删除文档后找出无人引用的图片资产（纯函数）。
+ * Find unreferenced image assets after a document is deleted (pure function).
  *
- * 只做精确匹配：源码里出现 `.vellink-assets/<name>` 就算被引用，
- * 不做语义解析——宁可多留一张图，也不能误删还在用的。
+ * Exact matching only: if `.vellink-assets/<name>` appears in the source, the asset counts as used.
+ * No semantic parsing — better to keep one extra image than to delete one still in use.
  */
 
 import { ASSET_DIR } from "./asset";
 
-/** 从 Markdown 源码里收集被引用的资产文件名。 */
+/** Collect referenced asset filenames from Markdown source. */
 export function referencedAssets(source: string): Set<string> {
   const out = new Set<string>();
   const re = new RegExp(`${ASSET_DIR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/([^\s)"'>]+)`, "g");
@@ -18,7 +18,7 @@ export function referencedAssets(source: string): Set<string> {
   return out;
 }
 
-/** 找出 assets 目录里没有任何文档引用的文件。 */
+/** Find files in the assets directory that no document references. */
 export function findOrphanAssets(
   sources: readonly string[],
   assetNames: readonly string[],

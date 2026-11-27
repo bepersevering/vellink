@@ -1,18 +1,21 @@
 /**
- * 更新策略：与平台无关的纯函数。
+ * Update policy: platform-independent pure functions.
  *
- * 抽出来的原因很实际——「该不该在启动时检查」「进度条百分比怎么算」「版本谁更新」
- * 全是纯逻辑，可以脱离 Tauri 运行时单测；只有真正的下载安装才碰原生插件。
+ * The reason for extracting these is practical — "should we check on startup",
+ * "how is the progress percentage computed", and "which version is newer" are all
+ * pure logic that can be unit-tested without the Tauri runtime; only the actual
+ * download and install touch the native plugin.
  */
 
-/** 自动检查间隔：6 小时。太勤会烦人，太久又错过小版本。 */
+/** Automatic check interval: 6 hours. Too often is annoying, too long misses minor releases. */
 export const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 
 /**
- * 现在该不该后台检查更新。
+ * Whether a background update check should run now.
  *
- * 时钟回拨（用户改过系统时间）时 lastCheck 会落到未来，此时按「该查」处理，
- * 否则一次误操作会把用户永久卡在不再检查的状态。
+ * If the clock was rolled back (the user changed the system time), lastCheck falls in
+ * the future; treat that as "should check", otherwise a single mistake would leave the
+ * user stuck never checking again.
  */
 export function shouldCheckForUpdate(
   lastCheckAt: number | null,
@@ -29,7 +32,7 @@ interface ParsedVersion {
   pre: string[];
 }
 
-/** 解析 `1.2.3` / `v1.2.3` / `1.2.3-beta.2`。非法段一律按 0 处理，不抛错。 */
+/** Parse `1.2.3` / `v1.2.3` / `1.2.3-beta.2`. Invalid segments are treated as 0, never throws. */
 function parseVersion(version: string): ParsedVersion {
   const trimmed = version.trim().replace(/^v/i, "");
   const dash = trimmed.indexOf("-");
@@ -45,7 +48,7 @@ function parseVersion(version: string): ParsedVersion {
 }
 
 function comparePrerelease(a: string[], b: string[]): number {
-  // 正式版 > 预发布版：1.0.0 > 1.0.0-beta
+  // A stable release > a prerelease: 1.0.0 > 1.0.0-beta
   if (a.length === 0 && b.length === 0) return 0;
   if (a.length === 0) return 1;
   if (b.length === 0) return -1;
@@ -60,7 +63,7 @@ function comparePrerelease(a: string[], b: string[]): number {
     if (leftNum !== null && rightNum !== null) {
       if (leftNum !== rightNum) return leftNum < rightNum ? -1 : 1;
     } else if (leftNum !== null) {
-      // 数字标识符优先级低于字母标识符（semver 规则）
+      // Numeric identifiers have lower precedence than alphanumeric ones (semver rule)
       return -1;
     } else if (rightNum !== null) {
       return 1;
@@ -71,7 +74,7 @@ function comparePrerelease(a: string[], b: string[]): number {
   return 0;
 }
 
-/** 比较两个版本号：a 比 b 新返回 1，旧返回 -1，相同返回 0。 */
+/** Compare two versions: 1 if a is newer than b, -1 if older, 0 if equal. */
 export function compareVersions(a: string, b: string): number {
   const left = parseVersion(a);
   const right = parseVersion(b);
@@ -84,7 +87,8 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /**
- * 下载进度百分比。服务端没给总长度时返回 null（UI 显示不确定进度条）。
+ * Download progress percentage. Returns null when the server provides no total length
+ * (the UI then shows an indeterminate progress bar).
  */
 export function progressPercent(downloaded: number, total: number | null): number | null {
   if (total === null || !Number.isFinite(total) || total <= 0) return null;
@@ -92,7 +96,7 @@ export function progressPercent(downloaded: number, total: number | null): numbe
   return Math.min(100, Math.round((downloaded / total) * 100));
 }
 
-/** 人类可读体积，用于「已下载 12.4 MB」。 */
+/** Human-readable byte size, e.g. "Downloaded 12.4 MB". */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];

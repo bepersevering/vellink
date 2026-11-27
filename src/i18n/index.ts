@@ -18,7 +18,7 @@ const PACKS: Record<Locale, Record<string, string>> = {
 
 const STORAGE_KEY = "vellink-locale";
 
-/** localStorage 可能不存在（node 测试环境 / Worker）：全部安全访问。 */
+/** localStorage may be absent (node test environment / Worker): all access is guarded. */
 const storage = {
   get(): string | null {
     try {
