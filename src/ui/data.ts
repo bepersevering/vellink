@@ -14,7 +14,7 @@ export interface CommandItem {
   id: string;
   /** i18n key；显示文案经 t() 解析，运行时翻译。 */
   label: string;
-  icon: "edit" | "ai" | "cloud" | "file" | "folder" | "search" | "down" | "up" | "set";
+  icon: "edit" | "ai" | "cloud" | "file" | "folder" | "search" | "down" | "up" | "set" | "chart";
   hint?: string;
   group: string;
   action: string;
@@ -92,6 +92,14 @@ export const commands: CommandItem[] = [
     hint: "⌘O",
     group: "group.recent",
     action: "open-folder",
+  },
+  {
+    id: "c-table",
+    label: "cmd.insertTable",
+    icon: "chart",
+    hint: "⌘⇧T",
+    group: "group.recent",
+    action: "insert-table",
   },
   {
     id: "c-export",

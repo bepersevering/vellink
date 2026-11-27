@@ -25,6 +25,7 @@ import {
 } from "./core/workspace-storage";
 import { buildExport, clampRange, type ExportFormat } from "./core/export";
 import { planImports, titleFromFileName } from "./core/import-docs";
+import { buildTable } from "./core/table-insert";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
 import {
@@ -60,6 +61,7 @@ import { UpdateNotice } from "./ui/UpdateNotice";
 import { useUpdater } from "./ui/useUpdater";
 import { CommandPalette } from "./ui/CommandPalette";
 import { ExportDialog, type ExportScope } from "./ui/ExportDialog";
+import { TableDialog } from "./ui/TableDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { IconSprite } from "./ui/Icon";
 import { commands as commandItems, type PluginInfo, type CommandItem } from "./ui/data";
@@ -111,6 +113,7 @@ export default function App() {
     to: number;
   } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
   /** 待打印的正文：PDF 由系统打印面板渲染，不自己编码。 */
   const [printSheet, setPrintSheet] = useState<{
     html: string;
@@ -467,6 +470,13 @@ export default function App() {
     const id = filesRef.current ? await filesRef.current.newPath(title) : undefined;
     workspace.create(title, id);
     showToast(t("toast.docCreated"));
+  }, [showToast]);
+
+  /** 插入一张空表格：走 insertMarkdown 的块模式，当前行不被拆坏。 */
+  const insertTable = useCallback((rows: number, cols: number) => {
+    editorRef.current?.insertMarkdown(buildTable(rows, cols), { block: true });
+    setTableOpen(false);
+    showToast(t("table.inserted"));
   }, [showToast]);
 
   /**
@@ -893,6 +903,9 @@ export default function App() {
       } else if (key === "e") {
         e.preventDefault();
         openExport();
+      } else if (key === "t" && e.shiftKey) {
+        e.preventDefault();
+        setTableOpen(true);
       } else if (key === ",") {
         // 平台惯例：设置就是 ⌘,（Preferences）
         e.preventDefault();
@@ -1002,6 +1015,9 @@ export default function App() {
         break;
       case "export":
         openExport();
+        break;
+      case "insert-table":
+        setTableOpen(true);
         break;
       case "settings":
         setSettingsOpen(true);
@@ -1133,6 +1149,11 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
       />
 
+      <TableDialog
+        open={tableOpen}
+        onClose={() => setTableOpen(false)}
+        onInsert={insertTable}
+      />
       {printSheet && (
         <>
           {/* 打印面板的样式与应用互不影响：所有选择器都挂在 .print-sheet 下 */}
