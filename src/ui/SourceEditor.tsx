@@ -30,6 +30,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 
 export interface SourceEditorHandle {
   /** 外部（PM 编辑 / 撤销）更新源码时同步 CM 文档，不回写 bridge。 */
@@ -210,10 +211,12 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(
           drawSelection(),
           indentOnInput(),
           bracketMatching(),
+          // 输入 ( [ { " ' 时自动补右半边；选中文本时包裹而不是覆盖
+          closeBrackets(),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           markdown(),
           findHighlight,
-          keymap.of([...defaultKeymap, indentWithTab]),
+          keymap.of([...closeBracketsKeymap, ...defaultKeymap, indentWithTab]),
           EditorView.lineWrapping,
           vellinkTheme,
           EditorView.updateListener.of((update) => {

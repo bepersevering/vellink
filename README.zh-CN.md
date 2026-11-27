@@ -39,7 +39,7 @@ Vellink 的选择是：**以统一文档模型（IR）为内核，把一切上�
 
 ## 快速开始
 
-> 项目处于早期开发阶段（M6.10 脚注）。当前可运行：React 写作界面 + ProseMirror WYSIWYG / CodeMirror 6 双视图实时同步、桌面端直接读写本地 `.md` 文件夹的多文档工作区（文件名跟随标题、外部改动由文件监听即时回灌）、可安装启停的插件系统、WebDAV 云同步与 AI 知识库问答两个官方插件，macOS / Windows / Linux 三平台签名安装包与就地自动更新，双视图通用的查找替换（`⌘F`），整篇 / 选区导出为 Markdown、HTML、PDF（`⌘E`），可调的写作排版与主题（`⌘,`），粘贴 / 拖入图片自动入库、导出时内嵌，以及一次导入多个 Markdown 文件。
+| M6.11 | 符号自动配对 | 源码视图接 CodeMirror `closeBrackets`（括号 / 引号自动补齐、选中包裹），所见即所得视图用 PM 插件在选中文本时输入 `*` / `_` / 反引号直接套粗体 / 斜体 / 行内代码。[清单](./功能差距清单.md) |
 
 现成安装包在 [Releases](https://github.com/bepersevering/vellink/releases)。装好之后新版本在应用内升级：启动后静默检查一次，也可以按 `⌘U` 或点状态栏右下角的版本号手动检查。
 
@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # 浏览器热更新（快速验收 UI）
 npm run tauri dev      # 启动桌面应用
-npm test               # 运行核心单测（336 项）
+npm test               # 运行核心单测（340 项）
 npx tsc --noEmit       # 类型检查
 ```
 
@@ -117,6 +117,7 @@ L0  宿主层         Tauri 2 (Rust) · 文件系统 · SQLite · 密钥链
 | M6.8 | 扩展语法 | 顶部 YAML frontmatter 渲染为属性卡、`[TOC]` 展开为可跳转目录、标题自动获得锚点；源码视图与 Markdown 导出都保留原始语法，导出 HTML 同样带目录与锚点。[清单](./功能差距清单.md) |
 | M6.9 | 网页粘贴转 Markdown | 剪贴板带 `text/html` 时按 DOM 递归转成 Markdown 再插入，两种视图共用一次撤销；纯文本与图片走原路径。零运行时依赖的转换器，script/style 丢弃、`javascript:` 链接降级。附逐条功能清单。[说明](./M6.9-网页粘贴转Markdown说明.md) · [清单](./功能差距清单.md) |
 | M6.10 | 脚注 | `[^1]` 行内引用渲染为上标跳转，`[^1]: 内容` 定义汇总到导出 HTML 的文末脚注区；源码视图与 Markdown 导出保留原始语法。Lezer 不认识脚注，靠源码层识别 + IR atom 实现。[清单](./功能差距清单.md) |
+| M6.11 | 符号自动配对 | 源码视图接 CodeMirror `closeBrackets`（括号 / 引号自动补齐、选中包裹），所见即所得视图用 PM 插件在选中文本时输入 `*` / `_` / 反引号直接套粗体 / 斜体 / 行内代码。[清单](./功能差距清单.md) |
 | M6 | 10 人试用打磨 → 公开发布 | 进行中 |
 
 ## 设计原则

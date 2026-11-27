@@ -21,6 +21,7 @@ import { renderMath } from "../core/view/math-view";
 import { renderExtSyntax } from "../core/view/ext-view";
 import { clipboardHtml, htmlToMarkdown } from "../core/paste-html";
 import { createHighlightPlugin } from "../core/view/highlight-plugin";
+import { createAutoPairPlugin } from "../core/view/auto-pair";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -721,6 +722,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         keymap(baseKeymap),
         findPlugin,
         createHighlightPlugin(),
+        createAutoPairPlugin(),
       ],
     });
     const view = new EditorView(host, {
