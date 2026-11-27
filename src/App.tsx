@@ -86,6 +86,7 @@ export default function App() {
     chars: 0,
     pm: 1,
     source: 0,
+    sourceText: "",
   });
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);

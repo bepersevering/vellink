@@ -2,6 +2,7 @@ import { Icon, type IconName } from "./Icon";
 import { t, getLocale } from "../i18n";
 import type { DocStats } from "./Editor";
 import type { SaveState } from "../core/workspace-storage";
+import { readingMinutes } from "../core/reading-time";
 
 interface Props {
   pluginCount: number;
@@ -75,6 +76,9 @@ export function StatusBar({
           line: stats.line,
           chars: stats.chars.toLocaleString(),
         })}
+      </div>
+      <div title={t("status.readingHint")}>
+        {t("status.reading", { minutes: readingMinutes(stats.sourceText) })}
       </div>
       <div title={t("status.pmSource", { pm: stats.pm, source: stats.source })}>
         UTF-8　Markdown　PM {stats.pm} ⇄ src {stats.source}

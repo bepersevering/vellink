@@ -57,6 +57,8 @@ export const en: Record<string, string> = {
   "status.saveFailed": "Save failed",
   "status.docs": "{count} docs · {dirty} unsaved",
   "status.lineChars": "Line {line} · {chars} chars",
+  "status.reading": "~{minutes} min read",
+  "status.readingHint": "Estimated at 400 CJK chars / 200 words per minute",
   "status.pmSource": "PM pos {pm} ↔ source offset {source}",
   "status.pluginsEnabled": "{count} plugins enabled",
   "status.storageLocal": "Local files",

@@ -35,6 +35,8 @@ export interface DocStats {
   chars: number;
   pm: number;
   source: number;
+  /** 当前源码全文，供状态栏估算阅读时长。 */
+  sourceText: string;
 }
 
 /** 暴露给 App 的编辑入口——撤销权威在 DocumentStore，定位走 source map。 */
@@ -825,6 +827,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       chars: source.replace(/\s/g, "").length,
       pm: cursor.pm,
       source: cursor.source,
+      sourceText: source,
     });
   }, [source, cursor, onStats]);
 

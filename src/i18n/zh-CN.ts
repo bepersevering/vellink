@@ -57,6 +57,8 @@ export const zhCN: Record<string, string> = {
   "status.saveFailed": "保存失败",
   "status.docs": "共 {count} 篇 · {dirty} 篇未保存",
   "status.lineChars": "第 {line} 行 · 共 {chars} 字",
+  "status.reading": "约 {minutes} 分钟读完",
+  "status.readingHint": "按中文 400 字/分钟、英文 200 词/分钟估算",
   "status.pmSource": "PM pos {pm} ↔ 源码 offset {source}",
   "status.pluginsEnabled": "{count} 个插件已启用",
   "status.storageLocal": "本地文件",
