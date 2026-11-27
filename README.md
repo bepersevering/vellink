@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (375 tests)
+npm test               # run unit tests (378 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -126,6 +126,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.17 | Line-number jump | Clicking a line number in source view moves the caret there and scrolls it into view; the active number is highlighted. Uses a native capture-phase listener because gutters sit outside CM's contentDOM. ([checklist](./功能差距清单.md), Chinese) |
 | M6.18 | Writing modes | Settings gain a typewriter mode (centre the current line) and focus paragraph (dim the rest), independent of the existing focus mode that only collapses sidebars. ([checklist](./功能差距清单.md), Chinese) |
 | M6.19 | Drag to reorder documents | In the browser, drag documents in the file tree to reorder them and persist the order in localStorage; on the desktop the order follows the filesystem. Also fixes autosave pushing the current document to the top and undoing a manual order. ([checklist](./功能差距清单.md), Chinese) |
+| M6.20 | List input finish | Typing `*`, `_` or a backtick over a selection applies the matching mark; Enter on an empty list item exits the list instead of adding another empty item. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

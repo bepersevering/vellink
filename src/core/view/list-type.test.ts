@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { parseMarkdown } from "../parser/markdown";
 import { buildPMView } from "./mapping";
-import { convertList, convertListCommand, enclosingList, listKind } from "./list-type";
+import { convertList, convertListCommand, enclosingList, exitEmptyListItem, listKind } from "./list-type";
 import { vellinkSchema as S } from "./schema";
 
 function listDoc(source: string) {
@@ -68,5 +68,33 @@ describe("列表类型转换", () => {
 
     const done = state.apply(result as never);
     expect(convertListCommand("ordered")(done, () => {})).toBe(false);
+  });
+});
+
+
+describe("空列表项回车退出", () => {
+  it("空列表项消费回车并 lift 出列表", () => {
+    const doc = S.node("doc", null, [
+      S.node("bulletList", null, [
+        S.node("listItem", null, [S.node("paragraph")]),
+      ]),
+    ]);
+    const state = EditorState.create({ doc, selection: TextSelection.create(doc, 2) });
+    let tr: unknown = null;
+    const ok = exitEmptyListItem()(state, (next) => { tr = next; });
+    expect(ok).toBe(true);
+    expect(tr).not.toBeNull();
+  });
+
+  it("非空列表项不拦截回车", () => {
+    const doc = listDoc("- 有内容\n");
+    const state = withCaret(doc, 3);
+    expect(exitEmptyListItem()(state, () => {})).toBe(false);
+  });
+
+  it("普通段落不拦截回车", () => {
+    const doc = S.node("doc", null, [S.node("paragraph")]);
+    const state = EditorState.create({ doc, selection: TextSelection.create(doc, 1) });
+    expect(exitEmptyListItem()(state, () => {})).toBe(false);
   });
 });

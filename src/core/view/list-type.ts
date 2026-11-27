@@ -9,6 +9,7 @@
 import type { Node as PMNode, NodeType } from "prosemirror-model";
 import type { Command } from "prosemirror-state";
 import { vellinkSchema as S } from "./schema";
+import { liftListItem } from "prosemirror-schema-list";
 
 export type ListKind = "bullet" | "ordered" | "task";
 
@@ -70,3 +71,29 @@ export const LIST_TYPES: Record<ListKind, NodeType> = {
   ordered: S.nodes.orderedList,
   task: S.nodes.bulletList,
 };
+
+
+/**
+ * 空列表项按回车结束列表。
+ *
+ * PM 的 baseKeymap 只会再拆一个空列表项出来，用户要连按两次退格才能退出。
+ * 这里在光标所在 listItem 的段落为空时直接调用 liftListItem。
+ */
+export function exitEmptyListItem(): Command {
+  return (state, dispatch) => {
+    if (!dispatch) return false;
+    const { $from } = state.selection;
+    for (let depth = $from.depth; depth > 0; depth--) {
+      if ($from.node(depth).type !== S.nodes.listItem) continue;
+      const item = $from.node(depth);
+      const first = item.firstChild;
+      const isEmpty =
+        item.childCount === 1 &&
+        first?.type === S.nodes.paragraph &&
+        first.content.size === 0;
+      if (!isEmpty) return false;
+      return liftListItem(S.nodes.listItem)(state, dispatch);
+    }
+    return false;
+  };
+}

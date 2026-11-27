@@ -24,7 +24,7 @@ import { clipboardHtml, htmlToMarkdown } from "../core/paste-html";
 import { createHighlightPlugin } from "../core/view/highlight-plugin";
 import { createAutoPairPlugin } from "../core/view/auto-pair";
 import { createEmojiPlugin } from "../core/view/emoji-plugin";
-import { convertListCommand } from "../core/view/list-type";
+import { convertListCommand, exitEmptyListItem } from "../core/view/list-type";
 import { t } from "../i18n";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { FindBar } from "./FindBar";
@@ -744,6 +744,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
           "Mod-Shift-7": convertListCommand("bullet"),
           "Mod-Shift-8": convertListCommand("ordered"),
           "Mod-Shift-9": convertListCommand("task"),
+          Enter: exitEmptyListItem(),
         }),
         keymap(baseKeymap),
         findPlugin,
