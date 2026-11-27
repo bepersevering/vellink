@@ -28,6 +28,7 @@ import { planImports, titleFromFileName } from "./core/import-docs";
 import { buildTable } from "./core/table-insert";
 import { applyCustomCss } from "./core/custom-css";
 import { findOrphanAssets } from "./core/orphan-assets";
+import { fitWithin, needsResize } from "./core/image-resize";
 import { findRelativeImages, rewriteImagePaths } from "./core/import-images";
 import { printCurrentWindow, saveExportFile } from "./core/export/save";
 import { docCss } from "./core/export/html";
@@ -465,6 +466,34 @@ export default function App() {
     [pluginSummaries, locale],
   );
 
+/** 用 canvas 等比缩小大图；GIF 不动（会丢动画），失败时回退原字节。 */
+async function shrinkImage(file: File, maxEdge: number): Promise<Uint8Array> {
+  const original = new Uint8Array(await file.arrayBuffer());
+  if (!maxEdge || file.type === "image/gif") return original;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = fitWithin({ width: bitmap.width, height: bitmap.height }, maxEdge);
+    if (!needsResize({ width: bitmap.width, height: bitmap.height }, maxEdge)) {
+      bitmap.close();
+      return original;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close();
+      return original;
+    }
+    ctx.drawImage(bitmap, 0, 0, size.width, size.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, file.type, 0.92));
+    return blob ? new Uint8Array(await blob.arrayBuffer()) : original;
+  } catch {
+    return original;
+  }
+}
+
   /* ------------------------------ 文档操作 ------------------------------ */
 
   const createDoc = useCallback(async () => {
@@ -679,7 +708,7 @@ export default function App() {
           continue;
         }
         try {
-          const bytes = new Uint8Array(await file.arrayBuffer());
+          const bytes = await shrinkImage(file, settingsRef.current.maxImageEdge);
           const name = assetName(file.name, file.type, bytes);
           if (!name) {
             showToast(t("toast.imageFailed"));

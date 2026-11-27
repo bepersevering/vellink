@@ -50,7 +50,7 @@ cd vellink
 npm install
 npm run dev            # browser dev server (quick UI verification)
 npm run tauri dev      # desktop app
-npm test               # run unit tests (415 tests)
+npm test               # run unit tests (420 tests)
 npx tsc --noEmit       # type check
 ```
 
@@ -133,6 +133,7 @@ Six contribution points: commands & menus, views & panels, block renderers, synt
 | M6.24 | Export formats and image migration | `⌘E` now has 8 formats grouped by exchange / publish / archive; adds LaTeX (ctex) and MediaWiki source. Importing Markdown also copies relative-path images into `.vellink-assets/` and rewrites references. PDF bookmarks deliberately skipped (print-panel route cannot emit them; a custom engine costs far more than it returns). ([checklist](./功能差距清单.md), Chinese) |
 | M6.25 | Custom CSS | Paste CSS in Settings to style both the editor and exported HTML; `@import` and remote image URLs are stripped to prevent external requests. ([checklist](./功能差距清单.md), Chinese) |
 | M6.26 | Orphan asset cleanup | On the desktop, deleting a document scans all remaining sources and moves unreferenced `.vellink-assets/` images into the trash (not a hard delete), so they can be recovered. ([checklist](./功能差距清单.md), Chinese) |
+| M6.27 | Image resize | Settings offer a max image edge (0–4096, default 2048, 0 disables); pasted images are shrunk via canvas before storage. GIFs are skipped to preserve animation; failures fall back to the original bytes. ([checklist](./功能差距清单.md), Chinese) |
 | M6 | 10-user beta polish → public release | In progress |
 
 ## Design Principles

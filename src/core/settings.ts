@@ -27,6 +27,8 @@ export interface Settings {
   focusLines: boolean;
   /** 用户自定义 CSS（已去掉外链），注入编辑器。 */
   customCss: string;
+  /** 粘贴图片的最长边上限，0 表示不压缩。 */
+  maxImageEdge: number;
 }
 
 export const LIMITS = {
@@ -44,6 +46,8 @@ export const DEFAULT_SETTINGS: Settings = {
   typewriter: false,
   focusLines: false,
   customCss: "",
+  // 默认压到 2048：足够看清文字截图，又能把 4K 图压到零头大小
+  maxImageEdge: 2048,
 };
 
 const STORAGE_KEY = "vellink-settings:v1";
@@ -96,6 +100,7 @@ export function normalizeSettings(raw: unknown): Settings {
     typewriter: input.typewriter === true,
     focusLines: input.focusLines === true,
     customCss: typeof input.customCss === "string" ? input.customCss.slice(0, 20000) : "",
+    maxImageEdge: clampNumber(input.maxImageEdge, 0, 4096, DEFAULT_SETTINGS.maxImageEdge),
   };
 }
 

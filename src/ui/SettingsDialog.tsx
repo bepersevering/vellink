@@ -178,6 +178,28 @@ export function SettingsDialog({ open, settings, onChange, onClose }: Props) {
 
         <section className="set-row">
           <div className="set-head">
+            <span className="set-label">{t("settings.maxImageEdge")}</span>
+            <span className="set-value">
+              {settings.maxImageEdge === 0
+                ? t("settings.maxImageEdgeOff")
+                : t("settings.px", { value: settings.maxImageEdge })}
+            </span>
+          </div>
+          <input
+            className="set-range"
+            type="range"
+            min={0}
+            max={4096}
+            step={256}
+            value={settings.maxImageEdge}
+            onChange={(e) => patch({ maxImageEdge: Number(e.target.value) })}
+            aria-label={t("settings.maxImageEdge")}
+          />
+          <p className="set-hint">{t("settings.maxImageEdgeHint")}</p>
+        </section>
+
+        <section className="set-row">
+          <div className="set-head">
             <span className="set-label">{t("settings.customCss")}</span>
           </div>
           <textarea
